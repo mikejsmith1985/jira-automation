@@ -276,33 +276,13 @@ export interface IPRLinkTaskConfig extends ITaskConfig {
  * IScheduleConfig - When Should This Task Run Automatically?
  * 
  * WHAT IS THIS?
- * -------------
  * Some tasks should run on a schedule, like:
  *   - Every Monday morning
  *   - Once a day at midnight
  *   - First day of every month
  * 
- * This config defines the schedule.
- * 
- * 
- * WHAT IS A CRON EXPRESSION?
- * ---------------------------
- * A cron expression is a special format for schedules:
- * 
- *   "0 9 * * MON" means:
- *     0 = minute 0 (9:00, not 9:05 or 9:30)
- *     9 = hour 9 (9am)
- *     * = any day of month
- *     * = any month
- *     MON = Monday only
- * 
- *   Result: Every Monday at 9:00 AM
- * 
- * 
- * MORE EXAMPLES:
- *   "0 0 * * *"      = Every day at midnight
- *   "0 */4 * * *"    = Every 4 hours
- *   "0 9 1 * *"      = First day of every month at 9am
+ * This config defines the schedule using cron expressions.
+ * Examples: "0 9 [asterisk] [asterisk] MON" = Every Monday at 9am
  */
 export interface IScheduleConfig {
   /**

@@ -8,7 +8,8 @@
     "watch:ts": "tsc --watch",
     "start:electron": "wait-on dist/main/main.js && electron .",
     "build": "tsc",
-    "package": "npm run build && electron-builder --win --x64",
+    "package": "npm run build && (electron-builder --win --x64 --publish never || npm run package:fallback)",
+    "package:fallback": "node scripts/create-portable-exe.js",
     "clean": "rimraf dist"
   },
   "keywords": [
@@ -39,7 +40,10 @@
     },
     "win": {
       "target": "portable",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "certificateFile": null,
+      "certificatePassword": null,
+      "sign": null
     },
     "files": [
       "dist/**/*",

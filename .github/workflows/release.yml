@@ -41,9 +41,16 @@ jobs:
         run: npm run build
       
       - name: Package application
-        run: npm run package
+        run: |
+          npm run build
+          electron-builder --win --x64 --publish never || (
+            Write-Host "electron-builder failed, using fallback"
+            node scripts/create-portable-exe.js
+          )
+        shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
       
       - name: Get tag name
         id: tag_name

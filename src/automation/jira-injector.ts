@@ -57,6 +57,15 @@ import { IPC_CHANNELS } from '../shared/ipc-channels';
  * - All browser APIs
  */
 
+declare global {
+  interface Window {
+    electron: {
+      on: (channel: string, callback: (args: any) => void) => void;
+      send: (channel: string, data: any) => void;
+    };
+  }
+}
+
 /**
  * AutomationState - Current state of automation
  * 

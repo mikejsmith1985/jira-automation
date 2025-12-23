@@ -15,6 +15,9 @@ directories:
 win:
   target: portable       # Creates a single .exe file (no installer needed!)
   icon: assets/icon.ico  # App icon (you'll need to create this)
+  certificateFile: null
+  certificatePassword: null
+  sign: null
 
 # files:
 #   What files to include in the packaged app

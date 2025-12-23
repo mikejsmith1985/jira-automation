@@ -114,9 +114,9 @@ contextBridge.exposeInMainWorld(
         IPC_CHANNELS.STOP_AUTOMATION,
         IPC_CHANNELS.SAVE_CONFIG,
         IPC_CHANNELS.LOAD_CONFIG,
-      ];
+      ] as const;
       
-      if (validChannels.includes(channel)) {
+      if (validChannels.includes(channel as any)) {
         // Channel is allowed, send the message
         ipcRenderer.send(channel, data);
       } else {
