@@ -1,0 +1,30 @@
+# Electron Builder Configuration
+# This file tells electron-builder how to package your app into a .exe
+
+appId: com.yourcompany.jira-automation
+productName: Jira Automation Assistant
+
+# directories:
+#   Where to find files and where to put the output
+directories:
+  output: release        # Final .exe goes here
+  buildResources: assets # Icons and other build assets
+
+# win:
+#   Windows-specific build settings
+win:
+  target: portable       # Creates a single .exe file (no installer needed!)
+  icon: assets/icon.ico  # App icon (you'll need to create this)
+
+# files:
+#   What files to include in the packaged app
+files:
+  - dist/**/*           # All compiled JavaScript
+  - src/renderer/**/*   # HTML/CSS for the UI
+  - package.json        # Node.js dependencies info
+
+# What NOT to include (keeps file size smaller)
+files:
+  - "!**/*.ts"          # Don't include TypeScript source
+  - "!**/*.map"         # Don't include source maps
+  - "!node_modules/**/*" # electron-builder handles dependencies automatically

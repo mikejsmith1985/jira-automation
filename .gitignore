@@ -1,0 +1,23 @@
+# Node.js dependencies (huge folder, don't commit)
+node_modules/
+
+# Compiled TypeScript output
+dist/
+
+# Build output (the final .exe file)
+release/
+
+# Logs and local configs
+logs/
+*.log
+config.json
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

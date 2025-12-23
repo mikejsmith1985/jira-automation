@@ -1,0 +1,504 @@
+/*
+ * ============================================================================
+ * APP.CSS - Application Styles
+ * ============================================================================
+ * 
+ * WHAT IS THIS FILE?
+ * ------------------
+ * Contains all the visual styling for the app.
+ * 
+ * Think of it like decorating a room:
+ *   - HTML = the structure (walls, floors)
+ *   - CSS = the decoration (paint colors, furniture placement)
+ * 
+ * 
+ * CSS ORGANIZATION:
+ * -----------------
+ * 1. Global Resets & Base Styles
+ * 2. Layout & Grid
+ * 3. Components (buttons, forms, etc.)
+ * 4. Utility Classes
+ */
+
+/* ============================================================================
+   1. GLOBAL RESETS & BASE STYLES
+   ============================================================================ */
+
+/*
+ * RESET DEFAULT BROWSER STYLES
+ * 
+ * WHY?
+ * Different browsers have different default styles.
+ * This ensures consistency across all browsers.
+ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;  /* Include padding/border in width calculations */
+}
+
+/*
+ * BODY - The Main Container
+ * 
+ * Sets the default font and background for the entire app.
+ */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  
+  /* Anti-aliasing makes text smoother */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  background: #f4f5f7;  /* Light gray background */
+  color: #172b4d;        /* Dark blue text */
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/*
+ * SCROLLBAR STYLING (Webkit browsers: Chrome, Edge, Safari)
+ * 
+ * Makes scrollbars prettier and less intrusive.
+ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+
+/* ============================================================================
+   2. LAYOUT & GRID
+   ============================================================================ */
+
+/*
+ * APP CONTAINER
+ * 
+ * The main wrapper around all content.
+ */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;  /* Full viewport height */
+  overflow: hidden;
+}
+
+/*
+ * HEADER
+ * 
+ * Top bar with app name and settings button.
+ */
+.app-header {
+  background: #0052CC;  /* Jira blue */
+  color: white;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.app-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/*
+ * MAIN CONTENT AREA
+ * 
+ * Two-column layout:
+ *   - Left: Controls (settings, start/stop buttons)
+ *   - Right: Progress display (logs, status)
+ */
+.app-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.app-sidebar {
+  width: 400px;
+  background: white;
+  border-right: 1px solid #dfe1e6;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+
+/* ============================================================================
+   3. COMPONENTS
+   ============================================================================ */
+
+/*
+ * BUTTONS
+ * 
+ * Three types:
+ *   - Primary (blue, for main actions)
+ *   - Secondary (gray, for cancel/back)
+ *   - Danger (red, for stop/delete)
+ */
+.btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:hover {
+  transform: translateY(-1px);  /* Subtle lift effect */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary button (blue) */
+.btn-primary {
+  background: #0052CC;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0065FF;
+}
+
+/* Secondary button (gray) */
+.btn-secondary {
+  background: #F4F5F7;
+  color: #42526E;
+  border: 1px solid #DFE1E6;
+}
+
+.btn-secondary:hover {
+  background: #EBECF0;
+}
+
+/* Danger button (red) */
+.btn-danger {
+  background: #DE350B;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #FF5630;
+}
+
+/*
+ * FORM ELEMENTS
+ * 
+ * Inputs, textareas, labels
+ */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #42526E;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 2px solid #DFE1E6;
+  border-radius: 4px;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #0052CC;
+}
+
+.form-textarea {
+  min-height: 100px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+/*
+ * CARDS
+ * 
+ * White boxes with shadow (for grouping content)
+ */
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #172B4D;
+}
+
+/*
+ * PROGRESS BAR
+ * 
+ * Shows completion percentage visually.
+ */
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #DFE1E6;
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: #0052CC;
+  transition: width 0.3s ease;
+}
+
+/*
+ * LOG VIEWER
+ * 
+ * Scrollable list of log entries.
+ */
+.log-viewer {
+  background: #F4F5F7;
+  border: 1px solid #DFE1E6;
+  border-radius: 4px;
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.log-entry {
+  padding: 4px 0;
+  border-bottom: 1px solid #EBECF0;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+/* Log entry types (colored dots) */
+.log-entry::before {
+  content: '●';
+  margin-right: 8px;
+}
+
+.log-entry.success::before {
+  color: #00875A;  /* Green */
+}
+
+.log-entry.error::before {
+  color: #DE350B;  /* Red */
+}
+
+.log-entry.info::before {
+  color: #0052CC;  /* Blue */
+}
+
+.log-entry.warning::before {
+  color: #FF991F;  /* Orange */
+}
+
+/*
+ * STATUS BADGE
+ * 
+ * Small colored labels showing status.
+ */
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-success {
+  background: #E3FCEF;
+  color: #006644;
+}
+
+.badge-error {
+  background: #FFEBE6;
+  color: #BF2600;
+}
+
+.badge-in-progress {
+  background: #DEEBFF;
+  color: #0747A6;
+}
+
+.badge-queued {
+  background: #F4F5F7;
+  color: #42526E;
+}
+
+
+/* ============================================================================
+   4. UTILITY CLASSES
+   ============================================================================ */
+
+/*
+ * Spacing utilities
+ * 
+ * Quick margin/padding classes.
+ */
+.mt-1 { margin-top: 8px; }
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+
+/*
+ * Text utilities
+ */
+.text-center { text-align: center; }
+.text-muted { color: #6B778C; }
+.text-success { color: #00875A; }
+.text-error { color: #DE350B; }
+.text-bold { font-weight: 600; }
+
+/*
+ * Flexbox utilities
+ */
+.flex { display: flex; }
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+
+/* ============================================================================
+   5. DARK MODE (OPTIONAL)
+   ============================================================================ */
+
+/*
+ * Dark mode styles
+ * 
+ * Applied when .dark-mode class is on <body>
+ */
+body.dark-mode {
+  background: #1D2125;
+  color: #B6C2CF;
+}
+
+body.dark-mode .app-sidebar {
+  background: #22272B;
+  border-right-color: #38414A;
+}
+
+body.dark-mode .card {
+  background: #22272B;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+body.dark-mode .form-input,
+body.dark-mode .form-textarea {
+  background: #1D2125;
+  border-color: #38414A;
+  color: #B6C2CF;
+}
+
+body.dark-mode .log-viewer {
+  background: #1D2125;
+  border-color: #38414A;
+}
+
+/*
+ * ============================================================================
+ * DEVELOPER NOTES
+ * ============================================================================
+ * 
+ * CSS ORGANIZATION TIPS:
+ * 
+ * 1. Use classes, not IDs (classes are reusable)
+ * 2. Keep selectors shallow (avoid .a .b .c .d)
+ * 3. Use BEM naming: .block__element--modifier
+ * 4. Group related styles together
+ * 5. Comment sections clearly
+ * 
+ * 
+ * COMMON LAYOUT PATTERNS:
+ * 
+ * Centering:
+ *   display: flex;
+ *   justify-content: center;  /* Horizontal */
+ *   align-items: center;      /* Vertical */
+ * 
+ * Full height:
+ *   height: 100vh;  /* 100% of viewport height */
+ * 
+ * Spacing:
+ *   Use margin for spacing BETWEEN elements
+ *   Use padding for spacing INSIDE elements
+ * 
+ * 
+ * DEBUGGING CSS:
+ * 
+ * 1. Border trick:
+ *    border: 1px solid red;  /* See where element is */
+ * 
+ * 2. Browser DevTools:
+ *    F12 -> Inspect element -> See computed styles
+ * 
+ * 3. Check specificity:
+ *    More specific selectors override less specific
+ *    Example: .card .title beats .title
+ * 
+ * 
+ * RESPONSIVE DESIGN (if needed later):
+ * 
+ * @media (max-width: 768px) {
+ *   .app-sidebar {
+ *     width: 100%;
+ *   }
+ * }
+ */
