@@ -1,0 +1,84 @@
+# ============================================================================
+# GitHub Actions Workflow - Automatic Release Builder
+# ============================================================================
+#
+# WHAT DOES THIS DO?
+# When you push a tag (e.g., v1.0.0) to GitHub:
+#   1. Builds the TypeScript
+#   2. Packages the .exe file
+#   3. Creates a GitHub Release
+#   4. Uploads the .exe
+#
+# HOW TO USE:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build TypeScript
+        run: npm run build
+      
+      - name: Package application
+        run: npm run package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Get tag name
+        id: tag_name
+        run: |
+          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        shell: bash
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
+          body: |
+            ## 🎉 Jira Automation Assistant ${{ steps.tag_name.outputs.TAG_NAME }}
+            
+            ### 📦 Download
+            - Download `JiraAutomationAssistant.exe` below
+            - No installation required
+            - No admin rights needed
+            
+            ### 📚 Documentation
+            - [Quick Start](https://github.com/mikejsmith1985/jira-automation/blob/main/QUICK_START.md)
+            - [Developer Guide](https://github.com/mikejsmith1985/jira-automation/blob/main/DEVELOPER_WALKTHROUGH.md)
+          draft: false
+          prerelease: false
+      
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./release/JiraAutomationAssistant.exe
+          asset_name: JiraAutomationAssistant.exe
+          asset_content_type: application/octet-stream
