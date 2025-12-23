@@ -56,19 +56,17 @@ jobs:
       - name: Get tag name
         id: tag_name
         run: |
-          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-        shell: bash
+          $tag = "${{ github.ref }}" -replace 'refs/tags/', ''
+          echo "TAG_NAME=$tag" >> $env:GITHUB_OUTPUT
+        shell: powershell
       
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           body: |
-            ## 🎉 Jira Automation Assistant ${{ steps.tag_name.outputs.TAG_NAME }}
+            ## 🎉 Jira Automation Assistant ${{ github.ref_name }}
             
             ### 📦 Download
             - Download `JiraAutomationAssistant.exe` below
@@ -78,15 +76,8 @@ jobs:
             ### 📚 Documentation
             - [Quick Start](https://github.com/mikejsmith1985/jira-automation/blob/main/QUICK_START.md)
             - [Developer Guide](https://github.com/mikejsmith1985/jira-automation/blob/main/DEVELOPER_WALKTHROUGH.md)
+          files: ./release/JiraAutomationAssistant.exe
           draft: false
           prerelease: false
-      
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./release/JiraAutomationAssistant.exe
-          asset_name: JiraAutomationAssistant.exe
-          asset_content_type: application/octet-stream
