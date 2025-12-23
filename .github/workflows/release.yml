@@ -43,10 +43,11 @@ jobs:
       - name: Package application
         run: |
           npm run build
-          electron-builder --win --x64 --publish never || (
+          npx electron-builder --win --x64 --publish never
+          if ($LASTEXITCODE -ne 0) {
             Write-Host "electron-builder failed, using fallback"
             node scripts/create-portable-exe.js
-          )
+          }
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
