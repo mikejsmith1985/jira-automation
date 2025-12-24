@@ -29,11 +29,22 @@ jobs:
       
       - name: Package application
         run: |
-          python -m PyInstaller --onefile --windowed --name=JiraAutomationAssistant --icon=assets/icon.ico app.py 2>&1
+          $iconPath = "assets/icon.ico"
+          $cmd = "python -m PyInstaller --onefile --windowed --name=JiraAutomationAssistant"
+          
+          if (Test-Path $iconPath) {
+            $cmd += " --icon=$iconPath"
+          }
+          
+          $cmd += " app.py"
+          
+          Write-Host "Running: $cmd"
+          Invoke-Expression $cmd
+          
           if (Test-Path "dist/JiraAutomationAssistant.exe") {
             New-Item -ItemType Directory -Path "release" -Force | Out-Null
             Copy-Item "dist/JiraAutomationAssistant.exe" "release/" -Force
-            Copy-Item "dist/*" "release/" -Force -Recurse -ErrorAction SilentlyContinue
+            Copy-Item "dist" "release/" -Force -Recurse -ErrorAction SilentlyContinue
             Write-Host "Executable packaged successfully"
           } else {
             Write-Host "ERROR: Failed to create executable"
