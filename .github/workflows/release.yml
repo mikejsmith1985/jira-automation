@@ -31,23 +31,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '20'
+          python-version: '3.11'
       
-      - name: Install dependencies
-        run: echo "Skipping Node.js dependencies - using Python build"
+      - name: Install PyInstaller
+        run: pip install pyinstaller
       
-      - name: Build TypeScript
-        run: echo "Skipping TypeScript - using Python build"
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
       
       - name: Package application
         run: |
           # Build the Python executable using PyInstaller
-          pyinstaller --onefile --windowed --icon=assets/icon.ico --name="Jira Automation Assistant" app.py 2>&1 || Write-Host "PyInstaller build info"
+          $pyInstallerArgs = @('--onefile', '--windowed', '--name=JiraAutomationAssistant', 'app.py')
+          if (Test-Path "assets/icon.ico") {
+            $pyInstallerArgs += '--icon=assets/icon.ico'
+          }
+          python -m PyInstaller @pyInstallerArgs 2>&1 | Write-Host
           New-Item -ItemType Directory -Path "./release" -Force | Out-Null
-          Copy-Item "./dist/Jira Automation Assistant.exe" "./release/" -Force -ErrorAction SilentlyContinue
+          if (Test-Path "./dist/JiraAutomationAssistant.exe") {
+            Copy-Item "./dist/JiraAutomationAssistant.exe" "./release/" -Force
+          }
           Copy-Item "./dist/*" "./release/" -Force -Recurse -ErrorAction SilentlyContinue
         shell: powershell
       
@@ -71,10 +77,10 @@ jobs:
       - name: Prepare assets
         run: |
           New-Item -ItemType Directory -Path "./assets" -Force | Out-Null
-          if (Test-Path "./release/Jira Automation Assistant.exe") {
-            Copy-Item "./release/Jira Automation Assistant.exe" "./assets/GitHubJiraSync.exe" -Force
-          } elseif (Test-Path "./dist/Jira Automation Assistant.exe") {
-            Copy-Item "./dist/Jira Automation Assistant.exe" "./assets/GitHubJiraSync.exe" -Force
+          if (Test-Path "./release/JiraAutomationAssistant.exe") {
+            Copy-Item "./release/JiraAutomationAssistant.exe" "./assets/GitHubJiraSync.exe" -Force
+          } elseif (Test-Path "./dist/JiraAutomationAssistant.exe") {
+            Copy-Item "./dist/JiraAutomationAssistant.exe" "./assets/GitHubJiraSync.exe" -Force
           }
         shell: powershell
       
