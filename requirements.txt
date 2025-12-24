@@ -1,2 +1,2 @@
-playwright==1.40.0
+selenium==4.16.0
 pyinstaller==6.17.0

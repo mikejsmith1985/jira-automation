@@ -1,7 +1,7 @@
 """
 Jira Hygiene Assistant - Python Edition
 A self-contained desktop app that automates Jira hygiene checks via browser automation
-Uses Python's built-in http.server instead of Flask (no C++ dependencies needed)
+Uses Selenium WebDriver with Chrome (no additional browser installation needed)
 """
 import os
 import sys
@@ -11,13 +11,16 @@ import time
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Global state
-browser_context = None
-page = None
-playwright_instance = None
-browser = None
+driver = None
 current_results = []
 
 class JiraHandler(BaseHTTPRequestHandler):
@@ -64,22 +67,26 @@ class JiraHandler(BaseHTTPRequestHandler):
     
     def handle_init(self, data):
         """Initialize browser and navigate to Jira"""
-        global browser_context, page, playwright_instance, browser
+        global driver
         
         try:
             jira_url = data.get('jiraUrl', '')
             if not jira_url:
                 return {'success': False, 'error': 'Jira URL required'}
             
-            # Initialize Playwright
-            if playwright_instance is None:
-                playwright_instance = sync_playwright().start()
-                browser = playwright_instance.chromium.launch(headless=False)
-                browser_context = browser.new_context()
-                page = browser_context.new_page()
+            # Initialize Chrome WebDriver if not already done
+            if driver is None:
+                chrome_options = Options()
+                # Don't run headless - user needs to see and login
+                chrome_options.add_argument('--start-maximized')
+                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                chrome_options.add_experimental_option('useAutomationExtension', False)
+                
+                driver = webdriver.Chrome(options=chrome_options)
             
             # Navigate to Jira
-            page.goto(jira_url, wait_until='networkidle', timeout=30000)
+            driver.get(jira_url)
             
             return {'success': True}
         except Exception as e:
@@ -87,34 +94,61 @@ class JiraHandler(BaseHTTPRequestHandler):
     
     def handle_query(self, data):
         """Execute JQL query via browser automation"""
-        global page, current_results
+        global driver, current_results
         
-        if page is None:
+        if driver is None:
             return {'success': False, 'error': 'Browser not initialized'}
         
         try:
             jql = data.get('jql', '')
             
             # Navigate to issue search
-            base_url = page.url.split('/jira')[0] if '/jira' in page.url else page.url.split('/browse')[0]
+            current_url = driver.current_url
+            base_url = current_url.split('/jira')[0] if '/jira' in current_url else current_url.split('/browse')[0]
             search_url = f"{base_url}/issues/?jql={jql}"
             
-            page.goto(search_url, wait_until='networkidle', timeout=30000)
-            time.sleep(2)
+            driver.get(search_url)
+            time.sleep(3)  # Wait for page load
             
-            # Extract ticket information
+            # Extract ticket information - try multiple selectors
             results = []
             try:
-                # Try multiple selectors for different Jira versions
-                issue_keys = page.query_selector_all('a[data-issue-key]')
-                for key_elem in issue_keys[:20]:
-                    key = key_elem.get_attribute('data-issue-key')
-                    if key and key not in [r['key'] for r in results]:
+                # Strategy 1: Look for data-issue-key attributes
+                issue_links = driver.find_elements(By.CSS_SELECTOR, 'a[data-issue-key]')
+                seen_keys = set()
+                
+                for link in issue_links[:20]:  # Limit to 20
+                    try:
+                        key = link.get_attribute('data-issue-key')
+                        if key and key not in seen_keys:
+                            seen_keys.add(key)
+                            try:
+                                summary = link.text.strip()
+                                if not summary:
+                                    summary = key
+                            except:
+                                summary = key
+                            results.append({'key': key, 'summary': summary})
+                    except:
+                        continue
+                
+                # Strategy 2: If no results, try finding issue keys in links
+                if not results:
+                    all_links = driver.find_elements(By.TAG_NAME, 'a')
+                    for link in all_links:
                         try:
-                            summary = key_elem.inner_text()
+                            href = link.get_attribute('href')
+                            if href and '/browse/' in href:
+                                key = href.split('/browse/')[-1].split('?')[0]
+                                if key and '-' in key and key not in seen_keys:
+                                    seen_keys.add(key)
+                                    summary = link.text.strip() or key
+                                    results.append({'key': key, 'summary': summary})
+                                    if len(results) >= 20:
+                                        break
                         except:
-                            summary = key
-                        results.append({'key': key, 'summary': summary})
+                            continue
+                            
             except Exception as e:
                 print(f"Error extracting results: {e}")
             
@@ -125,9 +159,9 @@ class JiraHandler(BaseHTTPRequestHandler):
     
     def handle_bulk_comment(self, data):
         """Add comment to multiple tickets"""
-        global page
+        global driver
         
-        if page is None:
+        if driver is None:
             return {'success': False, 'error': 'Browser not initialized'}
         
         try:
@@ -139,29 +173,46 @@ class JiraHandler(BaseHTTPRequestHandler):
             for ticket in tickets:
                 try:
                     # Navigate to ticket
-                    base_url = page.url.split('/jira')[0] if '/jira' in page.url else page.url.split('/browse')[0]
+                    current_url = driver.current_url
+                    base_url = current_url.split('/jira')[0] if '/jira' in current_url else current_url.split('/browse')[0]
                     ticket_url = f"{base_url}/browse/{ticket['key']}"
-                    page.goto(ticket_url, wait_until='networkidle', timeout=30000)
+                    driver.get(ticket_url)
                     
-                    # Try to click comment area - multiple strategies
+                    time.sleep(2)
+                    
+                    # Try multiple strategies to add comment
                     try:
-                        page.click('textarea[placeholder*="comment" i]', timeout=5000)
+                        # Strategy 1: Look for comment textarea
+                        comment_field = WebDriverWait(driver, 5).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, 'textarea[placeholder*="comment" i]'))
+                        )
+                        comment_field.click()
+                        time.sleep(0.5)
+                        comment_field.send_keys(comment)
+                        
+                        # Try to submit with Ctrl+Enter (Jira shortcut)
+                        from selenium.webdriver.common.keys import Keys
+                        comment_field.send_keys(Keys.CONTROL, Keys.ENTER)
+                        
                     except:
+                        # Strategy 2: Click comment button first
                         try:
-                            page.click('#footer-comment-button', timeout=5000)
+                            comment_btn = driver.find_element(By.ID, 'footer-comment-button')
+                            comment_btn.click()
+                            time.sleep(1)
+                            
+                            comment_field = driver.find_element(By.CSS_SELECTOR, 'textarea')
+                            comment_field.send_keys(comment)
+                            
+                            from selenium.webdriver.common.keys import Keys
+                            comment_field.send_keys(Keys.CONTROL, Keys.ENTER)
                         except:
-                            page.click('button:has-text("Comment")', timeout=5000)
-                    
-                    time.sleep(0.5)
-                    
-                    # Type comment
-                    page.keyboard.type(comment)
-                    
-                    # Submit
-                    page.keyboard.press('Control+Enter')  # Jira shortcut
+                            print(f"Could not add comment to {ticket['key']}")
+                            continue
                     
                     time.sleep(1)
                     success_count += 1
+                    
                 except Exception as e:
                     print(f"Error commenting on {ticket['key']}: {e}")
                     continue
@@ -170,7 +221,7 @@ class JiraHandler(BaseHTTPRequestHandler):
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-# HTML Template (embedded)
+# HTML Template (embedded) - Same as before
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -383,7 +434,7 @@ HTML_TEMPLATE = """
                 const data = await response.json();
                 
                 if (data.success) {
-                    showStatus('Connected! Please log in to Jira in the browser window.', 'success');
+                    showStatus('Connected! Please log in to Jira in the Chrome window.', 'success');
                 } else {
                     showStatus('Error: ' + data.error, 'error');
                 }
