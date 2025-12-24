@@ -1,268 +1,152 @@
-# 🚀 Jira Hygiene Assistant
+# Jira Hygiene Assistant - Python Edition
 
-A browser extension that helps you find and fix Jira ticket hygiene issues using the Jira REST API.
-
----
+A self-contained desktop application for automated Jira ticket hygiene checks using browser automation.
 
 ## ✨ Features
 
-- ✅ **Find stale tickets** - Identify tickets with no updates in 7+ days
-- ✅ **Find missing descriptions** - Locate tickets without descriptions
-- ✅ **Find missing due dates** - Discover tickets lacking due dates
-- ✅ **Custom JQL queries** - Run your own Jira Query Language searches
-- ✅ **Bulk actions** - Add comments to multiple tickets at once
-- ✅ **Works everywhere** - Compatible with Jira Server and Cloud (REST API v2)
+- 🔍 **Find stale tickets** - Tickets with no updates in 7+ days
+- 📝 **Find missing descriptions** - Tickets without descriptions
+- 📅 **Find missing due dates** - Tickets lacking due dates
+- 🔧 **Custom JQL queries** - Run any Jira Query Language search
+- 💬 **Bulk actions** - Add comments to multiple tickets at once
+- 🌐 **Browser automation** - Works through Jira web UI (no API needed)
+- 📦 **Self-contained** - Single .exe file, no installation required
 
----
+## 🚀 Quick Start
 
-## 📦 Installation
+### Running the Packaged Application:
 
-### For Chrome/Edge:
+1. Download `JiraHygieneAssistant.exe`
+2. Double-click to run
+3. Browser will open automatically to http://localhost:5000
+4. Enter your Jira URL and click "Connect to Jira"
+5. Log in to Jira in the browser window that opens
+6. Use the app to run queries and perform bulk actions
 
-1. Open your browser and navigate to:
-   - **Chrome:** `chrome://extensions`
-   - **Edge:** `edge://extensions`
-2. Enable **Developer mode** (toggle in top-right corner)
-3. Click **Load unpacked**
-4. Select the `jira-hygiene-extension` folder from this repository
+## 🛠️ Development Setup
 
-### Building the Extension:
+### Prerequisites:
 
-If you want to create a packaged `.zip` file:
+- Python 3.10+ ([Download](https://www.python.org/downloads/))
+- pip (comes with Python)
 
-```powershell
-.\build-extension.ps1
+### Installation:
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Install Playwright browsers
+playwright install chromium
+
+# 3. Run the app
+python app.py
 ```
 
-Output: `jira-hygiene-extension.zip`
+The app will start and open http://localhost:5000 in your browser.
 
----
+## 📦 Building the Executable
 
-## 🛠️ Usage
+Create a build script to package as standalone .exe:
 
-1. **Configure Jira URL:**
-   - Click the extension icon in your browser toolbar
-   - Enter your Jira base URL (e.g., `https://company.atlassian.net`)
-   - Click **Save Settings**
+```powershell
+# See build.ps1 for automated build process
+.\build.ps1
+```
 
-2. **Navigate to Jira:**
-   - Open any Jira page in your browser
-   - The extension will automatically detect Jira pages
-
-3. **Run Queries:**
-   - Click the extension icon
-   - Choose a pre-built query or enter custom JQL
-   - Click **Find Tickets** to see results
-
-4. **Take Action:**
-   - Review the list of found tickets
-   - Use bulk actions (e.g., add comments) as needed
-
----
+Output: `dist\JiraHygieneAssistant.exe`
 
 ## 🏗️ Architecture
 
-The extension consists of two main components:
-
 ```
-┌──────────────────────────────────────────────┐
-│  POPUP UI (popup.html / popup.js)            │
-│  ─────────────────────────────────────────   │
-│  • Settings configuration (Jira URL)         │
-│  • Pre-built query buttons                   │
-│  • Custom JQL input                          │
-│  • Bulk action controls                      │
-│  • Stores results in chrome.storage          │
-│  • Sends messages to content script          │
-└─────────────────┬────────────────────────────┘
-                  │ 
-                  │ chrome.tabs.sendMessage()
-                  ↓
-┌──────────────────────────────────────────────┐
-│  CONTENT SCRIPT (content.js)                 │
-│  ─────────────────────────────────────────   │
-│  • Injected into all Jira pages              │
-│  • Receives messages from popup              │
-│  • Makes Jira REST API calls                 │
-│  • Returns ticket data to popup              │
-│  • Adds comments via API                     │
-│  • Uses your browser's Jira session          │
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│  Web UI (Embedded HTML/JS)              │
+│  - Configuration form                   │
+│  - Query buttons                        │
+│  - Results display                      │
+│  - Bulk action controls                 │
+└────────────────┬────────────────────────┘
+                 │ HTTP (localhost:5000)
+                 ↓
+┌─────────────────────────────────────────┐
+│  Flask Backend (Python)                 │
+│  - REST API endpoints                   │
+│  - Session management                   │
+│  - Query orchestration                  │
+└────────────────┬────────────────────────┘
+                 │ Playwright API
+                 ↓
+┌─────────────────────────────────────────┐
+│  Browser Automation (Playwright)        │
+│  - Chromium browser control             │
+│  - Navigate Jira web UI                 │
+│  - Extract ticket data                  │
+│  - Add comments via UI                  │
+└─────────────────────────────────────────┘
 ```
-
-**How it works:**
-1. User clicks extension icon → opens popup
-2. User selects a query → popup sends message to content script
-3. Content script calls Jira REST API `/rest/api/2/search`
-4. Results sent back to popup
-5. Popup stores results and opens Jira tab with JQL query
-6. User can bulk add comments → content script posts to `/rest/api/2/issue/{key}/comment`
-
----
 
 ## 📂 Project Structure
 
 ```
 jira-automation/
-│
-├── jira-hygiene-extension/      # Extension source files
-│   ├── manifest.json            # Extension configuration
-│   ├── popup.html               # Extension popup UI
-│   ├── popup.js                 # Popup logic
-│   ├── content.js               # Content script (Jira integration)
-│   ├── icon.png                 # Extension icon
-│   └── README.md                # Extension-specific docs
-│
-├── build-extension.ps1          # Build script for packaging
-├── package.json                 # Project metadata
-└── README.md                    # This file
+├── app.py                  # Main Flask application with embedded UI
+├── requirements.txt        # Python dependencies
+├── build.ps1              # Build script (creates .exe)
+└── README.md              # This file
 ```
-
----
-
-## 🔧 Configuration
-
-### Settings Storage:
-
-The extension stores your Jira URL using Chrome's storage API. Settings persist across browser sessions.
-
-### Supported Jira Versions:
-
-- ✅ Jira Cloud (REST API v2)
-- ✅ Jira Server 7.x+ (REST API v2)
-- ✅ Jira Data Center
-
-### Pre-built Queries:
-
-1. **Stale Tickets:** `updated < -7d ORDER BY updated ASC`
-2. **Missing Descriptions:** `description is EMPTY ORDER BY created DESC`
-3. **Missing Due Dates:** `duedate is EMPTY ORDER BY created DESC`
-
----
 
 ## 🚨 Troubleshooting
 
-### Extension not appearing:
+### App won't start:
 
-**Problem:** Extension icon doesn't show in toolbar
+**Problem:** "Python not found" or module errors
+```bash
+# Solution: Ensure Python 3.10+ is installed
+python --version
+
+# Reinstall dependencies
+pip install -r requirements.txt
+playwright install chromium
 ```
-Solution: Pin the extension from the extensions menu (puzzle icon)
-```
 
-### API errors:
+### Browser automation fails:
 
-**Problem:** "Failed to fetch" or CORS errors
-- **Cause:** Incorrect Jira URL or authentication issues
-- **Solution:** 
-  1. Verify Jira URL is correct
-  2. Ensure you're logged into Jira in the same browser
-  3. Check browser console (F12) for detailed errors
+**Problem:** Can't find Jira elements
+- **Cause:** Jira's HTML structure varies by version
+- **Solution:** Update selectors in `app.py`
 
-### No results returned:
+**Problem:** Session expired
+- **Cause:** Not logged into Jira
+- **Solution:** Log in manually when browser window opens
 
-**Problem:** Query runs but shows no tickets
-- **Cause:** JQL query syntax error or no matching tickets
-- **Solution:** Test your JQL query directly in Jira's issue search
+## 🔐 Security
 
----
-
-## 🔐 Security & Permissions
-
-### Required Permissions:
-
-- **activeTab:** Access the current Jira tab
-- **storage:** Save your Jira URL setting
-- **host_permissions:** Make API calls to Jira domains
-
-### Privacy Notes:
-
-✅ **No external servers** - All data stays between your browser and Jira
-✅ **No credential storage** - Uses your existing browser session
-✅ **Local only** - No analytics or tracking
-✅ **Open source** - All code is reviewable
-
----
-
-## 🤝 Contributing
-
-### Adding New Features:
-
-1. Edit the appropriate file:
-   - UI changes: `popup.html`, `popup.js`
-   - Jira integration: `content.js`
-   - Permissions: `manifest.json`
-
-2. Test your changes:
-   - Reload the extension in `chrome://extensions`
-   - Test on a real Jira instance
-
-3. Package for distribution:
-   ```powershell
-   .\build-extension.ps1
-   ```
-
-### Code Style:
-
-- ✅ Use vanilla JavaScript (no build process required)
-- ✅ Add comments explaining complex logic
-- ✅ Follow existing code structure
-- ✅ Test with both Jira Cloud and Server
-
----
+- ✅ **No credential storage** - Uses your browser session
+- ✅ **Local only** - Runs on localhost
+- ✅ **Transparent** - Watch browser automation in real-time
+- ✅ **Open source** - All code is reviewable
 
 ## 📝 Changelog
 
-### Version 0.0.1 (Current)
+### Version 1.0.0 (Current)
 
-- ✅ Basic extension structure
-- ✅ Jira REST API integration
+- ✅ Flask web server with embedded UI
+- ✅ Playwright browser automation
 - ✅ Pre-built hygiene queries
+- ✅ Custom JQL support
 - ✅ Bulk comment functionality
-- ✅ Settings persistence
 
 ### Planned Features:
 
-- [ ] Additional bulk actions (assign, transition, update fields)
+- [ ] More bulk actions (assign, transition)
 - [ ] Export results to CSV
-- [ ] Scheduled checks with notifications
-- [ ] Custom query templates
-- [ ] Multi-project support
-- [ ] Dashboard view
-
----
+- [ ] Scheduled automation
+- [ ] Query templates
 
 ## 📄 License
 
-MIT License - See LICENSE file for details
+MIT License
 
 ---
 
-## 🆘 Support
-
-### Getting Help:
-
-1. Check the browser console (F12) for error messages
-2. Verify your Jira URL and authentication
-3. Test JQL queries directly in Jira first
-4. Review the Troubleshooting section above
-
-### Useful Resources:
-
-- [Jira REST API Documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v2/)
-- [JQL Query Syntax](https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/)
-- [Chrome Extension Development](https://developer.chrome.com/docs/extensions/)
-
----
-
-## 🎯 Quick Start Checklist
-
-- [ ] Install the extension in Chrome/Edge
-- [ ] Click the extension icon and set your Jira URL
-- [ ] Navigate to any Jira page
-- [ ] Click the extension icon
-- [ ] Select a query (e.g., "Find stale tickets")
-- [ ] Click "Find Tickets" and review results!
-
----
-
-**Built with ❤️ for teams who want cleaner Jira hygiene**
+**Built with ❤️ for teams who need Jira automation without API access**
