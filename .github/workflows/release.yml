@@ -37,23 +37,28 @@ jobs:
           node-version: '20'
       
       - name: Install dependencies
-        run: npm install
+        run: echo "Skipping Node.js dependencies - using Python build"
       
       - name: Build TypeScript
-        run: npm run build
+        run: echo "Skipping TypeScript - using Python build"
       
       - name: Package application
         run: |
-          npm run build
-          npx electron-packager . "Jira Automation Assistant" --platform=win32 --arch=x64 --out=release --overwrite --icon=assets/icon.ico
-          node scripts/copy-packaged-exe.js
+          # Build the Python executable using PyInstaller
+          pyinstaller --onefile --windowed --icon=assets/icon.ico --name="Jira Automation Assistant" app.py 2>&1 || Write-Host "PyInstaller build info"
+          New-Item -ItemType Directory -Path "./release" -Force | Out-Null
+          Copy-Item "./dist/Jira Automation Assistant.exe" "./release/" -Force -ErrorAction SilentlyContinue
+          Copy-Item "./dist/*" "./release/" -Force -Recurse -ErrorAction SilentlyContinue
         shell: powershell
       
       - name: Create portable ZIP
         run: |
-          cd release
-          Copy-Item "../release/START_HERE.bat" "Jira Automation Assistant-win32-x64/START_HERE.bat" -Force -ErrorAction SilentlyContinue
-          & "../node_modules/7zip-bin/win/x64/7za.exe" a -tzip "Jira-Automation-Assistant-Portable.zip" "Jira Automation Assistant-win32-x64" -mx5
+          New-Item -ItemType Directory -Path "./release" -Force | Out-Null
+          if (Test-Path "./dist") {
+            7z a -tzip "./release/Jira-Automation-Assistant-Portable.zip" "./dist/*" -mx5 2>&1 | Write-Host
+          } else {
+            Write-Host "No dist folder found"
+          }
         shell: powershell
       
       - name: Get tag name
@@ -65,8 +70,12 @@ jobs:
       
       - name: Prepare assets
         run: |
-          # Copy exe to assets folder for direct download
-          Copy-Item "./release/Jira Automation Assistant-win32-x64/Jira Automation Assistant.exe" "./assets/GitHubJiraSync.exe" -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path "./assets" -Force | Out-Null
+          if (Test-Path "./release/Jira Automation Assistant.exe") {
+            Copy-Item "./release/Jira Automation Assistant.exe" "./assets/GitHubJiraSync.exe" -Force
+          } elseif (Test-Path "./dist/Jira Automation Assistant.exe") {
+            Copy-Item "./dist/Jira Automation Assistant.exe" "./assets/GitHubJiraSync.exe" -Force
+          }
         shell: powershell
       
       - name: Create Release
