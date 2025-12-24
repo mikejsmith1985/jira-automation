@@ -1,2 +1,5 @@
 selenium==4.16.0
 pyinstaller==6.17.0
+pyyaml==6.0.1
+schedule==1.2.0
+requests==2.31.0

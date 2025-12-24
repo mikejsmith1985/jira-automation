@@ -1,6 +1,6 @@
 """
-Jira Hygiene Assistant - Python Edition
-A self-contained desktop app that automates Jira hygiene checks via browser automation
+GitHub-Jira Sync Tool
+A self-contained desktop app that syncs GitHub PRs with Jira tickets
 Uses Selenium WebDriver with Chrome (no additional browser installation needed)
 """
 import os
@@ -9,21 +9,19 @@ import webbrowser
 import threading
 import time
 import json
+import yaml
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from sync_engine import SyncEngine
 
 # Global state
 driver = None
-current_results = []
+sync_engine = None
+sync_thread = None
+is_syncing = False
 
-class JiraHandler(BaseHTTPRequestHandler):
+class SyncHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the web UI"""
     
     def log_message(self, format, *args):
@@ -37,6 +35,10 @@ class JiraHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(HTML_TEMPLATE.encode())
+        elif self.path == '/api/status':
+            self._handle_status()
+        elif self.path == '/api/config':
+            self._handle_get_config()
         else:
             self.send_response(404)
             self.end_headers()
@@ -53,10 +55,14 @@ class JiraHandler(BaseHTTPRequestHandler):
         
         if self.path == '/api/init':
             response = self.handle_init(data)
-        elif self.path == '/api/query':
-            response = self.handle_query(data)
-        elif self.path == '/api/bulk-comment':
-            response = self.handle_bulk_comment(data)
+        elif self.path == '/api/sync-now':
+            response = self.handle_sync_now()
+        elif self.path == '/api/start-scheduler':
+            response = self.handle_start_scheduler()
+        elif self.path == '/api/stop-scheduler':
+            response = self.handle_stop_scheduler()
+        elif self.path == '/api/config':
+            response = self.handle_save_config(data)
         else:
             response = {'success': False, 'error': 'Unknown endpoint'}
         
@@ -65,19 +71,42 @@ class JiraHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(response).encode())
     
+    def _handle_status(self):
+        """Return current sync status"""
+        global is_syncing
+        status = {
+            'is_syncing': is_syncing,
+            'has_driver': driver is not None,
+            'has_engine': sync_engine is not None
+        }
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(status).encode())
+    
+    def _handle_get_config(self):
+        """Return current configuration"""
+        try:
+            with open('config.yaml', 'r') as f:
+                config = yaml.safe_load(f)
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(config).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
     def handle_init(self, data):
-        """Initialize browser and navigate to Jira"""
-        global driver
+        """Initialize browser"""
+        global driver, sync_engine
         
         try:
-            jira_url = data.get('jiraUrl', '')
-            if not jira_url:
-                return {'success': False, 'error': 'Jira URL required'}
-            
             # Initialize Chrome WebDriver if not already done
             if driver is None:
                 chrome_options = Options()
-                # Don't run headless - user needs to see and login
                 chrome_options.add_argument('--start-maximized')
                 chrome_options.add_argument('--disable-blink-features=AutomationControlled')
                 chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -85,139 +114,65 @@ class JiraHandler(BaseHTTPRequestHandler):
                 
                 driver = webdriver.Chrome(options=chrome_options)
             
-            # Navigate to Jira
+            # Initialize sync engine
+            if sync_engine is None:
+                sync_engine = SyncEngine(driver)
+            
+            # Navigate to Jira for authentication
+            jira_url = data.get('jiraUrl', sync_engine.config['jira']['base_url'])
             driver.get(jira_url)
             
-            return {'success': True}
+            return {'success': True, 'message': 'Browser initialized. Please log in to Jira.'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
-    def handle_query(self, data):
-        """Execute JQL query via browser automation"""
-        global driver, current_results
+    def handle_sync_now(self):
+        """Run sync immediately"""
+        global sync_engine, is_syncing
         
-        if driver is None:
-            return {'success': False, 'error': 'Browser not initialized'}
+        if sync_engine is None:
+            return {'success': False, 'error': 'Please initialize browser first'}
+        
+        if is_syncing:
+            return {'success': False, 'error': 'Sync already in progress'}
         
         try:
-            jql = data.get('jql', '')
-            
-            # Navigate to issue search
-            current_url = driver.current_url
-            base_url = current_url.split('/jira')[0] if '/jira' in current_url else current_url.split('/browse')[0]
-            search_url = f"{base_url}/issues/?jql={jql}"
-            
-            driver.get(search_url)
-            time.sleep(3)  # Wait for page load
-            
-            # Extract ticket information - try multiple selectors
-            results = []
-            try:
-                # Strategy 1: Look for data-issue-key attributes
-                issue_links = driver.find_elements(By.CSS_SELECTOR, 'a[data-issue-key]')
-                seen_keys = set()
-                
-                for link in issue_links[:20]:  # Limit to 20
-                    try:
-                        key = link.get_attribute('data-issue-key')
-                        if key and key not in seen_keys:
-                            seen_keys.add(key)
-                            try:
-                                summary = link.text.strip()
-                                if not summary:
-                                    summary = key
-                            except:
-                                summary = key
-                            results.append({'key': key, 'summary': summary})
-                    except:
-                        continue
-                
-                # Strategy 2: If no results, try finding issue keys in links
-                if not results:
-                    all_links = driver.find_elements(By.TAG_NAME, 'a')
-                    for link in all_links:
-                        try:
-                            href = link.get_attribute('href')
-                            if href and '/browse/' in href:
-                                key = href.split('/browse/')[-1].split('?')[0]
-                                if key and '-' in key and key not in seen_keys:
-                                    seen_keys.add(key)
-                                    summary = link.text.strip() or key
-                                    results.append({'key': key, 'summary': summary})
-                                    if len(results) >= 20:
-                                        break
-                        except:
-                            continue
-                            
-            except Exception as e:
-                print(f"Error extracting results: {e}")
-            
-            current_results = results
-            return {'success': True, 'results': results}
+            is_syncing = True
+            sync_engine.sync_once()
+            is_syncing = False
+            return {'success': True, 'message': 'Sync completed'}
+        except Exception as e:
+            is_syncing = False
+            return {'success': False, 'error': str(e)}
+    
+    def handle_start_scheduler(self):
+        """Start scheduled sync"""
+        global sync_engine, sync_thread, is_syncing
+        
+        if sync_engine is None:
+            return {'success': False, 'error': 'Please initialize browser first'}
+        
+        if sync_thread and sync_thread.is_alive():
+            return {'success': False, 'error': 'Scheduler already running'}
+        
+        try:
+            sync_thread = threading.Thread(target=sync_engine.start_scheduled, daemon=True)
+            sync_thread.start()
+            return {'success': True, 'message': 'Scheduler started'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
-    def handle_bulk_comment(self, data):
-        """Add comment to multiple tickets"""
-        global driver
-        
-        if driver is None:
-            return {'success': False, 'error': 'Browser not initialized'}
-        
+    def handle_stop_scheduler(self):
+        """Stop scheduled sync"""
+        # Note: Can't easily stop schedule thread, would need to implement stop flag
+        return {'success': False, 'error': 'Scheduler stop not implemented yet. Restart app to stop.'}
+    
+    def handle_save_config(self, data):
+        """Save configuration changes"""
         try:
-            tickets = data.get('tickets', [])
-            comment = data.get('comment', '')
-            
-            success_count = 0
-            
-            for ticket in tickets:
-                try:
-                    # Navigate to ticket
-                    current_url = driver.current_url
-                    base_url = current_url.split('/jira')[0] if '/jira' in current_url else current_url.split('/browse')[0]
-                    ticket_url = f"{base_url}/browse/{ticket['key']}"
-                    driver.get(ticket_url)
-                    
-                    time.sleep(2)
-                    
-                    # Try multiple strategies to add comment
-                    try:
-                        # Strategy 1: Look for comment textarea
-                        comment_field = WebDriverWait(driver, 5).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, 'textarea[placeholder*="comment" i]'))
-                        )
-                        comment_field.click()
-                        time.sleep(0.5)
-                        comment_field.send_keys(comment)
-                        
-                        # Try to submit with Ctrl+Enter (Jira shortcut)
-                        from selenium.webdriver.common.keys import Keys
-                        comment_field.send_keys(Keys.CONTROL, Keys.ENTER)
-                        
-                    except:
-                        # Strategy 2: Click comment button first
-                        try:
-                            comment_btn = driver.find_element(By.ID, 'footer-comment-button')
-                            comment_btn.click()
-                            time.sleep(1)
-                            
-                            comment_field = driver.find_element(By.CSS_SELECTOR, 'textarea')
-                            comment_field.send_keys(comment)
-                            
-                            from selenium.webdriver.common.keys import Keys
-                            comment_field.send_keys(Keys.CONTROL, Keys.ENTER)
-                        except:
-                            print(f"Could not add comment to {ticket['key']}")
-                            continue
-                    
-                    time.sleep(1)
-                    success_count += 1
-                    
-                except Exception as e:
-                    print(f"Error commenting on {ticket['key']}: {e}")
-                    continue
-            
-            return {'success': True, 'success_count': success_count}
+            with open('config.yaml', 'w') as f:
+                yaml.dump(data, f, default_flow_style=False)
+            return {'success': True, 'message': 'Configuration saved'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 

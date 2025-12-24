@@ -1,0 +1,86 @@
+# GitHub-Jira Sync Configuration
+
+# GitHub Settings
+github:
+  base_url: "https://github.com"
+  organization: "your-org"
+  repositories:
+    - "repo1"
+    - "repo2"
+  # If API access available in future
+  api_token: ""  # Leave empty to use web scraping
+
+# Jira Settings
+jira:
+  base_url: "https://your-company.atlassian.net"
+  project_keys:
+    - "PROJ"
+    - "ABC"
+  # If API access available in future
+  api_token: ""  # Leave empty to use browser automation
+  
+  # Field Configuration
+  pr_link_field: "customfield_10001"  # ID of custom field for PR links
+  pr_link_field_name: "Pull Request"  # Human-readable name
+
+# Ticket Key Detection
+ticket_keys:
+  # Regex pattern to extract ticket keys from branch/PR names
+  pattern: "([A-Z]+-\\d+)"
+  # Branch naming convention: feature/ABC-123-description
+  # PR title convention: [ABC-123] Description or ABC-123: Description
+
+# Update Rules
+automation:
+  # When PR is opened
+  pr_opened:
+    add_comment: true
+    comment_template: "🔗 Pull Request opened: {pr_url}\nBranch: {branch_name}\nAuthor: {author}"
+    set_status: "In Review"  # Leave empty to skip
+    add_label: "has-pr"
+    update_pr_field: true
+    
+  # When PR is updated (new commits)
+  pr_updated:
+    add_comment: true
+    comment_template: "🔄 Pull Request updated: {pr_url}\nLatest commit: {commit_message}"
+    
+  # When PR is merged
+  pr_merged:
+    add_comment: true
+    comment_template: "✅ Pull Request merged: {pr_url}\nMerged by: {merger}"
+    set_status: "Done"
+    add_label: "merged"
+    
+  # When PR is closed (not merged)
+  pr_closed:
+    add_comment: true
+    comment_template: "❌ Pull Request closed without merging: {pr_url}"
+    add_label: "pr-closed"
+
+# Scheduler
+schedule:
+  enabled: true
+  # Run every hour during business hours (9 AM - 6 PM EST)
+  business_hours_only: true
+  timezone: "America/New_York"
+  start_hour: 9
+  end_hour: 18
+  # Only run on weekdays
+  weekdays_only: true
+  
+  # How far back to check for PR updates (in hours)
+  lookback_hours: 24
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARN, ERROR
+  file: "jira-sync.log"
+  max_size_mb: 10
+  backup_count: 5
+
+# Performance
+performance:
+  max_prs_per_run: 50
+  delay_between_updates_seconds: 2
+  browser_timeout_seconds: 30
