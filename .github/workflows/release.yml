@@ -43,16 +43,9 @@ jobs:
       - name: Package application
         run: |
           npm run build
-          npx electron-builder --win --x64 --publish never
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "electron-builder failed with exit code $LASTEXITCODE, using fallback"
-          }
-          node scripts/create-portable-exe.js
+          npx electron-packager . "Jira Automation Assistant" --platform=win32 --arch=x64 --out=release --overwrite --icon=assets/icon.ico
+          node scripts/copy-packaged-exe.js
         shell: powershell
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          ErrorActionPreference: Continue
       
       - name: Get tag name
         id: tag_name
