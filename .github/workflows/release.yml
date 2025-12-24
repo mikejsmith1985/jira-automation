@@ -35,10 +35,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       
       - name: Build TypeScript
         run: npm run build
@@ -64,6 +63,12 @@ jobs:
           echo "TAG_NAME=$tag" >> $env:GITHUB_OUTPUT
         shell: powershell
       
+      - name: Prepare assets
+        run: |
+          # Copy exe to assets folder for direct download
+          Copy-Item "./release/Jira Automation Assistant-win32-x64/Jira Automation Assistant.exe" "./assets/GitHubJiraSync.exe" -Force -ErrorAction SilentlyContinue
+        shell: powershell
+      
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -79,22 +84,25 @@ jobs:
             - ✅ Extract and run - no installation needed
             - ✅ No admin rights needed
             
+            **Standalone EXE:** Download `GitHubJiraSync.exe` for direct use
+            - ⚠️ May require additional dependencies
+            - Run directly without extraction
+            
             **How to use:**
-            1. Download the ZIP file below
-            2. Extract to any folder
-            3. Run `Jira Automation Assistant.exe` from the extracted folder
+            1. Download either the ZIP or standalone EXE
+            2. If using ZIP: Extract to any folder and run the .exe
+            3. If using standalone: Run directly
             
             ### 📚 Documentation
             - [Quick Start](https://github.com/mikejsmith1985/jira-automation/blob/main/QUICK_START.md)
             - [Developer Guide](https://github.com/mikejsmith1985/jira-automation/blob/main/DEVELOPER_WALKTHROUGH.md)
             
             ### ⚠️ Important Notes
-            - The standalone .exe files may be missing dependencies
-            - Always use the ZIP file for distribution
             - Windows Defender may show a warning on first run (click "More info" > "Run anyway")
           files: |
             ./release/JiraAutomationAssistant.exe
             ./release/Jira-Automation-Assistant-Portable.zip
+            ./assets/GitHubJiraSync.exe
           draft: false
           prerelease: false
         env:
