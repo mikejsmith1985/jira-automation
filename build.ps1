@@ -1,7 +1,7 @@
 # Jira Hygiene Assistant - Build Script
 # Creates a standalone .exe using PyInstaller
 
-Write-Host "🔨 Building Jira Hygiene Assistant..." -ForegroundColor Cyan
+Write-Host "🔨 Building GitHub-Jira Sync Tool..." -ForegroundColor Cyan
 Write-Host ""
 
 # Check Python
@@ -23,25 +23,24 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "✓ Dependencies installed" -ForegroundColor Green
 
-# Install Playwright browsers
-Write-Host ""
-Write-Host "🌐 Installing Playwright browsers..." -ForegroundColor Yellow
-playwright install chromium
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "✗ Failed to install Playwright browsers" -ForegroundColor Red
-    exit 1
-}
-Write-Host "✓ Playwright browsers installed" -ForegroundColor Green
-
 # Build with PyInstaller
 Write-Host ""
 Write-Host "🏗️ Building executable..." -ForegroundColor Yellow
 
-pyinstaller --clean `
-    --name "JiraHygieneAssistant" `
+# Clean previous builds
+if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
+
+# Build
+python -m PyInstaller --clean `
+    --name "GitHubJiraSync" `
     --onefile `
     --noconsole `
-    --icon=NONE `
+    --add-data "config.yaml;." `
+    --hidden-import=selenium `
+    --hidden-import=yaml `
+    --hidden-import=schedule `
     app.py
 
 if ($LASTEXITCODE -ne 0) {
@@ -49,7 +48,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$exePath = "dist\JiraHygieneAssistant.exe"
+$exePath = "dist\GitHubJiraSync.exe"
 if (Test-Path $exePath) {
     $size = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
     Write-Host "✓ Build successful! ($size MB)" -ForegroundColor Green
@@ -58,7 +57,29 @@ if (Test-Path $exePath) {
     Write-Host "   $exePath" -ForegroundColor White
     Write-Host ""
     Write-Host "🚀 To run:" -ForegroundColor Cyan
-    Write-Host "   .\dist\JiraHygieneAssistant.exe" -ForegroundColor White
+    Write-Host "   .\dist\GitHubJiraSync.exe" -ForegroundColor White
+    Write-Host ""
+    Write-Host "📄 Creating release package..." -ForegroundColor Yellow
+    
+    # Create release folder
+    $releaseDir = "release"
+    if (Test-Path $releaseDir) { Remove-Item -Recurse -Force $releaseDir }
+    New-Item -ItemType Directory -Path $releaseDir | Out-Null
+    
+    # Copy files
+    Copy-Item $exePath -Destination $releaseDir
+    Copy-Item "READY_TO_TEST.md" -Destination $releaseDir
+    Copy-Item "config.yaml" -Destination $releaseDir
+    Copy-Item "requirements.txt" -Destination $releaseDir
+    
+    # Create zip
+    $zipPath = "GitHubJiraSync-v1.0.0.zip"
+    if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
+    Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipPath
+    
+    $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
+    Write-Host "✓ Release package created: $zipPath ($zipSize MB)" -ForegroundColor Green
+    
 } else {
     Write-Host "✗ Executable not found" -ForegroundColor Red
     exit 1
