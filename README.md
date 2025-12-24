@@ -62,24 +62,41 @@ Output: `jira-hygiene-extension.zip`
 
 ## 🏗️ Architecture
 
-The extension consists of three main components:
+The extension consists of two main components:
 
 ```
-┌─────────────────────────────────────────┐
-│  POPUP (popup.html / popup.js)          │
-│  - User interface                       │
-│  - Settings configuration               │
-│  - Query selection                      │
-└────────────────┬────────────────────────┘
-                 │ Chrome API
-                 ↓
-┌─────────────────────────────────────────┐
-│  CONTENT SCRIPT (content.js)            │
-│  - Injected into Jira pages             │
-│  - Makes REST API calls                 │
-│  - Manipulates page DOM                 │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  POPUP UI (popup.html / popup.js)            │
+│  ─────────────────────────────────────────   │
+│  • Settings configuration (Jira URL)         │
+│  • Pre-built query buttons                   │
+│  • Custom JQL input                          │
+│  • Bulk action controls                      │
+│  • Stores results in chrome.storage          │
+│  • Sends messages to content script          │
+└─────────────────┬────────────────────────────┘
+                  │ 
+                  │ chrome.tabs.sendMessage()
+                  ↓
+┌──────────────────────────────────────────────┐
+│  CONTENT SCRIPT (content.js)                 │
+│  ─────────────────────────────────────────   │
+│  • Injected into all Jira pages              │
+│  • Receives messages from popup              │
+│  • Makes Jira REST API calls                 │
+│  • Returns ticket data to popup              │
+│  • Adds comments via API                     │
+│  • Uses your browser's Jira session          │
+└──────────────────────────────────────────────┘
 ```
+
+**How it works:**
+1. User clicks extension icon → opens popup
+2. User selects a query → popup sends message to content script
+3. Content script calls Jira REST API `/rest/api/2/search`
+4. Results sent back to popup
+5. Popup stores results and opens Jira tab with JQL query
+6. User can bulk add comments → content script posts to `/rest/api/2/issue/{key}/comment`
 
 ---
 
