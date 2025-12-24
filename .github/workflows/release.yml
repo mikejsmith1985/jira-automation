@@ -50,6 +50,13 @@ jobs:
           node scripts/copy-packaged-exe.js
         shell: powershell
       
+      - name: Create portable ZIP
+        run: |
+          cd release
+          Copy-Item "../release/START_HERE.bat" "Jira Automation Assistant-win32-x64/START_HERE.bat" -Force -ErrorAction SilentlyContinue
+          & "../node_modules/7zip-bin/win/x64/7za.exe" a -tzip "Jira-Automation-Assistant-Portable.zip" "Jira Automation Assistant-win32-x64" -mx5
+        shell: powershell
+      
       - name: Get tag name
         id: tag_name
         run: |
@@ -65,15 +72,29 @@ jobs:
           body: |
             ## 🎉 Jira Automation Assistant ${{ github.ref_name }}
             
-            ### 📦 Download
-            - Download `JiraAutomationAssistant.exe` below
-            - No installation required
-            - No admin rights needed
+            ### 📦 Download & Installation
+            
+            **RECOMMENDED:** Download `Jira-Automation-Assistant-Portable.zip` (106 MB)
+            - ✅ Includes ffmpeg.dll and all required dependencies
+            - ✅ Extract and run - no installation needed
+            - ✅ No admin rights needed
+            
+            **How to use:**
+            1. Download the ZIP file below
+            2. Extract to any folder
+            3. Run `Jira Automation Assistant.exe` from the extracted folder
             
             ### 📚 Documentation
             - [Quick Start](https://github.com/mikejsmith1985/jira-automation/blob/main/QUICK_START.md)
             - [Developer Guide](https://github.com/mikejsmith1985/jira-automation/blob/main/DEVELOPER_WALKTHROUGH.md)
-          files: ./release/JiraAutomationAssistant.exe
+            
+            ### ⚠️ Important Notes
+            - The standalone .exe files may be missing dependencies
+            - Always use the ZIP file for distribution
+            - Windows Defender may show a warning on first run (click "More info" > "Run anyway")
+          files: |
+            ./release/JiraAutomationAssistant.exe
+            ./release/Jira-Automation-Assistant-Portable.zip
           draft: false
           prerelease: false
         env:

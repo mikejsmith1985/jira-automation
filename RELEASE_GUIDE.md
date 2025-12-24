@@ -6,9 +6,10 @@
 
 When you push a version tag to GitHub, GitHub Actions automatically:
 1. ✅ Builds the TypeScript
-2. ✅ Packages the .exe file
-3. ✅ Creates a GitHub Release
-4. ✅ Uploads JiraAutomationAssistant.exe
+2. ✅ Packages the .exe file with all dependencies (including ffmpeg.dll)
+3. ✅ Creates a portable ZIP file for distribution
+4. ✅ Creates a GitHub Release
+5. ✅ Uploads JiraAutomationAssistant.exe and the ZIP file
 
 ---
 
@@ -38,7 +39,7 @@ git push origin main
 git tag v1.0.0
 
 # Or with message
-git tag -a v1.0.0 -m "Release version 1.0.0 - Initial release"
+git tag -a v1.0.0 -m "Release version 1.0.0 - Initial release with ffmpeg support"
 ```
 
 ### **4. Push the Tag**

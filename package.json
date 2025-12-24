@@ -41,15 +41,23 @@
     },
     "win": {
       "target": "portable",
-      "icon": "assets/icon.ico",
-      "certificateFile": null,
-      "certificatePassword": null,
-      "sign": null
+      "icon": "assets/icon.ico"
     },
     "files": [
       "dist/**/*",
       "src/renderer/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/electron/dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/electron/dist",
+        "to": ".",
+        "filter": ["**/*"]
+      }
+    ],
+    "asarUnpack": [
+      "**/*.node"
     ]
   }
 }

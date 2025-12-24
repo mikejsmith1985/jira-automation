@@ -25,9 +25,11 @@ files:
   - dist/**/*           # All compiled JavaScript
   - src/renderer/**/*   # HTML/CSS for the UI
   - package.json        # Node.js dependencies info
-
-# What NOT to include (keeps file size smaller)
-files:
   - "!**/*.ts"          # Don't include TypeScript source
   - "!**/*.map"         # Don't include source maps
   - "!node_modules/**/*" # electron-builder handles dependencies automatically
+
+# asarUnpack:
+#   Native modules that need to be unpacked from the asar archive
+asarUnpack:
+  - "**/*.node"
