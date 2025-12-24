@@ -14,12 +14,14 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from sync_engine import SyncEngine
+from insights_engine import InsightsEngine
 
 # Global state
 driver = None
 sync_engine = None
 sync_thread = None
 is_syncing = False
+insights_engine = None
 
 class SyncHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the web UI"""
@@ -39,6 +41,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             self._handle_status()
         elif self.path == '/api/config':
             self._handle_get_config()
+        elif self.path == '/api/insights':
+            self._handle_get_insights()
+        elif self.path == '/api/insights/trend':
+            self._handle_get_trend()
         else:
             self.send_response(404)
             self.end_headers()
@@ -63,6 +69,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             response = self.handle_stop_scheduler()
         elif self.path == '/api/config':
             response = self.handle_save_config(data)
+        elif self.path == '/api/insights/resolve':
+            response = self.handle_resolve_insight(data)
+        elif self.path == '/api/insights/run':
+            response = self.handle_run_insights(data)
         else:
             response = {'success': False, 'error': 'Unknown endpoint'}
         
@@ -173,6 +183,77 @@ class SyncHandler(BaseHTTPRequestHandler):
             with open('config.yaml', 'w') as f:
                 yaml.dump(data, f, default_flow_style=False)
             return {'success': True, 'message': 'Configuration saved'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_get_insights(self):
+        """Return recent insights"""
+        global insights_engine
+        try:
+            if insights_engine is None:
+                insights_engine = InsightsEngine()
+            
+            days = int(self.headers.get('X-Days', 7))
+            insights = insights_engine.get_insights(days=days)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'insights': insights}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def _handle_get_trend(self):
+        """Return metric trend data"""
+        global insights_engine
+        try:
+            if insights_engine is None:
+                insights_engine = InsightsEngine()
+            
+            metric_type = self.headers.get('X-Metric-Type', 'velocity')
+            days = int(self.headers.get('X-Days', 30))
+            trend = insights_engine.get_metric_trend(metric_type, days)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'trend': trend}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def handle_resolve_insight(self, data):
+        """Mark insight as resolved"""
+        global insights_engine
+        try:
+            if insights_engine is None:
+                insights_engine = InsightsEngine()
+            
+            insight_id = data.get('id')
+            if not insight_id:
+                return {'success': False, 'error': 'Missing insight ID'}
+            
+            insights_engine.resolve_insight(insight_id)
+            return {'success': True, 'message': 'Insight resolved'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_run_insights(self, data):
+        """Run insights analysis on provided data"""
+        global insights_engine
+        try:
+            if insights_engine is None:
+                insights_engine = InsightsEngine()
+            
+            jira_data = data.get('jira_data', {})
+            insights = insights_engine.analyze_all(jira_data)
+            
+            return {'success': True, 'insights': insights}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
@@ -494,6 +575,201 @@ HTML_TEMPLATE = """
             font-size: 12px;
             color: #172B4D;
         }
+        .feature-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0052CC;
+        }
+        .feature-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+        .feature-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #172B4D;
+            margin-bottom: 5px;
+        }
+        .feature-key {
+            color: #5E6C84;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+        .feature-progress {
+            text-align: right;
+        }
+        .progress-bar {
+            width: 120px;
+            height: 8px;
+            background: #DFE1E6;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #00875A;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            font-size: 12px;
+            color: #5E6C84;
+        }
+        .child-issues {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #DFE1E6;
+        }
+        .child-issue {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #F4F5F7;
+        }
+        .child-issue:last-child {
+            border-bottom: none;
+        }
+        .child-issue-info {
+            flex: 1;
+        }
+        .child-issue-key {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #5E6C84;
+            margin-right: 8px;
+        }
+        .child-issue-summary {
+            font-size: 14px;
+            color: #172B4D;
+        }
+        .child-issue-status {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-todo {
+            background: #DFE1E6;
+            color: #42526E;
+        }
+        .status-inprogress {
+            background: #DEEBFF;
+            color: #0052CC;
+        }
+        .status-review {
+            background: #FFF0B3;
+            color: #7A5C00;
+        }
+        .status-done {
+            background: #E3FCEF;
+            color: #006644;
+        }
+        .status-blocked {
+            background: #FFEBE6;
+            color: #BF2600;
+        }
+        .expand-toggle {
+            background: none;
+            border: none;
+            color: #0052CC;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 8px;
+        }
+        .canvas-card {
+            position: absolute;
+            width: 220px;
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            cursor: move;
+            transition: box-shadow 0.2s;
+            z-index: 10;
+        }
+        .canvas-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+            z-index: 20;
+        }
+        .canvas-card.selected {
+            box-shadow: 0 0 0 3px #0052CC;
+            z-index: 30;
+        }
+        .canvas-card.blocked {
+            border-left: 4px solid #DE350B;
+        }
+        .canvas-card-key {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #0052CC;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .canvas-card-summary {
+            font-size: 13px;
+            color: #172B4D;
+            line-height: 1.3;
+            margin-bottom: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .canvas-card-status {
+            font-size: 10px;
+            padding: 3px 6px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        .canvas-card-links {
+            font-size: 10px;
+            color: #5E6C84;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #DFE1E6;
+        }
+        #dependency-canvas-container {
+            cursor: grab;
+        }
+        #dependency-canvas-container.dragging {
+            cursor: grabbing;
+        }
+        .persona-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid #DFE1E6;
+        }
+        .persona-card:hover {
+            border-color: #0052CC;
+            box-shadow: 0 4px 12px rgba(0,82,204,0.2);
+            transform: translateY(-2px);
+        }
+        .persona-card.selected {
+            border-color: #00875A;
+            background: #E3FCEF;
+        }
+        .persona-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #172B4D;
+            margin-bottom: 8px;
+        }
+        .persona-desc {
+            font-size: 13px;
+            color: #5E6C84;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -505,6 +781,9 @@ HTML_TEMPLATE = """
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+            <button class="tab" onclick="switchTab('po')">👔 PO</button>
+            <button class="tab" onclick="switchTab('dev')">💻 Dev</button>
+            <button class="tab" onclick="switchTab('sm')">📈 SM</button>
             <button class="tab" onclick="switchTab('workflows')">⚙️ Workflows</button>
             <button class="tab" onclick="switchTab('favorites')">⭐ Favorites</button>
             <button class="tab" onclick="switchTab('logs')">📋 Logs</button>
@@ -515,6 +794,31 @@ HTML_TEMPLATE = """
 
         <!-- DASHBOARD TAB -->
         <div id="dashboard" class="tab-content active">
+            <!-- Persona Selection Card -->
+            <div class="card">
+                <h2>Welcome! Select Your Primary Role</h2>
+                <p style="color: #5E6C84; margin-bottom: 15px;">
+                    Choose your role to see relevant quick actions on the dashboard. You can always access all features from the tabs above.
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                    <div class="persona-card" onclick="selectPersona('po')">
+                        <div style="font-size: 48px; margin-bottom: 10px;">👔</div>
+                        <div class="persona-title">Product Owner</div>
+                        <div class="persona-desc">Track features, visualize dependencies, export reports</div>
+                    </div>
+                    <div class="persona-card" onclick="selectPersona('dev')">
+                        <div style="font-size: 48px; margin-bottom: 10px;">💻</div>
+                        <div class="persona-title">Developer</div>
+                        <div class="persona-desc">Automate Jira updates from GitHub, reduce admin work</div>
+                    </div>
+                    <div class="persona-card" onclick="selectPersona('sm')">
+                        <div style="font-size: 48px; margin-bottom: 10px;">📈</div>
+                        <div class="persona-title">Scrum Master</div>
+                        <div class="persona-desc">Team metrics, hygiene reports, insights</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <h2>System Status</h2>
                 <div class="stat-grid">
@@ -535,6 +839,12 @@ HTML_TEMPLATE = """
                         <div class="stat-label">Active Workflows</div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Dynamic persona-specific quick actions -->
+            <div id="persona-quick-actions" class="card" style="display: none;">
+                <h2 id="persona-actions-title">Quick Actions</h2>
+                <div id="persona-actions-content"></div>
             </div>
 
             <div class="card">
@@ -559,6 +869,294 @@ HTML_TEMPLATE = """
                 <h2>Recent Activity</h2>
                 <div id="recent-activity" class="log-viewer">
                     <div class="log-entry log-info">Waiting for first sync...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PO TAB -->
+        <div id="po" class="tab-content">
+            <div class="card">
+                <h2>Team Mode</h2>
+                <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="radio" name="team-mode" value="scrum" onchange="toggleTeamMode('scrum')">
+                        <span>🏃 Scrum (Sprint-based)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="radio" name="team-mode" value="kanban" checked onchange="toggleTeamMode('kanban')">
+                        <span>🌊 Kanban (Flow-based)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Scrum-specific metrics -->
+            <div id="scrum-metrics" class="card" style="display: none;">
+                <h2>Sprint Overview</h2>
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-sprint-name">Sprint 24</div>
+                        <div class="stat-label">Current Sprint</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-sprint-progress">65%</div>
+                        <div class="stat-label">Sprint Progress</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-velocity-current">38</div>
+                        <div class="stat-label">Velocity</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-sprint-days">5</div>
+                        <div class="stat-label">Days Remaining</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kanban-specific metrics -->
+            <div id="kanban-metrics" class="card">
+                <h2>Flow Metrics</h2>
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-wip-count">8</div>
+                        <div class="stat-label">WIP (Work in Progress)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-cycle-time">4.2</div>
+                        <div class="stat-label">Avg Cycle Time (days)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-throughput">12</div>
+                        <div class="stat-label">Weekly Throughput</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="po-blocked-count">2</div>
+                        <div class="stat-label">Blocked Items</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Features & Epics</h2>
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="feature-search" placeholder="Search features..." style="flex: 1;">
+                    <select id="feature-filter" style="width: auto;">
+                        <option value="all">All Features</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="blocked">Blocked</option>
+                    </select>
+                    <button class="btn-small" onclick="refreshFeatures()">🔄 Refresh</button>
+                    <button class="btn-small btn-success" onclick="exportFeatures()">📥 Export CSV</button>
+                </div>
+                <div id="po-features-list">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Dependency Canvas</h2>
+                <p style="color: #5E6C84; margin-bottom: 15px;">
+                    Visualize issue dependencies and blockers. Provide a data structure to load dependencies.
+                </p>
+                
+                <!-- Data Input Section -->
+                <div style="background: #FFF4E5; border-left: 4px solid #FF991F; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
+                    <h3 style="margin: 0 0 10px 0; color: #172B4D; font-size: 14px;">📋 Data Setup Required</h3>
+                    <p style="color: #5E6C84; font-size: 13px; margin-bottom: 10px;">
+                        Create a JSON file with your issue dependencies and provide the URL or upload it below.
+                    </p>
+                    <details style="margin-bottom: 10px;">
+                        <summary style="cursor: pointer; color: #0052CC; font-weight: 600; font-size: 13px;">
+                            📖 Show JSON Schema Example
+                        </summary>
+                        <pre style="background: white; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 11px; overflow-x: auto;">{
+  "PROJ-100": {
+    "key": "PROJ-100",
+    "summary": "User Authentication System",
+    "status": "inprogress",
+    "links": [
+      { "type": "blocks", "target": "PROJ-101" },
+      { "type": "depends", "target": "PROJ-200" }
+    ]
+  },
+  "PROJ-101": {
+    "key": "PROJ-101",
+    "summary": "OAuth2 Integration",
+    "status": "blocked",
+    "links": [
+      { "type": "blocked-by", "target": "PROJ-100" }
+    ]
+  }
+}
+
+Link Types: "blocks", "blocked-by", "depends", "required-by", "relates"
+Status: "todo", "inprogress", "review", "blocked", "done"</pre>
+                    </details>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="canvas-data-url" placeholder="Paste URL to JSON file..." style="flex: 1;">
+                        <button class="btn-small btn-success" onclick="loadDependencyData()">📥 Load from URL</button>
+                        <label class="btn-small btn-secondary" style="margin: 0; cursor: pointer;">
+                            📁 Upload File
+                            <input type="file" id="canvas-data-file" accept=".json" style="display: none;" onchange="loadDependencyFile()">
+                        </label>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="canvas-issue-key" placeholder="Enter issue key to focus (e.g., PROJ-100)" style="flex: 1;">
+                    <button class="btn-small btn-success" onclick="loadIssueDependencies()">📊 Load Issue</button>
+                    <button class="btn-small btn-secondary" onclick="clearCanvas()">🗑️ Clear Canvas</button>
+                    <button class="btn-small" onclick="resetCanvasZoom()">🔍 Reset View</button>
+                    <button class="btn-small" onclick="exportCanvasImage()">📸 Export PNG</button>
+                </div>
+                <div id="dependency-canvas-container" style="position: relative; width: 100%; height: 600px; background: #F4F5F7; border-radius: 8px; overflow: hidden;">
+                    <canvas id="dependency-canvas" style="position: absolute; top: 0; left: 0;"></canvas>
+                    <svg id="dependency-svg" style="position: absolute; top: 0; left: 0; pointer-events: none;"></svg>
+                    <div id="canvas-cards" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+                </div>
+                <div style="margin-top: 15px; padding: 10px; background: white; border-radius: 4px; font-size: 12px;">
+                    <strong>Legend:</strong>
+                    <span style="margin-left: 15px;">🔴 Blocks/Blocked</span>
+                    <span style="margin-left: 15px;">🟢 Depends On (numbered)</span>
+                    <span style="margin-left: 15px;">🔵 Related</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- DEV TAB -->
+        <div id="dev" class="tab-content">
+            <div class="card">
+                <h2>GitHub → Jira Automation</h2>
+                <p style="color: #5E6C84; margin-bottom: 15px;">
+                    Reduce administrative burden by automatically syncing GitHub PRs to Jira tickets.
+                </p>
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="dev-prs-synced">0</div>
+                        <div class="stat-label">PRs Synced Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="dev-tickets-updated">0</div>
+                        <div class="stat-label">Tickets Auto-Updated</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="dev-last-sync">Never</div>
+                        <div class="stat-label">Last Sync</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Automation Rules</h2>
+                <div class="workflow-item">
+                    <div class="workflow-info">
+                        <div class="workflow-name">PR Merged → Move to Done</div>
+                        <div class="workflow-desc">Automatically move Jira ticket to "Done" when PR is merged</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="workflow-item">
+                    <div class="workflow-info">
+                        <div class="workflow-name">PR Opened → Add Comment</div>
+                        <div class="workflow-desc">Add PR link as comment to linked Jira ticket</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="workflow-item">
+                    <div class="workflow-info">
+                        <div class="workflow-name">PR Approved → Update Status</div>
+                        <div class="workflow-desc">Move ticket to "Ready for Deploy" when PR is approved</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Manual Sync</h2>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn-success" onclick="syncGitHubToJira()">🔄 Sync All PRs</button>
+                    <button class="btn-secondary" onclick="viewSyncLog()">📋 View Sync Log</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SM TAB -->
+        <div id="sm" class="tab-content">
+            <div class="card">
+                <h2>Team Health Overview</h2>
+                <div class="stat-grid">
+                    <div class="stat-card" style="border-left-color: #00875A;">
+                        <div class="stat-value" id="sm-health-score">85</div>
+                        <div class="stat-label">Health Score</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #FF991F;">
+                        <div class="stat-value" id="sm-stale-tickets">7</div>
+                        <div class="stat-label">Stale Tickets</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #DE350B;">
+                        <div class="stat-value" id="sm-hygiene-issues">12</div>
+                        <div class="stat-label">Hygiene Issues</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #0052CC;">
+                        <div class="stat-value" id="sm-velocity">42</div>
+                        <div class="stat-label">Avg Velocity</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🤖 AI Insights</h2>
+                <p style="color: #5E6C84; margin-bottom: 15px;">
+                    Automated insights generated from your team's data. Click to see details.
+                </p>
+                <div id="sm-ai-insights">
+                    <div class="favorite-item" style="border-left-color: #FF991F;">
+                        <div class="favorite-header">
+                            <div class="favorite-name">⚠️ Scope Creep Detected</div>
+                            <button class="btn-small" onclick="viewInsight('scope-creep')">View Details</button>
+                        </div>
+                        <div class="favorite-desc">
+                            3 stories in current sprint have grown by 40% in story points after sprint start.
+                        </div>
+                    </div>
+                    <div class="favorite-item" style="border-left-color: #DE350B;">
+                        <div class="favorite-header">
+                            <div class="favorite-name">🐛 Defect Leakage Alert</div>
+                            <button class="btn-small" onclick="viewInsight('defect-leakage')">View Details</button>
+                        </div>
+                        <div class="favorite-desc">
+                            5 production bugs found in stories marked "Done" last sprint. Review QA process.
+                        </div>
+                    </div>
+                    <div class="favorite-item" style="border-left-color: #0052CC;">
+                        <div class="favorite-header">
+                            <div class="favorite-name">📊 Velocity Trend</div>
+                            <button class="btn-small" onclick="viewInsight('velocity')">View Details</button>
+                        </div>
+                        <div class="favorite-desc">
+                            Team velocity has been stable at 40-45 points for last 4 sprints. Predictable delivery.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Hygiene Report</h2>
+                <div style="margin-bottom: 15px;">
+                    <button class="btn-small btn-success" onclick="runHygieneCheck()">🔍 Run Check</button>
+                    <button class="btn-small" onclick="exportHygieneReport()">📥 Export Report</button>
+                </div>
+                <div id="sm-hygiene-report">
+                    <!-- Populated by JavaScript -->
                 </div>
             </div>
         </div>
@@ -644,6 +1242,7 @@ HTML_TEMPLATE = """
     <script>
         let currentConfig = {};
         let logs = [];
+        let selectedPersona = localStorage.getItem('selectedPersona') || null;
 
         // Tab switching
         function switchTab(tabName) {
@@ -654,10 +1253,66 @@ HTML_TEMPLATE = """
             document.getElementById(tabName).classList.add('active');
             
             // Load data when switching to tabs
+            if (tabName === 'po') loadPOView();
+            if (tabName === 'dev') loadDevView();
+            if (tabName === 'sm') loadSMView();
             if (tabName === 'workflows') loadWorkflows();
             if (tabName === 'favorites') loadFavorites();
             if (tabName === 'logs') refreshLogs();
             if (tabName === 'settings') loadSettings();
+        }
+
+        // Persona selection
+        function selectPersona(persona) {
+            selectedPersona = persona;
+            localStorage.setItem('selectedPersona', persona);
+            
+            // Update UI
+            document.querySelectorAll('.persona-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.target.closest('.persona-card').classList.add('selected');
+            
+            // Show persona-specific quick actions
+            const actionsCard = document.getElementById('persona-quick-actions');
+            const actionsTitle = document.getElementById('persona-actions-title');
+            const actionsContent = document.getElementById('persona-actions-content');
+            
+            actionsCard.style.display = 'block';
+            
+            if (persona === 'po') {
+                actionsTitle.textContent = '👔 PO Quick Actions';
+                actionsContent.innerHTML = `
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn-success" onclick="switchTab('po')">📊 View Features</button>
+                        <button class="btn-secondary" onclick="switchTab('po'); setTimeout(() => document.getElementById('canvas-issue-key').focus(), 100)">
+                            🔗 Load Dependencies
+                        </button>
+                        <button onclick="exportFeatures()">📥 Export Features</button>
+                    </div>
+                `;
+                addLog('info', 'Selected PO persona - Focus on feature tracking and visualization');
+            } else if (persona === 'dev') {
+                actionsTitle.textContent = '💻 Dev Quick Actions';
+                actionsContent.innerHTML = `
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn-success" onclick="syncGitHubToJira()">🔄 Sync GitHub PRs</button>
+                        <button class="btn-secondary" onclick="switchTab('dev')">⚙️ View Automation Rules</button>
+                        <button onclick="viewSyncLog()">📋 View Sync Log</button>
+                    </div>
+                `;
+                addLog('info', 'Selected Dev persona - Focus on automation and GitHub sync');
+            } else if (persona === 'sm') {
+                actionsTitle.textContent = '📈 SM Quick Actions';
+                actionsContent.innerHTML = `
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn-success" onclick="runHygieneCheck()">🔍 Run Hygiene Check</button>
+                        <button class="btn-secondary" onclick="switchTab('sm')">📊 View Metrics</button>
+                        <button onclick="exportHygieneReport()">📥 Export Report</button>
+                    </div>
+                `;
+                addLog('info', 'Selected SM persona - Focus on metrics and team health');
+            }
         }
 
         // Status message display
@@ -1006,11 +1661,744 @@ HTML_TEMPLATE = """
             alert('Log viewer coming soon! For now, check jira-sync.log file.');
         }
 
+        // Toggle team mode (Scrum vs Kanban)
+        function toggleTeamMode(mode) {
+            const scrumMetrics = document.getElementById('scrum-metrics');
+            const kanbanMetrics = document.getElementById('kanban-metrics');
+            
+            if (mode === 'scrum') {
+                scrumMetrics.style.display = 'block';
+                kanbanMetrics.style.display = 'none';
+                addLog('info', 'Switched to Scrum mode');
+            } else {
+                scrumMetrics.style.display = 'none';
+                kanbanMetrics.style.display = 'block';
+                addLog('info', 'Switched to Kanban mode');
+            }
+        }
+
+        // Load PO view
+        async function loadPOView() {
+            addLog('info', 'Loading PO view...');
+            
+            // TODO: Fetch real data from Jira API
+            // For now, showing placeholder data
+            refreshFeatures();
+            
+            showStatus('PO view loaded (placeholder data)', 'info');
+        }
+
+        // Refresh features list
+        function refreshFeatures() {
+            const featuresList = document.getElementById('po-features-list');
+            
+            // TODO: Replace with actual Jira API data
+            const sampleFeatures = [
+                {
+                    key: 'PROJ-100',
+                    title: 'User Authentication & Authorization',
+                    progress: 75,
+                    completed: 6,
+                    total: 8,
+                    children: [
+                        { key: 'PROJ-101', summary: 'Implement OAuth2 login', status: 'done' },
+                        { key: 'PROJ-102', summary: 'Add role-based access control', status: 'done' },
+                        { key: 'PROJ-103', summary: 'Create user permissions UI', status: 'inprogress' },
+                        { key: 'PROJ-104', summary: 'Add JWT token refresh', status: 'inprogress' },
+                        { key: 'PROJ-105', summary: 'Implement MFA support', status: 'todo' },
+                        { key: 'PROJ-106', summary: 'Add session management', status: 'todo' },
+                        { key: 'PROJ-107', summary: 'Security audit and fixes', status: 'done' },
+                        { key: 'PROJ-108', summary: 'Documentation for auth flow', status: 'done' }
+                    ]
+                },
+                {
+                    key: 'PROJ-200',
+                    title: 'Payment Processing Integration',
+                    progress: 40,
+                    completed: 2,
+                    total: 5,
+                    children: [
+                        { key: 'PROJ-201', summary: 'Stripe API integration', status: 'done' },
+                        { key: 'PROJ-202', summary: 'Payment webhook handlers', status: 'done' },
+                        { key: 'PROJ-203', summary: 'Refund processing logic', status: 'inprogress' },
+                        { key: 'PROJ-204', summary: 'Payment receipt generation', status: 'blocked' },
+                        { key: 'PROJ-205', summary: 'PCI compliance review', status: 'todo' }
+                    ]
+                },
+                {
+                    key: 'PROJ-300',
+                    title: 'Mobile App - iOS',
+                    progress: 20,
+                    completed: 1,
+                    total: 5,
+                    children: [
+                        { key: 'PROJ-301', summary: 'Setup React Native project', status: 'done' },
+                        { key: 'PROJ-302', summary: 'Build login screen', status: 'inprogress' },
+                        { key: 'PROJ-303', summary: 'Implement navigation', status: 'review' },
+                        { key: 'PROJ-304', summary: 'Add push notifications', status: 'todo' },
+                        { key: 'PROJ-305', summary: 'App Store submission', status: 'todo' }
+                    ]
+                }
+            ];
+            
+            featuresList.innerHTML = sampleFeatures.map((feature, index) => `
+                <div class="feature-card">
+                    <div class="feature-header">
+                        <div style="flex: 1;">
+                            <div class="feature-title">${feature.title}</div>
+                            <div class="feature-key">${feature.key}</div>
+                        </div>
+                        <div class="feature-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${feature.progress}%;"></div>
+                            </div>
+                            <div class="progress-text">${feature.completed}/${feature.total} complete (${feature.progress}%)</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <button class="expand-toggle" onclick="toggleFeature(${index})">
+                            <span id="toggle-icon-${index}">▼</span> 
+                            <span style="font-size: 13px; font-weight: 600;">Show ${feature.total} child issues</span>
+                        </button>
+                    </div>
+                    <div id="feature-children-${index}" class="child-issues" style="display: none;">
+                        ${feature.children.map(child => `
+                            <div class="child-issue">
+                                <div class="child-issue-info">
+                                    <span class="child-issue-key">${child.key}</span>
+                                    <span class="child-issue-summary">${child.summary}</span>
+                                </div>
+                                <span class="child-issue-status status-${child.status}">
+                                    ${child.status === 'todo' ? 'To Do' : 
+                                      child.status === 'inprogress' ? 'In Progress' :
+                                      child.status === 'review' ? 'Review' :
+                                      child.status === 'blocked' ? 'Blocked' : 'Done'}
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+            
+            addLog('info', `Loaded ${sampleFeatures.length} features`);
+        }
+
+        // Export features to CSV
+        function exportFeatures() {
+            // TODO: Get actual feature data
+            const csv = 'Feature Key,Title,Progress,Completed,Total,Status\n' +
+                        'PROJ-100,User Authentication,75%,6,8,In Progress\n' +
+                        'PROJ-200,Payment Processing,40%,2,5,In Progress\n' +
+                        'PROJ-300,Mobile App iOS,20%,1,5,In Progress\n';
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `features-export-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            
+            showStatus('✅ Features exported to CSV', 'success');
+            addLog('success', 'Features exported to CSV');
+        }
+
+        // Toggle feature expansion
+        function toggleFeature(index) {
+            const children = document.getElementById(`feature-children-${index}`);
+            const icon = document.getElementById(`toggle-icon-${index}`);
+            
+            if (children.style.display === 'none') {
+                children.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                children.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
+        // Dependency Canvas
+        let canvasState = {
+            cards: [],
+            links: [],
+            selectedCard: null,
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+            isDragging: false,
+            dragStartX: 0,
+            dragStartY: 0,
+            draggedCard: null,
+            dataStore: {} // Store loaded dependency data
+        };
+
+        // Load dependency data from URL
+        async function loadDependencyData() {
+            const url = document.getElementById('canvas-data-url').value.trim();
+            if (!url) {
+                showStatus('Please enter a URL', 'error');
+                return;
+            }
+
+            try {
+                addLog('info', `Loading dependency data from ${url}...`);
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                canvasState.dataStore = data;
+                showStatus(`✅ Loaded ${Object.keys(data).length} issues from URL`, 'success');
+                addLog('success', `Data loaded: ${Object.keys(data).length} issues`);
+            } catch (error) {
+                showStatus('❌ Failed to load data: ' + error.message, 'error');
+                addLog('error', 'Failed to load dependency data: ' + error.message);
+            }
+        }
+
+        // Load dependency data from file
+        function loadDependencyFile() {
+            const fileInput = document.getElementById('canvas-data-file');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    canvasState.dataStore = data;
+                    showStatus(`✅ Loaded ${Object.keys(data).length} issues from file`, 'success');
+                    addLog('success', `Data loaded from ${file.name}: ${Object.keys(data).length} issues`);
+                } catch (error) {
+                    showStatus('❌ Invalid JSON file: ' + error.message, 'error');
+                    addLog('error', 'Failed to parse JSON file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Load issue dependencies
+        async function loadIssueDependencies() {
+            const issueKey = document.getElementById('canvas-issue-key').value.trim();
+            
+            // Check if we have data loaded
+            if (Object.keys(canvasState.dataStore).length === 0) {
+                showStatus('⚠️ Please load dependency data first (URL or file)', 'error');
+                return;
+            }
+            
+            if (!issueKey) {
+                showStatus('Please enter an issue key', 'error');
+                return;
+            }
+
+            const rootIssue = canvasState.dataStore[issueKey];
+            if (!rootIssue) {
+                showStatus(`Issue ${issueKey} not found in loaded data`, 'error');
+                return;
+            }
+
+            addLog('info', `Loading dependencies for ${issueKey}...`);
+
+            // Clear and rebuild canvas
+            clearCanvas();
+            
+            // Add root card at center
+            addCanvasCard(rootIssue, 400, 200, true);
+            
+            // Add linked issues in a circular layout
+            const linkedKeys = new Set();
+            rootIssue.links.forEach(link => linkedKeys.add(link.target));
+            
+            const radius = 200;
+            const angleStep = (2 * Math.PI) / linkedKeys.size;
+            let angle = 0;
+            
+            linkedKeys.forEach(key => {
+                const issue = canvasState.dataStore[key];
+                if (issue) {
+                    const x = 400 + radius * Math.cos(angle);
+                    const y = 200 + radius * Math.sin(angle);
+                    addCanvasCard(issue, x, y, false);
+                    angle += angleStep;
+                }
+            });
+            
+            // Add links
+            rootIssue.links.forEach(link => {
+                addCanvasLink(rootIssue.key, link.target, link.type);
+            });
+            
+            renderCanvas();
+            showStatus(`Loaded ${linkedKeys.size + 1} issues with dependencies`, 'success');
+        }
+
+        // Add card to canvas
+        function addCanvasCard(issue, x, y, isRoot) {
+            const card = {
+                id: issue.key,
+                key: issue.key,
+                summary: issue.summary,
+                status: issue.status,
+                x: x,
+                y: y,
+                isRoot: isRoot,
+                links: issue.links || []
+            };
+            
+            canvasState.cards.push(card);
+        }
+
+        // Add link between cards
+        function addCanvasLink(fromKey, toKey, type) {
+            canvasState.links.push({
+                from: fromKey,
+                to: toKey,
+                type: type
+            });
+        }
+
+        // Render canvas
+        function renderCanvas() {
+            const container = document.getElementById('canvas-cards');
+            const svg = document.getElementById('dependency-svg');
+            
+            // Set SVG size
+            const rect = container.getBoundingClientRect();
+            svg.setAttribute('width', rect.width);
+            svg.setAttribute('height', rect.height);
+            
+            // Clear existing content
+            container.innerHTML = '';
+            svg.innerHTML = '';
+            
+            // Draw links first (so they appear behind cards)
+            canvasState.links.forEach((link, index) => {
+                const fromCard = canvasState.cards.find(c => c.id === link.from);
+                const toCard = canvasState.cards.find(c => c.id === link.to);
+                
+                if (fromCard && toCard) {
+                    drawLink(svg, fromCard, toCard, link.type, index);
+                }
+            });
+            
+            // Draw cards
+            canvasState.cards.forEach((card, index) => {
+                const cardEl = createCardElement(card, index);
+                container.appendChild(cardEl);
+            });
+        }
+
+        // Create card DOM element
+        function createCardElement(card, index) {
+            const div = document.createElement('div');
+            div.className = 'canvas-card' + (card.status === 'blocked' ? ' blocked' : '');
+            div.style.left = card.x + 'px';
+            div.style.top = card.y + 'px';
+            div.dataset.index = index;
+            
+            const statusClass = 'status-' + card.status;
+            const statusText = card.status === 'todo' ? 'To Do' : 
+                              card.status === 'inprogress' ? 'In Progress' :
+                              card.status === 'review' ? 'Review' :
+                              card.status === 'blocked' ? 'Blocked' : 'Done';
+            
+            div.innerHTML = `
+                <div class="canvas-card-key">${card.key}</div>
+                <div class="canvas-card-summary">${card.summary}</div>
+                <span class="canvas-card-status ${statusClass}">${statusText}</span>
+                ${card.links.length > 0 ? `<div class="canvas-card-links">🔗 ${card.links.length} link${card.links.length > 1 ? 's' : ''}</div>` : ''}
+            `;
+            
+            // Make card draggable
+            div.addEventListener('mousedown', (e) => startDragCard(e, index));
+            div.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectCard(index);
+            });
+            
+            return div;
+        }
+
+        // Draw link between cards
+        function drawLink(svg, fromCard, toCard, type, index) {
+            const fromX = fromCard.x + 110; // Center of card (220/2)
+            const fromY = fromCard.y + 50;
+            const toX = toCard.x + 110;
+            const toY = toCard.y + 50;
+            
+            let color, strokeDasharray, strokeWidth;
+            
+            if (type === 'blocks' || type === 'blocked-by') {
+                color = '#DE350B'; // Red for blockers
+                strokeDasharray = '5,5'; // Dashed line
+                strokeWidth = 2;
+            } else if (type === 'depends' || type === 'required-by') {
+                color = '#00875A'; // Green for dependencies
+                strokeDasharray = 'none';
+                strokeWidth = 2;
+            } else {
+                color = '#0052CC'; // Blue for related
+                strokeDasharray = 'none';
+                strokeWidth = 1;
+            }
+            
+            // Draw arrow line
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', fromX);
+            line.setAttribute('y1', fromY);
+            line.setAttribute('x2', toX);
+            line.setAttribute('y2', toY);
+            line.setAttribute('stroke', color);
+            line.setAttribute('stroke-width', strokeWidth);
+            if (strokeDasharray !== 'none') {
+                line.setAttribute('stroke-dasharray', strokeDasharray);
+            }
+            line.setAttribute('marker-end', `url(#arrowhead-${type})`);
+            svg.appendChild(line);
+            
+            // Add arrowhead marker if not exists
+            if (!document.getElementById(`arrowhead-${type}`)) {
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.setAttribute('id', `arrowhead-${type}`);
+                marker.setAttribute('markerWidth', '10');
+                marker.setAttribute('markerHeight', '10');
+                marker.setAttribute('refX', '9');
+                marker.setAttribute('refY', '3');
+                marker.setAttribute('orient', 'auto');
+                
+                const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                polygon.setAttribute('points', '0 0, 10 3, 0 6');
+                polygon.setAttribute('fill', color);
+                
+                marker.appendChild(polygon);
+                defs.appendChild(marker);
+                svg.appendChild(defs);
+            }
+            
+            // Add sequence number for dependency chains
+            if (type === 'depends' || type === 'required-by') {
+                const midX = (fromX + toX) / 2;
+                const midY = (fromY + toY) / 2;
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', midX);
+                circle.setAttribute('cy', midY);
+                circle.setAttribute('r', '12');
+                circle.setAttribute('fill', 'white');
+                circle.setAttribute('stroke', color);
+                circle.setAttribute('stroke-width', '2');
+                svg.appendChild(circle);
+                
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', midX);
+                text.setAttribute('y', midY + 4);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('font-size', '12');
+                text.setAttribute('font-weight', 'bold');
+                text.setAttribute('fill', color);
+                text.textContent = index + 1;
+                svg.appendChild(text);
+            }
+        }
+
+        // Card dragging
+        function startDragCard(e, index) {
+            e.stopPropagation();
+            canvasState.draggedCard = index;
+            canvasState.dragStartX = e.clientX - canvasState.cards[index].x;
+            canvasState.dragStartY = e.clientY - canvasState.cards[index].y;
+            
+            document.addEventListener('mousemove', dragCard);
+            document.addEventListener('mouseup', stopDragCard);
+        }
+
+        function dragCard(e) {
+            if (canvasState.draggedCard !== null) {
+                const card = canvasState.cards[canvasState.draggedCard];
+                card.x = e.clientX - canvasState.dragStartX;
+                card.y = e.clientY - canvasState.dragStartY;
+                renderCanvas();
+            }
+        }
+
+        function stopDragCard() {
+            canvasState.draggedCard = null;
+            document.removeEventListener('mousemove', dragCard);
+            document.removeEventListener('mouseup', stopDragCard);
+        }
+
+        // Select card
+        function selectCard(index) {
+            canvasState.selectedCard = index;
+            
+            // Highlight selected card
+            const cards = document.querySelectorAll('.canvas-card');
+            cards.forEach((card, i) => {
+                if (i === index) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.remove('selected');
+                }
+            });
+            
+            const selectedIssue = canvasState.cards[index];
+            addLog('info', `Selected: ${selectedIssue.key} - ${selectedIssue.summary}`);
+        }
+
+        // Clear canvas
+        function clearCanvas() {
+            canvasState.cards = [];
+            canvasState.links = [];
+            canvasState.selectedCard = null;
+            document.getElementById('canvas-cards').innerHTML = '';
+            document.getElementById('dependency-svg').innerHTML = '';
+            addLog('info', 'Canvas cleared');
+        }
+
+        // Reset zoom
+        function resetCanvasZoom() {
+            canvasState.zoom = 1;
+            canvasState.panX = 0;
+            canvasState.panY = 0;
+            renderCanvas();
+            addLog('info', 'Canvas view reset');
+        }
+
+        // Export canvas as image
+        function exportCanvasImage() {
+            const container = document.getElementById('dependency-canvas-container');
+            
+            // TODO: Implement proper canvas export using html2canvas or similar
+            showStatus('⚠️ Canvas export feature coming soon!', 'info');
+            addLog('info', 'Canvas export requested');
+        }
+
+        // Dev persona functions
+        function loadDevView() {
+            addLog('info', 'Loading Dev view...');
+            // TODO: Load GitHub sync status
+        }
+
+        function syncGitHubToJira() {
+            showStatus('🔄 Syncing GitHub PRs to Jira...', 'info');
+            addLog('info', 'Starting GitHub → Jira sync');
+            // TODO: Trigger actual sync
+            setTimeout(() => {
+                showStatus('✅ Sync completed!', 'success');
+                addLog('success', 'GitHub sync completed');
+            }, 2000);
+        }
+
+        function viewSyncLog() {
+            switchTab('logs');
+            addLog('info', 'Viewing sync log');
+        }
+
+        // SM persona functions
+        async function loadSMView() {
+            addLog('info', 'Loading SM view...');
+            await loadRealInsights();
+            loadHygieneReport();
+        }
+
+        async function loadRealInsights() {
+            try {
+                const response = await fetch('/api/insights', {
+                    headers: {'X-Days': '7'}
+                });
+                const data = await response.json();
+                
+                if (data.insights && data.insights.length > 0) {
+                    displayInsights(data.insights);
+                } else {
+                    // Show placeholder if no insights yet
+                    displayPlaceholderInsights();
+                }
+            } catch (error) {
+                addLog('error', 'Failed to load insights: ' + error.message);
+                displayPlaceholderInsights();
+            }
+        }
+
+        function displayInsights(insights) {
+            const container = document.getElementById('sm-ai-insights');
+            container.innerHTML = '';
+            
+            insights.forEach(insight => {
+                const severityColor = {
+                    'error': '#DE350B',
+                    'warning': '#FF991F',
+                    'info': '#0052CC'
+                }[insight.severity] || '#0052CC';
+                
+                const item = document.createElement('div');
+                item.className = 'favorite-item';
+                item.style.borderLeftColor = severityColor;
+                item.innerHTML = `
+                    <div class="favorite-header">
+                        <div class="favorite-name">${insight.title}</div>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn-small" onclick="viewInsightDetails(${insight.id})">View</button>
+                            ${!insight.resolved ? `<button class="btn-small btn-success" onclick="resolveInsight(${insight.id})">✓ Resolve</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="favorite-desc">${insight.message}</div>
+                    <div style="font-size: 11px; color: #5E6C84; margin-top: 8px;">
+                        ${new Date(insight.timestamp).toLocaleString()}
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+            
+            addLog('info', `Loaded ${insights.length} insights`);
+        }
+
+        function displayPlaceholderInsights() {
+            const container = document.getElementById('sm-ai-insights');
+            container.innerHTML = `
+                <div class="favorite-item" style="border-left-color: #0052CC;">
+                    <div class="favorite-header">
+                        <div class="favorite-name">📊 No Insights Yet</div>
+                    </div>
+                    <div class="favorite-desc">
+                        Run insights analysis to detect patterns, issues, and trends in your Jira data.
+                        Click "Run Hygiene Check" to generate insights.
+                    </div>
+                </div>
+            `;
+        }
+
+        async function resolveInsight(insightId) {
+            try {
+                const response = await fetch('/api/insights/resolve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: insightId})
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('✅ Insight marked as resolved', 'success');
+                    loadRealInsights(); // Refresh
+                } else {
+                    showStatus('❌ Failed to resolve: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        function viewInsightDetails(insightId) {
+            addLog('info', `Viewing insight #${insightId}`);
+            showStatus(`📊 Viewing insight details...`, 'info');
+            // TODO: Show detailed modal or navigate to detail view
+        }
+
+        function loadHygieneReport() {
+            const report = document.getElementById('sm-hygiene-report');
+            report.innerHTML = `
+                <div class="workflow-item" style="border-left-color: #FF991F;">
+                    <div class="workflow-info">
+                        <div class="workflow-name">7 Stale Tickets</div>
+                        <div class="workflow-desc">No updates in 14+ days</div>
+                    </div>
+                    <button class="btn-small">View</button>
+                </div>
+                <div class="workflow-item" style="border-left-color: #FF991F;">
+                    <div class="workflow-info">
+                        <div class="workflow-name">5 Missing Story Points</div>
+                        <div class="workflow-desc">Stories without estimates</div>
+                    </div>
+                    <button class="btn-small">View</button>
+                </div>
+                <div class="workflow-item" style="border-left-color: #DE350B;">
+                    <div class="workflow-info">
+                        <div class="workflow-name">3 Long-Running Stories</div>
+                        <div class="workflow-desc">In progress > 10 days</div>
+                    </div>
+                    <button class="btn-small">View</button>
+                </div>
+            `;
+        }
+
+        async function runHygieneCheck() {
+            showStatus('🔍 Running hygiene check...', 'info');
+            addLog('info', 'Running team hygiene check');
+            
+            // TODO: Gather real Jira data from scraper
+            // For now, run with sample data
+            const sampleData = {
+                stories: [],
+                bugs: [],
+                tickets: [],
+                velocity_history: [38, 42, 45, 40, 38],
+                sprint_data: {}
+            };
+            
+            try {
+                const response = await fetch('/api/insights/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({jira_data: sampleData})
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus(`✅ Analysis complete: ${data.insights.length} insights generated`, 'success');
+                    addLog('success', `Hygiene check completed: ${data.insights.length} insights`);
+                    loadRealInsights(); // Refresh display
+                } else {
+                    showStatus('❌ Analysis failed: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+                addLog('error', 'Hygiene check failed: ' + error.message);
+            }
+        }
+
+        function exportHygieneReport() {
+            const csv = 'Issue Type,Count,Severity,Description\n' +
+                        'Stale Tickets,7,Medium,No updates in 14+ days\n' +
+                        'Missing Story Points,5,Medium,Stories without estimates\n' +
+                        'Long-Running Stories,3,High,In progress > 10 days\n';
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `hygiene-report-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            
+            showStatus('✅ Hygiene report exported', 'success');
+            addLog('success', 'Hygiene report exported to CSV');
+        }
+
+        function viewInsight(type) {
+            addLog('info', `Viewing ${type} insight`);
+            showStatus(`📊 Viewing ${type} insight details...`, 'info');
+            // TODO: Show detailed insight modal or navigate to detail view
+        }
+
         // Initialize on load
         window.addEventListener('load', () => {
             addLog('info', 'UI initialized');
             loadWorkflows();
             loadSettings();
+            
+            // Restore selected persona if exists
+            if (selectedPersona) {
+                const personaCards = document.querySelectorAll('.persona-card');
+                personaCards.forEach((card, index) => {
+                    const personas = ['po', 'dev', 'sm'];
+                    if (personas[index] === selectedPersona) {
+                        card.classList.add('selected');
+                        // Trigger persona selection to show quick actions
+                        setTimeout(() => {
+                            card.click();
+                        }, 100);
+                    }
+                });
+            }
         });
     </script>
 </body>
