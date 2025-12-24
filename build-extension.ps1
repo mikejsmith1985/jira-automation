@@ -1,41 +1,30 @@
-# Script to build the complete extension
-Write-Host "Building Jira Hygiene Assistant Extension..." -ForegroundColor Cyan
+# Script to build the Jira Hygiene Assistant extension and create distribution zip
+Write-Host "Building Jira Hygiene Assistant Extension v0.0.1..." -ForegroundColor Cyan
 
 $extDir = "jira-hygiene-extension"
-if (Test-Path $extDir) {
-    Remove-Item -Recurse -Force $extDir
+$zipFile = "jira-hygiene-extension.zip"
+
+# Check if extension files exist
+if (-not (Test-Path "$extDir\popup.html")) {
+    Write-Host "Error: Extension source files not found in $extDir" -ForegroundColor Red
+    Write-Host "Required files: popup.html, popup.js, content.js, manifest.json, icon.png, README.md" -ForegroundColor Yellow
+    exit 1
 }
-New-Item -ItemType Directory $extDir | Out-Null
 
-# Create manifest.json
-$manifest = @'
-{
-  "manifest_version": 3,
-  "name": "Jira Hygiene Assistant",
-  "version": "0.0.1",
-  "description": "Automate Jira ticket hygiene checks and fixes",
-  "permissions": ["activeTab", "storage"],
-  "host_permissions": ["http://*/*", "https://*/*"],
-  "action": {"default_popup": "popup.html", "default_icon": "icon.png"},
-  "content_scripts": [{"matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_idle"}],
-  "icons": {"128": "icon.png"}
+# Remove old zip if exists
+if (Test-Path $zipFile) {
+    Remove-Item $zipFile -Force
+    Write-Host "✓ Removed old zip file" -ForegroundColor Green
 }
-'@
-$manifest | Set-Content "$extDir\manifest.json"
 
-# Create icon (simple blue square with J)
-Add-Type -AssemblyName System.Drawing
-$bmp = New-Object System.Drawing.Bitmap(128, 128)
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.Clear([System.Drawing.Color]::FromArgb(0, 82, 204))
-$font = New-Object System.Drawing.Font("Arial", 48, [System.Drawing.FontStyle]::Bold)
-$brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-$g.DrawString("J", $font, $brush, 40, 30)
-$bmp.Save("$extDir\icon.png")
-$g.Dispose()
-$bmp.Dispose()
+# Create zip file
+Write-Host "Creating zip package..." -ForegroundColor Cyan
+Compress-Archive -Path "$extDir\*" -DestinationPath $zipFile -Force
 
-Write-Host "✓ Created manifest.json and icon.png" -ForegroundColor Green
+Write-Host "✓ Created $zipFile" -ForegroundColor Green
 Write-Host ""
-Write-Host "Next: Manually create popup.html, popup.js, content.js, and README.md in $extDir" -ForegroundColor Yellow
-Write-Host "See extension source files for content" -ForegroundColor Yellow
+Write-Host "Extension package ready for distribution!" -ForegroundColor Green
+Write-Host "Users can:" -ForegroundColor Cyan
+Write-Host "  1. Download $zipFile" -ForegroundColor White
+Write-Host "  2. Extract it" -ForegroundColor White
+Write-Host "  3. Load unpacked extension in Chrome/Edge" -ForegroundColor White
