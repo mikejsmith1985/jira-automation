@@ -1,122 +1,85 @@
-# 🚀 Jira Automation Assistant
+# 🚀 Jira Hygiene Assistant
 
-A desktop application that automates Jira tasks through UI simulation - **no API access required**.
+A browser extension that helps you find and fix Jira ticket hygiene issues using the Jira REST API.
 
 ---
 
 ## ✨ Features
 
-- ✅ **No Jira API needed** - Works through the web interface
-- ✅ **Single .exe file** - No installation or admin rights required
-- ✅ **Uses your session** - Inherits your SSO and permissions
-- ✅ **Fully transparent** - Watch it work in real-time
-- ✅ **Extensible** - Easy to add new automation types
+- ✅ **Find stale tickets** - Identify tickets with no updates in 7+ days
+- ✅ **Find missing descriptions** - Locate tickets without descriptions
+- ✅ **Find missing due dates** - Discover tickets lacking due dates
+- ✅ **Custom JQL queries** - Run your own Jira Query Language searches
+- ✅ **Bulk actions** - Add comments to multiple tickets at once
+- ✅ **Works everywhere** - Compatible with Jira Server and Cloud (REST API v2)
 
 ---
 
-## 📋 What Can It Do?
+## 📦 Installation
 
-### Current Automation Types:
+### For Chrome/Edge:
 
-1. **Update Due Dates**
-   - Sets due dates based on FixVersion release dates
-   - Accounts for business days and holidays
-   - Processes issues in bulk
+1. Open your browser and navigate to:
+   - **Chrome:** `chrome://extensions`
+   - **Edge:** `edge://extensions`
+2. Enable **Developer mode** (toggle in top-right corner)
+3. Click **Load unpacked**
+4. Select the `jira-hygiene-extension` folder from this repository
 
-2. **Link Pull Requests**
-   - Associates GitHub/GitLab PRs with Jira issues
-   - Injects PR comments into Jira
+### Building the Extension:
 
-3. **Bulk Field Updates**
-   - Update any field across multiple issues
-   - Transition issues to new statuses
+If you want to create a packaged `.zip` file:
+
+```powershell
+.\build-extension.ps1
+```
+
+Output: `jira-hygiene-extension.zip`
+
+---
+
+## 🛠️ Usage
+
+1. **Configure Jira URL:**
+   - Click the extension icon in your browser toolbar
+   - Enter your Jira base URL (e.g., `https://company.atlassian.net`)
+   - Click **Save Settings**
+
+2. **Navigate to Jira:**
+   - Open any Jira page in your browser
+   - The extension will automatically detect Jira pages
+
+3. **Run Queries:**
+   - Click the extension icon
+   - Choose a pre-built query or enter custom JQL
+   - Click **Find Tickets** to see results
+
+4. **Take Action:**
+   - Review the list of found tickets
+   - Use bulk actions (e.g., add comments) as needed
 
 ---
 
 ## 🏗️ Architecture
 
-### The App Has 3 Main Parts:
+The extension consists of three main components:
 
 ```
 ┌─────────────────────────────────────────┐
-│  RENDERER (React UI)                    │
-│  - Forms and buttons                    │
-│  - Progress display                     │
-│  - Configuration editor                 │
+│  POPUP (popup.html / popup.js)          │
+│  - User interface                       │
+│  - Settings configuration               │
+│  - Query selection                      │
 └────────────────┬────────────────────────┘
-                 │ IPC Messages
+                 │ Chrome API
                  ↓
 ┌─────────────────────────────────────────┐
-│  MAIN PROCESS (Electron)                │
-│  - Window management                    │
-│  - File I/O (config, logs)              │
-│  - IPC coordination                     │
-└────────────────┬────────────────────────┘
-                 │
-                 ↓
-┌─────────────────────────────────────────┐
-│  AUTOMATION (Injected Scripts)          │
-│  - Loads Jira in hidden window          │
-│  - Simulates clicks and form fills      │
-│  - Reports progress                     │
+│  CONTENT SCRIPT (content.js)            │
+│  - Injected into Jira pages             │
+│  - Makes REST API calls                 │
+│  - Manipulates page DOM                 │
 └─────────────────────────────────────────┘
 ```
-
-**For detailed architecture explanation, see:** `DEVELOPER_WALKTHROUGH.md`
-
----
-
-## 🛠️ Development Setup
-
-### Prerequisites:
-
-- Node.js 18+ ([Download here](https://nodejs.org/))
-- npm (comes with Node.js)
-- Windows, Mac, or Linux
-
-### Installation:
-
-```bash
-# 1. Clone or download this project
-cd jira-automation
-
-# 2. Install dependencies
-npm install
-
-# 3. Build TypeScript
-npm run build
-
-# 4. Run the app
-npm run dev
-```
-
-### Development Workflow:
-
-```bash
-# Terminal 1: Watch TypeScript files (auto-compile on save)
-npm run watch:ts
-
-# Terminal 2: Run Electron
-npm run start:electron
-```
-
----
-
-## 📦 Building for Distribution
-
-Create a standalone `.exe` file:
-
-```bash
-npm run package
-```
-
-Output: `release/JiraAutomationAssistant.exe`
-
-**Distribution notes:**
-- Single file, no installer needed
-- No admin rights required
-- Can run from USB drive or network share
-- Size: ~120MB (includes Chromium engine)
 
 ---
 
@@ -125,157 +88,81 @@ Output: `release/JiraAutomationAssistant.exe`
 ```
 jira-automation/
 │
-├── src/
-│   ├── main/                    # Electron main process
-│   │   ├── main.ts              # Entry point
-│   │   └── preload.ts           # Security bridge
-│   │
-│   ├── renderer/                # React UI
-│   │   ├── index.html           # Main HTML
-│   │   ├── App.tsx              # Root component
-│   │   ├── components/          # UI components
-│   │   └── styles/              # CSS files
-│   │
-│   ├── automation/              # Automation scripts
-│   │   ├── jira-injector.ts     # Main automation engine
-│   │   └── modules/             # Task-specific automation
-│   │
-│   └── shared/                  # Code used by multiple parts
-│       ├── ipc-channels.ts      # IPC channel definitions
-│       └── interfaces/          # TypeScript interfaces
+├── jira-hygiene-extension/      # Extension source files
+│   ├── manifest.json            # Extension configuration
+│   ├── popup.html               # Extension popup UI
+│   ├── popup.js                 # Popup logic
+│   ├── content.js               # Content script (Jira integration)
+│   ├── icon.png                 # Extension icon
+│   └── README.md                # Extension-specific docs
 │
-├── package.json                 # Dependencies & scripts
-├── tsconfig.json                # TypeScript configuration
-├── electron-builder.yml         # Build configuration
-├── README.md                    # This file
-└── DEVELOPER_WALKTHROUGH.md     # Detailed architecture guide
+├── build-extension.ps1          # Build script for packaging
+├── package.json                 # Project metadata
+└── README.md                    # This file
 ```
-
----
-
-## 🎓 Learning Resources
-
-### For Beginners:
-
-1. **Start here:** `DEVELOPER_WALKTHROUGH.md`
-   - Explains every file and why it exists
-   - Detailed code comments
-   - Clear analogies and examples
-
-2. **Read the code files** in this order:
-   - `src/shared/ipc-channels.ts` - Communication channels
-   - `src/shared/interfaces/` - Data structures
-   - `src/main/main.ts` - Main process
-   - `src/main/preload.ts` - Security bridge
-   - `src/renderer/index.html` - UI shell
-
-3. **Official Documentation:**
-   - [Electron Docs](https://www.electronjs.org/docs/latest/)
-   - [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
-   - [React Tutorial](https://react.dev/learn)
 
 ---
 
 ## 🔧 Configuration
 
-### First Run:
+### Settings Storage:
 
-1. Launch the app
-2. Set your Jira URL (e.g., `https://company.atlassian.net`)
-3. Configure a task:
-   - Choose task type (e.g., "Update Due Dates")
-   - Enter JQL query (e.g., `project = ABC AND status = "To Do"`)
-   - Set parameters (e.g., "10 days before FixVersion")
-4. Click "Start"
+The extension stores your Jira URL using Chrome's storage API. Settings persist across browser sessions.
 
-### Configuration File Location:
+### Supported Jira Versions:
 
-- **Windows:** `C:\Users\YourName\AppData\Roaming\jira-automation-assistant\config.json`
-- **Mac:** `~/Library/Application Support/jira-automation-assistant/config.json`
-- **Linux:** `~/.config/jira-automation-assistant/config.json`
+- ✅ Jira Cloud (REST API v2)
+- ✅ Jira Server 7.x+ (REST API v2)
+- ✅ Jira Data Center
 
-### Configuration Options:
+### Pre-built Queries:
 
-```typescript
-{
-  "jiraBaseUrl": "https://company.atlassian.net",
-  "throttling": {
-    "minDelayMs": 500,      // Min wait between actions
-    "maxDelayMs": 2000,     // Max wait (randomized for human-like behavior)
-    "pageLoadTimeoutMs": 30000
-  },
-  "retryPolicy": {
-    "maxRetries": 3,
-    "backoffMultiplier": 2   // Exponential backoff: 1s, 2s, 4s
-  },
-  "ui": {
-    "showBrowserWindow": true,  // Show Jira window during automation
-    "darkMode": false
-  },
-  "tasks": [/* Your automation tasks */]
-}
-```
+1. **Stale Tickets:** `updated < -7d ORDER BY updated ASC`
+2. **Missing Descriptions:** `description is EMPTY ORDER BY created DESC`
+3. **Missing Due Dates:** `duedate is EMPTY ORDER BY created DESC`
 
 ---
 
 ## 🚨 Troubleshooting
 
-### App won't start:
+### Extension not appearing:
 
-**Problem:** "window.electron is undefined"
-```bash
-# Solution: Rebuild the project
-npm run build
-# Then restart the app
+**Problem:** Extension icon doesn't show in toolbar
+```
+Solution: Pin the extension from the extensions menu (puzzle icon)
 ```
 
-**Problem:** Blank white screen
-```bash
-# Check the terminal for errors
-# Common cause: TypeScript not compiled
-npm run build
-```
+### API errors:
 
-### Automation not working:
+**Problem:** "Failed to fetch" or CORS errors
+- **Cause:** Incorrect Jira URL or authentication issues
+- **Solution:** 
+  1. Verify Jira URL is correct
+  2. Ensure you're logged into Jira in the same browser
+  3. Check browser console (F12) for detailed errors
 
-**Problem:** Can't find Jira elements
-- **Cause:** Jira's HTML structure changed
-- **Solution:** Update selectors in `src/automation/modules/`
+### No results returned:
 
-**Problem:** Session expired
-- **Cause:** You're not logged into Jira
-- **Solution:** Log in manually in the Jira window, then resume automation
-
-### Build errors:
-
-**Problem:** `npm run package` fails
-```bash
-# Solution: Clean and rebuild
-npm run clean
-npm install
-npm run build
-npm run package
-```
+**Problem:** Query runs but shows no tickets
+- **Cause:** JQL query syntax error or no matching tickets
+- **Solution:** Test your JQL query directly in Jira's issue search
 
 ---
 
-## 🔐 Security & Compliance
+## 🔐 Security & Permissions
 
-### Why This Approach Is Safe:
+### Required Permissions:
 
+- **activeTab:** Access the current Jira tab
+- **storage:** Save your Jira URL setting
+- **host_permissions:** Make API calls to Jira domains
+
+### Privacy Notes:
+
+✅ **No external servers** - All data stays between your browser and Jira
 ✅ **No credential storage** - Uses your existing browser session
-✅ **Transparent operation** - You can watch it work
-✅ **Auditable** - All code is reviewable
-✅ **Local only** - No cloud components or external calls
-✅ **Respects permissions** - Uses YOUR Jira access rights
-
-### Enterprise Considerations:
-
-- ✅ No browser extension installation required
-- ✅ No elevated privileges needed
-- ✅ Equivalent to Selenium/RPA tools
-- ✅ Can be code-signed for Windows SmartScreen
-- ✅ Runs in user space only
+✅ **Local only** - No analytics or tracking
+✅ **Open source** - All code is reviewable
 
 ---
 
@@ -283,44 +170,47 @@ npm run package
 
 ### Adding New Features:
 
-See `DEVELOPER_WALKTHROUGH.md` - Section: "How To Add New Features"
+1. Edit the appropriate file:
+   - UI changes: `popup.html`, `popup.js`
+   - Jira integration: `content.js`
+   - Permissions: `manifest.json`
 
-Quick steps:
-1. Add new TaskType enum value
-2. Create interface for task config
-3. Write automation module
-4. Wire it up in jira-injector.ts
+2. Test your changes:
+   - Reload the extension in `chrome://extensions`
+   - Test on a real Jira instance
+
+3. Package for distribution:
+   ```powershell
+   .\build-extension.ps1
+   ```
 
 ### Code Style:
 
-- ✅ Use TypeScript strict mode
-- ✅ Add detailed comments explaining WHY, not just WHAT
-- ✅ Follow existing naming conventions
-- ✅ Test with real Jira instance before committing
+- ✅ Use vanilla JavaScript (no build process required)
+- ✅ Add comments explaining complex logic
+- ✅ Follow existing code structure
+- ✅ Test with both Jira Cloud and Server
 
 ---
 
 ## 📝 Changelog
 
-### Version 1.0.0 (Current)
+### Version 0.0.1 (Current)
 
-- ✅ Initial project structure
-- ✅ Electron + TypeScript setup
-- ✅ IPC communication framework
-- ✅ Configuration management
-- ✅ Basic UI shell
-- ⏳ React components (in progress)
-- ⏳ Automation engine (in progress)
+- ✅ Basic extension structure
+- ✅ Jira REST API integration
+- ✅ Pre-built hygiene queries
+- ✅ Bulk comment functionality
+- ✅ Settings persistence
 
 ### Planned Features:
 
-- [ ] Due date automation (based on FixVersion)
-- [ ] PR linking and comment injection
-- [ ] Bulk field updates
-- [ ] Scheduled automation (cron-like)
-- [ ] Multi-task parallel execution
-- [ ] Detailed logging and reporting
-- [ ] Task templates library
+- [ ] Additional bulk actions (assign, transition, update fields)
+- [ ] Export results to CSV
+- [ ] Scheduled checks with notifications
+- [ ] Custom query templates
+- [ ] Multi-project support
+- [ ] Dashboard view
 
 ---
 
@@ -332,31 +222,30 @@ MIT License - See LICENSE file for details
 
 ## 🆘 Support
 
-### Documentation:
-
-- **Architecture Guide:** `DEVELOPER_WALKTHROUGH.md`
-- **Code Comments:** Every file is heavily commented
-- **Inline Help:** Check console logs for debugging info
-
 ### Getting Help:
 
-1. Check `DEVELOPER_WALKTHROUGH.md` first
-2. Look for `Developer Notes` comments in code files
-3. Check console output (F12 in Electron window)
+1. Check the browser console (F12) for error messages
+2. Verify your Jira URL and authentication
+3. Test JQL queries directly in Jira first
 4. Review the Troubleshooting section above
+
+### Useful Resources:
+
+- [Jira REST API Documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v2/)
+- [JQL Query Syntax](https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/)
+- [Chrome Extension Development](https://developer.chrome.com/docs/extensions/)
 
 ---
 
 ## 🎯 Quick Start Checklist
 
-- [ ] Install Node.js 18+
-- [ ] Run `npm install`
-- [ ] Run `npm run build`
-- [ ] Run `npm run dev`
-- [ ] Set Jira URL in the app
-- [ ] Configure your first task
-- [ ] Click "Start" and watch it work!
+- [ ] Install the extension in Chrome/Edge
+- [ ] Click the extension icon and set your Jira URL
+- [ ] Navigate to any Jira page
+- [ ] Click the extension icon
+- [ ] Select a query (e.g., "Find stale tickets")
+- [ ] Click "Find Tickets" and review results!
 
 ---
 
-**Built with ❤️ for teams who need Jira automation without API access**
+**Built with ❤️ for teams who want cleaner Jira hygiene**
