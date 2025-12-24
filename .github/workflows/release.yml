@@ -45,13 +45,14 @@ jobs:
           npm run build
           npx electron-builder --win --x64 --publish never
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "electron-builder failed, using fallback"
-            node scripts/create-portable-exe.js
+            Write-Host "electron-builder failed with exit code $LASTEXITCODE, using fallback"
           }
+          node scripts/create-portable-exe.js
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          ErrorActionPreference: Continue
       
       - name: Get tag name
         id: tag_name
