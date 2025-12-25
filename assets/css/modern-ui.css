@@ -60,49 +60,83 @@ body {
    Theme Toggle
    ============================================================================ */
 
-.theme-toggle {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 1px solid var(--border);
-    background: var(--bg-primary);
+.theme-toggle-sidebar {
+    width: 100%;
+    padding: 12px 20px;
+    margin-bottom: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
     color: var(--text-primary);
     cursor: pointer;
     display: flex;
     align-items: center;
-    justify-content: center;
-    z-index: 1000;
+    gap: 12px;
     transition: all 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
 }
 
-.theme-toggle:hover {
-    background: var(--bg-secondary);
-    border-color: var(--accent);
+.theme-toggle-sidebar:hover {
+    background: var(--accent-light);
+    color: var(--accent);
+    transform: translateX(2px);
 }
 
-.theme-toggle svg {
-    width: 20px;
-    height: 20px;
-    position: absolute;
+[data-theme="dark"] .theme-toggle-sidebar:hover {
+    background: var(--accent-dark);
+    color: var(--accent-light);
+}
+
+.theme-toggle-sidebar svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.theme-toggle .moon-icon {
+.theme-toggle-sidebar .moon-icon {
     opacity: 0;
     transform: rotate(-90deg);
+    position: absolute;
 }
 
-[data-theme="dark"] .theme-toggle .sun-icon {
-    opacity: 0;
-    transform: rotate(90deg);
-}
-
-[data-theme="dark"] .theme-toggle .moon-icon {
+.theme-toggle-sidebar .sun-icon {
     opacity: 1;
     transform: rotate(0);
+}
+
+[data-theme="dark"] .theme-toggle-sidebar .sun-icon {
+    opacity: 0;
+    transform: rotate(90deg);
+    position: absolute;
+}
+
+[data-theme="dark"] .theme-toggle-sidebar .moon-icon {
+    opacity: 1;
+    transform: rotate(0);
+    position: relative;
+}
+
+.theme-label {
+    flex: 1;
+    text-align: left;
+}
+
+[data-theme="dark"] .theme-label::after {
+    content: ' Mode';
+}
+
+[data-theme="dark"] .theme-label::before {
+    content: 'Dark';
+}
+
+.theme-label::after {
+    content: ' Mode';
+}
+
+.theme-label::before {
+    content: 'Light';
 }
 
 /* ============================================================================
@@ -130,6 +164,9 @@ body {
 .main-content {
     grid-column: 2;
     background: var(--bg-secondary);
+    display: flex;
+    justify-content: center;
+    padding-left: 250px;
 }
 
 /* ============================================================================
@@ -236,34 +273,13 @@ body {
 }
 
 /* ============================================================================
-   Header
-   ============================================================================ */
-
-.header {
-    padding: 32px 40px;
-    background: var(--bg-primary);
-    border-bottom: 1px solid var(--border);
-}
-
-.header-content h2 {
-    font-size: 28px;
-    font-weight: 700;
-    margin-bottom: 4px;
-    letter-spacing: -0.5px;
-}
-
-.header-content p {
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
-/* ============================================================================
    Content
    ============================================================================ */
 
 .content {
-    padding: 32px 40px;
-    margin-left: 250px;
+    padding: 40px;
+    width: 100%;
+    max-width: 1200px;
 }
 
 .tab {
@@ -297,6 +313,10 @@ body {
 
 .grid-cols-3 {
     grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr);
 }
 
 /* ============================================================================
@@ -542,6 +562,11 @@ input[type="checkbox"] {
     transform: scale(0.98);
 }
 
+.btn-small {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
 /* ============================================================================
    Badges
    ============================================================================ */
@@ -645,6 +670,15 @@ input[type="checkbox"] {
     .header {
         padding: 20px;
     }
+}
+
+/* ============================================================================
+   Notifications
+   ============================================================================ */
+
+#notification.show {
+    transform: translateY(0);
+    opacity: 1;
 }
 
 /* ============================================================================

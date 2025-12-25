@@ -4,20 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waypoint - GitHub Jira Sync</title>
-    <link rel="stylesheet" href="/assets/css/app.css">
+    <link rel="stylesheet" href="/assets/css/modern-ui.css">
 </head>
 <body>
-    <!-- Theme Toggle -->
-    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-        <svg viewBox="0 0 24 24" class="sun-icon">
-            <circle cx="12" cy="12" r="5"/>
-            <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <svg viewBox="0 0 24 24" class="moon-icon">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-    </button>
-
     <div class="layout">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -30,6 +19,18 @@
                 <a href="#" class="nav-item active" data-tab="dashboard">
                     <span class="nav-icon">📊</span>
                     <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="po">
+                    <span class="nav-icon">👔</span>
+                    <span>PO</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="dev">
+                    <span class="nav-icon">💻</span>
+                    <span>Dev</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="sm">
+                    <span class="nav-icon">📈</span>
+                    <span>SM</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="rules">
                     <span class="nav-icon">⚙️</span>
@@ -46,6 +47,18 @@
             </nav>
 
             <div class="sidebar-footer">
+                <!-- Theme Toggle -->
+                <button class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
+                    <svg viewBox="0 0 24 24" class="sun-icon">
+                        <circle cx="12" cy="12" r="5"/>
+                        <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <svg viewBox="0 0 24 24" class="moon-icon">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                    <span class="theme-label">Dark Mode</span>
+                </button>
+                
                 <div class="user-card">
                     <div class="user-avatar">👤</div>
                     <div>
@@ -58,14 +71,6 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Header -->
-            <header class="header">
-                <div class="header-content">
-                    <h2 id="page-title">Dashboard</h2>
-                    <p id="page-subtitle">Overview of your sync status</p>
-                </div>
-            </header>
-
             <!-- Tab Content -->
             <div class="content">
                 <!-- Dashboard Tab -->
@@ -117,6 +122,13 @@
                             
                             <div class="rule-body">
                                 <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-opened-enabled" checked>
+                                        <span>Enable this rule</span>
+                                    </label>
+                                </div>
+
+                                <div class="form-group">
                                     <label>Move to Status</label>
                                     <input type="text" id="pr-opened-status" value="In Review" placeholder="e.g., In Review">
                                     <p class="form-hint">Leave empty to skip</p>
@@ -136,7 +148,7 @@
 
                                 <div class="form-group">
                                     <label>Comment Template</label>
-                                    <textarea id="pr-opened-template" placeholder="Use {pr_url}, {branch_name}, {author}">🔗 PR opened: {pr_url}</textarea>
+                                    <textarea id="pr-opened-comment-text" placeholder="Use {pr_url}, {branch_name}, {author}">🔗 PR opened: {pr_url}</textarea>
                                 </div>
                             </div>
                         </div>
@@ -150,6 +162,13 @@
                             </div>
                             
                             <div class="rule-body">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-merged-enabled" checked>
+                                        <span>Enable this rule</span>
+                                    </label>
+                                </div>
+
                                 <div id="branch-rules" class="branch-rules">
                                     <!-- Will be populated by JavaScript -->
                                 </div>
@@ -165,6 +184,13 @@
                             </div>
                             
                             <div class="rule-body">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-closed-enabled" checked>
+                                        <span>Enable this rule</span>
+                                    </label>
+                                </div>
+
                                 <div class="form-group">
                                     <label>Add Label</label>
                                     <input type="text" id="pr-closed-label" value="pr-closed" placeholder="e.g., pr-closed">
@@ -183,6 +209,245 @@
                         <div class="card-footer">
                             <button class="btn btn-primary" id="save-rules">Save Rules</button>
                             <button class="btn btn-secondary" id="reset-rules">Reset</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- PO Tab -->
+                <section id="po" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Team Mode</h3>
+                            <p class="text-secondary">Choose your team's working style</p>
+                        </div>
+                        <div style="display: flex; gap: 20px; padding: 20px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="team-mode" value="scrum" onchange="toggleTeamMode('scrum')">
+                                <span>🏃 Scrum (Sprint-based)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="team-mode" value="kanban" checked onchange="toggleTeamMode('kanban')">
+                                <span>🌊 Kanban (Flow-based)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Kanban Metrics -->
+                    <div class="card" id="kanban-metrics">
+                        <div class="card-header">
+                            <h3>Flow Metrics</h3>
+                        </div>
+                        <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">8</div>
+                                <div class="stat-label">WIP</div>
+                                <div class="stat-change">Work in Progress</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">4.2</div>
+                                <div class="stat-label">Cycle Time</div>
+                                <div class="stat-change">Avg days</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">12</div>
+                                <div class="stat-label">Throughput</div>
+                                <div class="stat-change">Weekly</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">2</div>
+                                <div class="stat-label">Blocked</div>
+                                <div class="stat-change">Items</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scrum Metrics -->
+                    <div class="card" id="scrum-metrics" style="display: none;">
+                        <div class="card-header">
+                            <h3>Sprint Overview</h3>
+                        </div>
+                        <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">Sprint 24</div>
+                                <div class="stat-label">Current Sprint</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">65%</div>
+                                <div class="stat-label">Progress</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">38</div>
+                                <div class="stat-label">Velocity</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">5</div>
+                                <div class="stat-label">Days Left</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Features & Epics</h3>
+                            <p class="text-secondary">Track feature completeness and progress</p>
+                        </div>
+                        <div class="empty-state">
+                            <p>No features loaded</p>
+                            <p class="text-secondary">Import Jira data to view features and epics</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Dependency Canvas</h3>
+                            <p class="text-secondary">Visualize issue dependencies and blockers</p>
+                        </div>
+                        <div class="empty-state">
+                            <p>Dependency visualization available</p>
+                            <p class="text-secondary">Provide JSON data structure to load dependencies</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Dev Tab -->
+                <section id="dev" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>GitHub → Jira Automation</h3>
+                            <p class="text-secondary">Reduce admin burden with automated updates</p>
+                        </div>
+                        <div class="grid grid-cols-3" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">0</div>
+                                <div class="stat-label">PRs Synced</div>
+                                <div class="stat-change">Today</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">0</div>
+                                <div class="stat-label">Tickets Updated</div>
+                                <div class="stat-change">Auto-updated</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">Never</div>
+                                <div class="stat-label">Last Sync</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Active Automation Rules</h3>
+                            <p class="text-secondary">Rules are managed in the Automation tab</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>PR Merged → Move to Done</h4>
+                                    <p class="text-secondary">Auto-move tickets when PR merged</p>
+                                </div>
+                                <span class="badge badge-success">Active</span>
+                            </div>
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>PR Opened → Add Comment</h4>
+                                    <p class="text-secondary">Link PR to Jira ticket</p>
+                                </div>
+                                <span class="badge badge-success">Active</span>
+                            </div>
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>PR Closed → Add Label</h4>
+                                    <p class="text-secondary">Tag closed PRs</p>
+                                </div>
+                                <span class="badge badge-success">Active</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Manual Actions</h3>
+                        </div>
+                        <div style="padding: 20px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary">🔄 Sync All PRs</button>
+                            <button class="btn btn-secondary">📋 View Sync Log</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SM Tab -->
+                <section id="sm" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Team Health Overview</h3>
+                            <p class="text-secondary">Monitor team productivity and identify issues</p>
+                        </div>
+                        <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">85</div>
+                                <div class="stat-label">Health Score</div>
+                                <div class="stat-change">Good</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">7</div>
+                                <div class="stat-label">Stale Tickets</div>
+                                <div class="stat-change">14+ days</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">12</div>
+                                <div class="stat-label">Hygiene Issues</div>
+                                <div class="stat-change">Needs attention</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">42</div>
+                                <div class="stat-label">Avg Velocity</div>
+                                <div class="stat-change">Points/sprint</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>📊 Insights</h3>
+                            <p class="text-secondary">AI-powered pattern detection</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="integration-item" style="border-left: 4px solid #FF991F;">
+                                <div class="integration-info">
+                                    <h4>⚠️ Scope Creep Detected</h4>
+                                    <p class="text-secondary">3 stories grew by 40% after sprint start</p>
+                                </div>
+                                <button class="btn btn-secondary btn-small">View Details</button>
+                            </div>
+                            <div class="integration-item" style="border-left: 4px solid #DE350B;">
+                                <div class="integration-info">
+                                    <h4>🐛 Defect Leakage Alert</h4>
+                                    <p class="text-secondary">5 production bugs in "Done" stories</p>
+                                </div>
+                                <button class="btn btn-secondary btn-small">View Details</button>
+                            </div>
+                            <div class="integration-item" style="border-left: 4px solid #0052CC;">
+                                <div class="integration-info">
+                                    <h4>📈 Velocity Trend Stable</h4>
+                                    <p class="text-secondary">40-45 points for last 4 sprints</p>
+                                </div>
+                                <button class="btn btn-secondary btn-small">View Details</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Hygiene Report</h3>
+                            <p class="text-secondary">Identify team process issues</p>
+                        </div>
+                        <div style="padding: 20px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary">🔍 Run Check</button>
+                            <button class="btn btn-secondary">📥 Export Report</button>
+                        </div>
+                        <div class="empty-state">
+                            <p>No hygiene issues detected</p>
+                            <p class="text-secondary">Run check to analyze team data</p>
                         </div>
                     </div>
                 </section>
@@ -238,6 +503,9 @@
         </main>
     </div>
 
-    <script src="/assets/js/app.js"></script>
+    <!-- Notification Toast -->
+    <div id="notification" style="position: fixed; bottom: 20px; right: 20px; padding: 16px 24px; background: #00875a; color: white; border-radius: 8px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 1000;"></div>
+
+    <script src="/assets/js/modern-ui.js"></script>
 </body>
 </html>

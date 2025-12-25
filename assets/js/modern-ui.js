@@ -35,11 +35,12 @@ function initTheme() {
    ============================================================================ */
 
 function initTabNavigation() {
-    const tabs = document.querySelectorAll('.nav-tab');
-    const contents = document.querySelectorAll('.tab-content');
+    const tabs = document.querySelectorAll('.nav-item');
+    const contents = document.querySelectorAll('.tab');
     
     tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
             const tabName = tab.dataset.tab;
             
             // Remove active from all
@@ -48,7 +49,10 @@ function initTabNavigation() {
             
             // Add active to clicked
             tab.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
+            const targetTab = document.getElementById(tabName);
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
         });
     });
 }
@@ -58,14 +62,18 @@ function initTabNavigation() {
    ============================================================================ */
 
 function initBranchRules() {
-    const addBtn = document.getElementById('add-branch-rule');
-    addBtn.addEventListener('click', addBranchRule);
+    const addBtn = document.getElementById('add-rule');
+    if (addBtn) {
+        addBtn.addEventListener('click', addBranchRule);
+    }
 }
 
 function addBranchRule() {
-    const container = document.getElementById('branch-rules-container');
-    const branchRule = createBranchRuleElement();
-    container.appendChild(branchRule);
+    const container = document.getElementById('branch-rules');
+    if (container) {
+        const branchRule = createBranchRuleElement();
+        container.appendChild(branchRule);
+    }
 }
 
 function createBranchRuleElement(data = {}) {
@@ -157,13 +165,15 @@ async function loadRulesFromConfig() {
             
             // Load branch rules
             if (auto.pr_merged && auto.pr_merged.branch_rules) {
-                const container = document.getElementById('branch-rules-container');
-                container.innerHTML = '';
-                auto.pr_merged.branch_rules.forEach(rule => {
-                    if (rule.branch !== 'default') {
-                        container.appendChild(createBranchRuleElement(rule));
-                    }
-                });
+                const container = document.getElementById('branch-rules');
+                if (container) {
+                    container.innerHTML = '';
+                    auto.pr_merged.branch_rules.forEach(rule => {
+                        if (rule.branch !== 'default') {
+                            container.appendChild(createBranchRuleElement(rule));
+                        }
+                    });
+                }
             }
         }
     } catch (error) {
@@ -256,3 +266,33 @@ function showNotification(message, type = 'success') {
         notif.classList.remove('show');
     }, 3000);
 }
+
+/* ============================================================================
+   Persona Views - PO Team Mode Toggle
+   ============================================================================ */
+
+function toggleTeamMode(mode) {
+    const scrumMetrics = document.getElementById('scrum-metrics');
+    const kanbanMetrics = document.getElementById('kanban-metrics');
+    
+    if (mode === 'scrum') {
+        scrumMetrics.style.display = 'block';
+        kanbanMetrics.style.display = 'none';
+    } else {
+        scrumMetrics.style.display = 'none';
+        kanbanMetrics.style.display = 'block';
+    }
+    
+    // Save preference
+    localStorage.setItem('teamMode', mode);
+}
+
+// Initialize team mode on load
+document.addEventListener('DOMContentLoaded', function() {
+    const savedMode = localStorage.getItem('teamMode') || 'kanban';
+    const radio = document.querySelector(`input[name="team-mode"][value="${savedMode}"]`);
+    if (radio) {
+        radio.checked = true;
+        toggleTeamMode(savedMode);
+    }
+});
