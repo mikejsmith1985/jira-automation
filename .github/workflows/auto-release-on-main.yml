@@ -1,6 +1,5 @@
 name: Auto Release on Main Push
 
-# Triggers when code is merged to main (via squash merge from PR)
 on:
   push:
     branches:
@@ -8,11 +7,10 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   auto-release:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
@@ -20,174 +18,64 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: Check if we should create release
-        id: should_release
+      - name: Get latest tag and calculate next version
+        id: version
         run: |
-          # Try to get the latest tag
-          $tags = git tag --list 'v*' | Sort-Object { [version]$_.Substring(1) } -Descending | Select-Object -First 1
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           
-          if ($tags) {
-            $latestTag = $tags
-            echo "latest_tag=$latestTag" >> $env:GITHUB_OUTPUT
-            Write-Host "Found latest tag: $latestTag"
-          } else {
-            $latestTag = "v0.0.0"
-            echo "latest_tag=$latestTag" >> $env:GITHUB_OUTPUT
-            Write-Host "No tags found, starting with v0.0.0"
-          }
+          # Parse version
+          VERSION=${LATEST_TAG#v}
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
           
-          # Always create release on main push
-          echo "should_release=true" >> $env:GITHUB_OUTPUT
-          Write-Host "Will create new release"
-        shell: pwsh
+          # Bump patch
+          PATCH=$((PATCH + 1))
+          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version will be: $NEW_VERSION"
       
-      - name: Set up Python
-        if: steps.should_release.outputs.should_release == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        if: steps.should_release.outputs.should_release == 'true'
+      - name: Create release notes
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-      
-      - name: Get latest tag
-        if: steps.should_release.outputs.should_release == 'true'
-        id: get_tag
-        run: |
-          $tags = git tag --list 'v*' | Sort-Object { [version]$_.Substring(1) } -Descending | Select-Object -First 1
+          mkdir -p release
+          cat > release/RELEASE_NOTES.md << 'EOF'
+          # Release ${{ steps.version.outputs.new_version }}
           
-          if ($tags) {
-            $latestTag = $tags
-          } else {
-            $latestTag = "v0.0.0"
-          }
-          echo "latest_tag=$latestTag" >> $env:GITHUB_OUTPUT
-          Write-Host "Latest tag: $latestTag"
-        shell: pwsh
-      
-      - name: Calculate next version (patch bump)
-        if: steps.should_release.outputs.should_release == 'true'
-        id: calc_version
-        run: |
-          $latestTag = "${{ steps.get_tag.outputs.latest_tag }}"
-          $version = $latestTag -replace '^v', ''
-          $parts = $version -split '\.'
-          $major = [int]$parts[0]
-          $minor = [int]$parts[1]
-          $patch = [int]$parts[2]
+          ## What's New
           
-          # Auto patch bump on main push
-          $patch++
+          This release contains the latest changes merged to main.
           
-          $newVersion = "v$major.$minor.$patch"
-          echo "new_version=$newVersion" >> $env:GITHUB_OUTPUT
-          echo "New version: $newVersion"
-        shell: pwsh
-      
-      - name: Build executable with PyInstaller
-        if: steps.should_release.outputs.should_release == 'true'
-        run: |
-          if (Test-Path "GitHubJiraSync.spec") {
-            pyinstaller GitHubJiraSync.spec
-          } elseif (Test-Path "JiraAutomationAssistant.spec") {
-            pyinstaller JiraAutomationAssistant.spec
-          } else {
-            pyinstaller --name="GitHubJiraSync" --onefile --windowed --icon="assets/icon.ico" app.py
-          }
-        shell: pwsh
-      
-      - name: Prepare release assets
-        if: steps.should_release.outputs.should_release == 'true'
-        run: |
-          $version = "${{ steps.calc_version.outputs.new_version }}"
-          New-Item -ItemType Directory -Force -Path release
+          See the [commit history](https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.latest_tag }}...${{ github.sha }}) for detailed changes.
           
-          # Find the built executable
-          $exePath = Get-ChildItem -Path "dist" -Filter "*.exe" -Recurse | Select-Object -First 1
+          ## Installation
           
-          if ($exePath) {
-            $exeName = $exePath.Name
-            Copy-Item $exePath.FullName -Destination "release/GitHubJiraSync-$version.exe"
-            
-            # Create release notes from latest commit message
-            $latestCommit = git log -1 --format='%s%n%b'
-            $releaseNotes = @"
-# Release $version
-
-## What's New in $version
-
-$latestCommit
-
-## Installation
-
-1. Download ``GitHubJiraSync-$version.exe``
-2. Run the executable
-3. Browser will open to http://localhost:5000
-4. Configure your settings and start using the app
-
-## Requirements
-
-- Windows 10/11
-- Chrome browser (for Jira automation)
-
-## Changes in this release
-
-$latestCommit
-
----
-
-*This release was automatically generated when code was merged to main.*
-"@
-            
-            $releaseNotes | Out-File -FilePath "release/RELEASE_NOTES.md" -Encoding utf8
-            
-            echo "Executable built: release/GitHubJiraSync-$version.exe"
-          } else {
-            Write-Error "No executable found in dist folder"
-            exit 1
-          }
-        shell: pwsh
+          1. Download the executable from Assets below
+          2. Run the .exe file
+          3. Application will open at http://localhost:5000
+          4. Configure your settings
+          
+          ## System Requirements
+          
+          - Windows 10/11
+          - Chrome browser
+          EOF
       
-      - name: Create and push tag
-        if: steps.should_release.outputs.should_release == 'true'
+      - name: Create Git tag
         run: |
-          $version = "${{ steps.calc_version.outputs.new_version }}"
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag -a $version -m "Release $version [auto-generated from main merge]"
-          git push origin $version
-          echo "Tag $version created and pushed"
-        shell: pwsh
+          git tag -a "${{ steps.version.outputs.new_version }}" -m "Release ${{ steps.version.outputs.new_version }}"
+          git push origin "${{ steps.version.outputs.new_version }}"
       
-      - name: Create GitHub Release
-        if: steps.should_release.outputs.should_release == 'true'
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.calc_version.outputs.new_version }}
-          name: Release ${{ steps.calc_version.outputs.new_version }}
+          tag_name: ${{ steps.version.outputs.new_version }}
+          name: Release ${{ steps.version.outputs.new_version }}
           body_path: release/RELEASE_NOTES.md
           draft: false
           prerelease: false
-          files: |
-            release/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Upload build artifacts
-        if: steps.should_release.outputs.should_release == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: GitHubJiraSync-${{ steps.calc_version.outputs.new_version }}
-          path: |
-            release/*.exe
-            release/RELEASE_NOTES.md
-          retention-days: 30
-      
-      - name: No release needed
-        if: steps.should_release.outputs.should_release != 'true'
-        run: echo "ℹ️ No release created (no new commits since last tag)"
-        shell: pwsh
