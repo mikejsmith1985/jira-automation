@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waypoint - GitHub Jira Sync Assistant</title>
+    <link rel="stylesheet" href="/assets/css/modern-ui.css">
+    <script src="/assets/js/html2canvas.min.js"></script>
+</head>
+<body>
+    <!-- Theme Toggle -->
+    <div class="theme-toggle-container">
+        <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode">
+            <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="moon-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+        </button>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">🚀 Waypoint</h1>
+                <p class="subtitle">GitHub-Jira Sync Automation</p>
+            </div>
+        </header>
+
+        <!-- Main Navigation -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="dashboard">📊 Dashboard</button>
+            <button class="nav-tab" data-tab="rules">⚙️ Automation Rules</button>
+            <button class="nav-tab" data-tab="status">📈 Status</button>
+            <button class="nav-tab" data-tab="settings">⚙️ Settings</button>
+        </nav>
+
+        <!-- Tab Content -->
+        <main class="tab-content-area">
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
+                <div class="card">
+                    <h2>Welcome to Waypoint</h2>
+                    <p>Seamlessly sync your GitHub pull requests with Jira tickets.</p>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-prs">0</div>
+                            <div class="stat-label">PRs Synced</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-tickets">0</div>
+                            <div class="stat-label">Tickets Updated</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-active-rules">5</div>
+                            <div class="stat-label">Active Rules</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Automation Rules Tab -->
+            <section id="rules" class="tab-content">
+                <div class="card">
+                    <h2>Automation Rules Configuration</h2>
+                    <p class="subtitle-text">Configure how GitHub events are synced to Jira</p>
+
+                    <!-- PR Opened Rules -->
+                    <div class="rule-section">
+                        <div class="rule-header">
+                            <h3>🆕 When PR is Opened</h3>
+                            <div class="rule-toggle">
+                                <input type="checkbox" id="pr-opened-enabled" class="toggle-input" checked>
+                                <label for="pr-opened-enabled" class="toggle-label"></label>
+                            </div>
+                        </div>
+                        
+                        <div class="rule-body">
+                            <div class="form-group">
+                                <label>Move Ticket to Status:</label>
+                                <input type="text" id="pr-opened-status" class="input-field" placeholder="e.g., In Review" value="In Review">
+                                <small>Leave empty to skip</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Add Label:</label>
+                                <input type="text" id="pr-opened-label" class="input-field" placeholder="e.g., has-pr" value="has-pr">
+                            </div>
+                            
+                            <div class="form-group checkbox">
+                                <input type="checkbox" id="pr-opened-comment" class="toggle-input" checked>
+                                <label for="pr-opened-comment">Add Comment to Ticket</label>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Comment Template:</label>
+                                <textarea id="pr-opened-comment-text" class="input-field" placeholder="Use {pr_url}, {branch_name}, {author}">🔗 PR opened: {pr_url}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PR Merged Rules (Branch-Specific) -->
+                    <div class="rule-section">
+                        <div class="rule-header">
+                            <h3>✅ When PR is Merged</h3>
+                            <div class="rule-toggle">
+                                <input type="checkbox" id="pr-merged-enabled" class="toggle-input" checked>
+                                <label for="pr-merged-enabled" class="toggle-label"></label>
+                            </div>
+                        </div>
+                        
+                        <div class="rule-body">
+                            <p class="subtitle-text">Configure different actions for each target branch:</p>
+                            
+                            <div id="branch-rules-container" class="branch-rules">
+                                <!-- Branch rules will be rendered here -->
+                            </div>
+                            
+                            <button class="btn btn-secondary" id="add-branch-rule">+ Add Branch Rule</button>
+                        </div>
+                    </div>
+
+                    <!-- PR Closed Rules -->
+                    <div class="rule-section">
+                        <div class="rule-header">
+                            <h3>❌ When PR is Closed</h3>
+                            <div class="rule-toggle">
+                                <input type="checkbox" id="pr-closed-enabled" class="toggle-input" checked>
+                                <label for="pr-closed-enabled" class="toggle-label"></label>
+                            </div>
+                        </div>
+                        
+                        <div class="rule-body">
+                            <div class="form-group">
+                                <label>Add Label:</label>
+                                <input type="text" id="pr-closed-label" class="input-field" placeholder="e.g., pr-closed" value="pr-closed">
+                            </div>
+                            
+                            <div class="form-group checkbox">
+                                <input type="checkbox" id="pr-closed-comment" class="toggle-input" checked>
+                                <label for="pr-closed-comment">Add Comment to Ticket</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div class="form-actions">
+                        <button class="btn btn-primary" id="save-rules">💾 Save Rules</button>
+                        <button class="btn btn-secondary" id="reset-rules">↻ Reset</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status Tab -->
+            <section id="status" class="tab-content">
+                <div class="card">
+                    <h2>System Status</h2>
+                    <div class="status-info">
+                        <p>Sync Engine: <span class="status-badge connected">● Connected</span></p>
+                        <p>Last Sync: <span id="last-sync">Never</span></p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="settings" class="tab-content">
+                <div class="card">
+                    <h2>Settings</h2>
+                    <div class="form-group">
+                        <label>Jira URL:</label>
+                        <input type="text" class="input-field" placeholder="https://your-company.atlassian.net">
+                    </div>
+                    <div class="form-group">
+                        <label>GitHub Organization:</label>
+                        <input type="text" class="input-field" placeholder="your-org">
+                    </div>
+                    <button class="btn btn-primary">Save Settings</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Notification Toast -->
+        <div id="notification" class="notification"></div>
+    </div>
+
+    <script src="/assets/js/modern-ui.js"></script>
+</body>
+</html>
