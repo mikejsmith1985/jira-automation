@@ -100,9 +100,34 @@ driver.get(jira_url)
 2. **Empower POs** with visual tools and dependency tracking
 3. **Give SMs insights** into team health and productivity
 4. **Work without API access** (Selenium-first approach)
+5. **Enable user feedback** (built-in bug reporting system)
+
+## Feedback System
+
+### Architecture
+- **Floating bug button** - Always visible, bottom-right corner
+- **GitHub integration** - Submit issues via PyGithub library
+- **Auto-capture** - Logs, console errors, network failures
+- **Media capture** - Screenshots (html2canvas) and video (MediaRecorder API, 30s max)
+- **Privacy-focused** - Browser tab recording only
+
+### Implementation Details
+- **Backend**: `github_feedback.py` with `GitHubFeedback` and `LogCapture` classes
+- **Frontend**: Modal UI with screenshot/video capture
+- **Storage**: GitHub Personal Access Token in config.yaml
+- **Testing**: Unit tests in `test_feedback_system.py`
+
+### Usage
+1. User clicks 🐛 button
+2. If no token: shows setup modal
+3. User fills title/description
+4. Optionally captures screenshot or 30s video
+5. Logs auto-captured (last 5 mins if no video, full capture with video)
+6. Submit creates GitHub issue with all attachments
 
 ## Remember
 - This is a **desktop tool**, not a web service
 - Users authenticate once via browser, session persists
 - Favor client-side rendering over server-side
 - Keep UI embedded in single Python file for easy distribution
+- **Feedback system uses GitHub API** (exception to Jira no-API rule)

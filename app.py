@@ -15,6 +15,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from sync_engine import SyncEngine
 from insights_engine import InsightsEngine
+from github_feedback import GitHubFeedback, LogCapture
 
 # Global state
 driver = None
@@ -22,6 +23,8 @@ sync_engine = None
 sync_thread = None
 is_syncing = False
 insights_engine = None
+github_feedback = None
+log_capture = LogCapture()
 
 class SyncHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the web UI"""
@@ -45,6 +48,12 @@ class SyncHandler(BaseHTTPRequestHandler):
             self._handle_get_insights()
         elif self.path == '/api/insights/trend':
             self._handle_get_trend()
+        elif self.path == '/api/feedback/validate-token':
+            self._handle_validate_feedback_token()
+        elif self.path == '/api/feedback/console-log':
+            self._handle_console_log()
+        elif self.path == '/api/feedback/network-error':
+            self._handle_network_error()
         else:
             self.send_response(404)
             self.end_headers()
@@ -73,6 +82,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             response = self.handle_resolve_insight(data)
         elif self.path == '/api/insights/run':
             response = self.handle_run_insights(data)
+        elif self.path == '/api/feedback/submit':
+            response = self.handle_submit_feedback(data)
+        elif self.path == '/api/feedback/save-token':
+            response = self.handle_save_feedback_token(data)
         else:
             response = {'success': False, 'error': 'Unknown endpoint'}
         
@@ -256,6 +269,153 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': True, 'insights': insights}
         except Exception as e:
             return {'success': False, 'error': str(e)}
+    
+    def _handle_validate_feedback_token(self):
+        """Validate GitHub feedback token"""
+        global github_feedback
+        try:
+            if github_feedback and github_feedback.token:
+                result = github_feedback.validate_token()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode())
+            else:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'valid': False,
+                    'error': 'No token configured'
+                }).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def _handle_console_log(self):
+        """Receive and store console log from browser"""
+        global log_capture
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            log_entry = json.loads(post_data.decode())
+            
+            log_capture.add_console_log(log_entry)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def _handle_network_error(self):
+        """Receive and store network error from browser"""
+        global log_capture
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            error_entry = json.loads(post_data.decode())
+            
+            log_capture.add_network_error(error_entry)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def handle_submit_feedback(self, data):
+        """Submit feedback as GitHub issue"""
+        global github_feedback, log_capture
+        try:
+            if not github_feedback or not github_feedback.token:
+                return {'success': False, 'error': 'GitHub token not configured'}
+            
+            title = data.get('title', 'User Feedback')
+            description = data.get('description', '')
+            attachments = data.get('attachments', [])
+            include_logs = data.get('include_logs', True)
+            
+            # Build issue body
+            body = description + "\n\n"
+            
+            if include_logs:
+                body += log_capture.export_all_logs()
+            
+            # Add system info
+            import platform
+            body += "\n\n## System Information\n"
+            body += f"- OS: {platform.system()} {platform.release()}\n"
+            body += f"- Python: {platform.python_version()}\n"
+            body += f"- Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            
+            # Submit issue
+            result = github_feedback.create_issue(
+                title=title,
+                body=body,
+                labels=['user-feedback', 'bug'],
+                attachments=attachments
+            )
+            
+            return result
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_save_feedback_token(self, data):
+        """Save GitHub feedback token to config"""
+        global github_feedback
+        try:
+            token = data.get('token', '')
+            repo = data.get('repo', '')
+            
+            if not token or not repo:
+                return {'success': False, 'error': 'Token and repo required'}
+            
+            # Load config
+            with open('config.yaml', 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # Update feedback section
+            if 'feedback' not in config:
+                config['feedback'] = {}
+            
+            config['feedback']['github_token'] = token
+            config['feedback']['repo'] = repo
+            
+            # Save config
+            with open('config.yaml', 'w') as f:
+                yaml.dump(config, f, default_flow_style=False)
+            
+            # Initialize GitHub feedback client
+            github_feedback = GitHubFeedback(token=token, repo_name=repo)
+            
+            # Validate token
+            validation = github_feedback.validate_token()
+            
+            if validation['valid']:
+                return {
+                    'success': True,
+                    'message': f"Token validated for user: {validation['user']}"
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': validation['error']
+                }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
 
 # HTML Template (embedded)
@@ -266,6 +426,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GitHub-Jira Sync Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -770,6 +931,118 @@ HTML_TEMPLATE = """
             color: #5E6C84;
             line-height: 1.4;
         }
+        
+        /* Feedback System Styles */
+        .feedback-floating-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #DE350B 0%, #FF5630 100%);
+            color: white;
+            font-size: 28px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(222, 53, 11, 0.4);
+            z-index: 999;
+            transition: all 0.3s;
+        }
+        .feedback-floating-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(222, 53, 11, 0.6);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 12px;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideDown 0.3s;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .modal-close {
+            font-size: 32px;
+            font-weight: 300;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .modal-close:hover {
+            opacity: 1;
+        }
+        .modal-body {
+            padding: 30px;
+        }
+        .recording-pulse {
+            display: inline-block;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .attachment-preview {
+            display: inline-block;
+            margin: 5px;
+            padding: 10px;
+            background: #F4F5F7;
+            border-radius: 4px;
+            border: 2px solid #DFE1E6;
+        }
+        .attachment-preview img {
+            max-width: 150px;
+            max-height: 150px;
+            display: block;
+            margin-bottom: 5px;
+            border-radius: 4px;
+        }
+        .attachment-preview video {
+            max-width: 200px;
+            max-height: 150px;
+            display: block;
+            margin-bottom: 5px;
+            border-radius: 4px;
+        }
+        .attachment-preview button {
+            font-size: 11px;
+            padding: 4px 8px;
+        }
     </style>
 </head>
 <body>
@@ -1235,6 +1508,106 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                 <button onclick="viewLogs()" class="btn-secondary" style="margin-left: 10px;">
                     📄 View Log File
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Feedback Button -->
+    <button id="feedback-btn" class="feedback-floating-btn" onclick="openFeedbackModal()">
+        🐛
+    </button>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🐛 Report Bug / Feedback</h2>
+                <span class="modal-close" onclick="closeFeedbackModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Title *</label>
+                    <input type="text" id="feedback-title" placeholder="Brief description of the issue">
+                </div>
+                
+                <div class="input-group">
+                    <label>Description *</label>
+                    <textarea id="feedback-description" placeholder="Please describe what happened, what you expected, and steps to reproduce..." rows="6"></textarea>
+                </div>
+                
+                <div class="input-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="feedback-include-logs" checked>
+                        <span>Include logs (last 5 minutes)</span>
+                    </label>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin: 20px 0;">
+                    <button class="btn-secondary btn-small" onclick="captureScreenshot()">
+                        📸 Capture Screenshot
+                    </button>
+                    <button class="btn-secondary btn-small" onclick="toggleVideoRecording()" id="record-video-btn">
+                        🎥 Record Video (30s)
+                    </button>
+                    <div id="recording-indicator" style="display: none; color: #DE350B; font-weight: 600; align-items: center; gap: 5px;">
+                        <span class="recording-pulse">●</span>
+                        <span id="recording-timer">00:00</span>
+                    </div>
+                </div>
+                
+                <div id="feedback-attachments" style="margin: 15px 0;">
+                    <!-- Attachment previews will be added here -->
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button class="btn-secondary" onclick="closeFeedbackModal()">Cancel</button>
+                    <button class="btn-success" onclick="submitFeedback()" id="submit-feedback-btn">
+                        Submit Feedback
+                    </button>
+                </div>
+                
+                <div id="feedback-status" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitHub Token Setup Modal -->
+    <div id="github-token-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>🔑 GitHub Token Setup</h2>
+                <span class="modal-close" onclick="closeGitHubTokenModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="color: #5E6C84; margin-bottom: 15px;">
+                    To submit feedback, you need to configure a GitHub Personal Access Token.
+                </p>
+                
+                <div class="input-group">
+                    <label>GitHub Personal Access Token *</label>
+                    <input type="password" id="github-token-input" placeholder="ghp_xxxxxxxxxxxx">
+                    <small style="color: #5E6C84; display: block; margin-top: 5px;">
+                        Create at: <a href="https://github.com/settings/tokens" target="_blank">GitHub Settings → Developer settings → Personal access tokens</a><br>
+                        Required scope: <code>repo</code> (Full control of private repositories)
+                    </small>
+                </div>
+                
+                <div class="input-group">
+                    <label>Repository (owner/repo) *</label>
+                    <input type="text" id="github-repo-input" placeholder="username/repo-name">
+                    <small style="color: #5E6C84; display: block; margin-top: 5px;">
+                        Example: octocat/Hello-World
+                    </small>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button class="btn-secondary" onclick="closeGitHubTokenModal()">Cancel</button>
+                    <button class="btn-success" onclick="saveGitHubToken()">
+                        Save & Validate
+                    </button>
+                </div>
+                
+                <div id="token-status" style="margin-top: 15px; display: none;"></div>
             </div>
         </div>
     </div>
@@ -2379,11 +2752,357 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             // TODO: Show detailed insight modal or navigate to detail view
         }
 
+        // ========================================
+        // FEEDBACK SYSTEM
+        // ========================================
+        let feedbackAttachments = [];
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordingStartTime = null;
+        let recordingInterval = null;
+        let hasGitHubToken = false;
+
+        // Console log capture
+        (function() {
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            
+            console.log = function(...args) {
+                captureConsoleLog('log', args.join(' '));
+                originalLog.apply(console, args);
+            };
+            
+            console.error = function(...args) {
+                captureConsoleLog('error', args.join(' '));
+                originalError.apply(console, args);
+            };
+            
+            console.warn = function(...args) {
+                captureConsoleLog('warn', args.join(' '));
+                originalWarn.apply(console, args);
+            };
+            
+            window.addEventListener('error', (event) => {
+                captureConsoleLog('error', `${event.message} at ${event.filename}:${event.lineno}`);
+            });
+        })();
+
+        function captureConsoleLog(level, message) {
+            fetch('/api/feedback/console-log', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    level: level,
+                    message: message,
+                    timestamp: new Date().toISOString()
+                })
+            }).catch(() => {});  // Silent fail
+        }
+
+        function initFeedbackSystem() {
+            // Check if GitHub token is configured
+            fetch('/api/feedback/validate-token')
+                .then(r => r.json())
+                .then(data => {
+                    hasGitHubToken = data.valid;
+                    if (!hasGitHubToken) {
+                        console.log('GitHub token not configured for feedback system');
+                    }
+                })
+                .catch(console.error);
+        }
+
+        function openFeedbackModal() {
+            if (!hasGitHubToken) {
+                document.getElementById('github-token-modal').style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('feedback-modal').style.display = 'block';
+        }
+
+        function closeFeedbackModal() {
+            document.getElementById('feedback-modal').style.display = 'none';
+            // Reset form
+            document.getElementById('feedback-title').value = '';
+            document.getElementById('feedback-description').value = '';
+            document.getElementById('feedback-attachments').innerHTML = '';
+            feedbackAttachments = [];
+            
+            // Stop recording if active
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopVideoRecording();
+            }
+        }
+
+        function closeGitHubTokenModal() {
+            document.getElementById('github-token-modal').style.display = 'none';
+        }
+
+        async function saveGitHubToken() {
+            const token = document.getElementById('github-token-input').value.trim();
+            const repo = document.getElementById('github-repo-input').value.trim();
+            
+            if (!token || !repo) {
+                showTokenStatus('Please fill in both fields', 'error');
+                return;
+            }
+            
+            showTokenStatus('Validating token...', 'info');
+            
+            try {
+                const response = await fetch('/api/feedback/save-token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token, repo})
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showTokenStatus(data.message, 'success');
+                    hasGitHubToken = true;
+                    setTimeout(() => {
+                        closeGitHubTokenModal();
+                        openFeedbackModal();
+                    }, 1500);
+                } else {
+                    showTokenStatus('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showTokenStatus('Failed to save token: ' + error.message, 'error');
+            }
+        }
+
+        function showTokenStatus(message, type) {
+            const status = document.getElementById('token-status');
+            status.textContent = message;
+            status.className = 'status-' + type;
+            status.style.display = 'block';
+        }
+
+        async function captureScreenshot() {
+            try {
+                addLog('info', 'Capturing screenshot...');
+                
+                // Use html2canvas to capture the page
+                const canvas = await html2canvas(document.body);
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.9));
+                const reader = new FileReader();
+                
+                reader.onloadend = function() {
+                    const base64 = reader.result.split(',')[1];
+                    feedbackAttachments.push({
+                        name: `screenshot-${Date.now()}.png`,
+                        content: base64,
+                        mime_type: 'image/png',
+                        type: 'image'
+                    });
+                    renderAttachments();
+                    showStatus('✅ Screenshot captured', 'success');
+                };
+                
+                reader.readAsDataURL(blob);
+                
+            } catch (error) {
+                showStatus('❌ Screenshot failed: ' + error.message, 'error');
+                addLog('error', 'Screenshot capture failed: ' + error.message);
+            }
+        }
+
+        async function toggleVideoRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopVideoRecording();
+            } else {
+                startVideoRecording();
+            }
+        }
+
+        async function startVideoRecording() {
+            try {
+                addLog('info', 'Starting video recording...');
+                
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { mediaSource: 'browser' },
+                    audio: false
+                });
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm'
+                });
+                
+                recordedChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const reader = new FileReader();
+                    
+                    reader.onloadend = function() {
+                        const base64 = reader.result.split(',')[1];
+                        feedbackAttachments.push({
+                            name: `recording-${Date.now()}.webm`,
+                            content: base64,
+                            mime_type: 'video/webm',
+                            type: 'video'
+                        });
+                        renderAttachments();
+                        showStatus('✅ Video recording saved', 'success');
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                recordingStartTime = Date.now();
+                
+                document.getElementById('recording-indicator').style.display = 'flex';
+                document.getElementById('record-video-btn').textContent = '⏹️ Stop Recording';
+                
+                // Update timer
+                recordingInterval = setInterval(updateRecordingTimer, 100);
+                
+                // Auto-stop after 30 seconds
+                setTimeout(() => {
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        stopVideoRecording();
+                    }
+                }, 30000);
+                
+                showStatus('🎥 Recording started (max 30s)', 'info');
+                
+            } catch (error) {
+                showStatus('❌ Recording failed: ' + error.message, 'error');
+                addLog('error', 'Video recording failed: ' + error.message);
+            }
+        }
+
+        function stopVideoRecording() {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+                clearInterval(recordingInterval);
+                document.getElementById('recording-indicator').style.display = 'none';
+                document.getElementById('record-video-btn').textContent = '🎥 Record Video (30s)';
+                addLog('info', 'Video recording stopped');
+            }
+        }
+
+        function updateRecordingTimer() {
+            if (recordingStartTime) {
+                const elapsed = Date.now() - recordingStartTime;
+                const seconds = Math.floor(elapsed / 1000);
+                const ms = Math.floor((elapsed % 1000) / 100);
+                document.getElementById('recording-timer').textContent = 
+                    `${String(seconds).padStart(2, '0')}:${ms}`;
+            }
+        }
+
+        function renderAttachments() {
+            const container = document.getElementById('feedback-attachments');
+            container.innerHTML = '';
+            
+            feedbackAttachments.forEach((attachment, index) => {
+                const preview = document.createElement('div');
+                preview.className = 'attachment-preview';
+                
+                if (attachment.type === 'image') {
+                    preview.innerHTML = `
+                        <img src="data:${attachment.mime_type};base64,${attachment.content}" alt="${attachment.name}">
+                        <div style="font-size: 11px; color: #5E6C84; margin-bottom: 5px;">${attachment.name}</div>
+                        <button class="btn-danger btn-small" onclick="removeAttachment(${index})">Remove</button>
+                    `;
+                } else if (attachment.type === 'video') {
+                    preview.innerHTML = `
+                        <video controls src="data:${attachment.mime_type};base64,${attachment.content}"></video>
+                        <div style="font-size: 11px; color: #5E6C84; margin-bottom: 5px;">${attachment.name}</div>
+                        <button class="btn-danger btn-small" onclick="removeAttachment(${index})">Remove</button>
+                    `;
+                }
+                
+                container.appendChild(preview);
+            });
+        }
+
+        function removeAttachment(index) {
+            feedbackAttachments.splice(index, 1);
+            renderAttachments();
+        }
+
+        async function submitFeedback() {
+            const title = document.getElementById('feedback-title').value.trim();
+            const description = document.getElementById('feedback-description').value.trim();
+            const includeLogs = document.getElementById('feedback-include-logs').checked;
+            
+            if (!title || !description) {
+                showFeedbackStatus('Please fill in title and description', 'error');
+                return;
+            }
+            
+            const submitBtn = document.getElementById('submit-feedback-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            
+            showFeedbackStatus('Submitting feedback to GitHub...', 'info');
+            addLog('info', 'Submitting feedback issue');
+            
+            try {
+                const response = await fetch('/api/feedback/submit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        title: title,
+                        description: description,
+                        attachments: feedbackAttachments,
+                        include_logs: includeLogs
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showFeedbackStatus(
+                        `✅ Feedback submitted! <a href="${data.issue_url}" target="_blank">View issue #${data.issue_number}</a>`,
+                        'success'
+                    );
+                    addLog('success', `Feedback submitted as issue #${data.issue_number}`);
+                    
+                    setTimeout(() => {
+                        closeFeedbackModal();
+                    }, 3000);
+                } else {
+                    showFeedbackStatus('❌ Error: ' + data.error, 'error');
+                    addLog('error', 'Feedback submission failed: ' + data.error);
+                }
+                
+            } catch (error) {
+                showFeedbackStatus('❌ Failed: ' + error.message, 'error');
+                addLog('error', 'Feedback submission error: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Feedback';
+            }
+        }
+
+        function showFeedbackStatus(message, type) {
+            const status = document.getElementById('feedback-status');
+            status.innerHTML = message;
+            status.className = 'status-' + type;
+            status.style.display = 'block';
+        }
+
         // Initialize on load
         window.addEventListener('load', () => {
             addLog('info', 'UI initialized');
             loadWorkflows();
             loadSettings();
+            initFeedbackSystem();
             
             // Restore selected persona if exists
             if (selectedPersona) {
@@ -2412,6 +3131,23 @@ def open_browser():
 
 def run_server():
     """Run the HTTP server"""
+    global github_feedback
+    
+    # Initialize GitHub feedback if token exists in config
+    try:
+        with open('config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+            
+        if 'feedback' in config:
+            token = config['feedback'].get('github_token')
+            repo = config['feedback'].get('repo')
+            
+            if token and repo:
+                github_feedback = GitHubFeedback(token=token, repo_name=repo)
+                print("✅ GitHub feedback system initialized")
+    except Exception as e:
+        print(f"⚠️  GitHub feedback not configured: {str(e)}")
+    
     server_address = ('localhost', 5000)
     httpd = HTTPServer(server_address, SyncHandler)
     print("🚀 GitHub-Jira Sync Tool starting...")

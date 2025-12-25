@@ -199,3 +199,14 @@ performance:
   max_tickets_per_run: 100
   delay_between_updates_seconds: 2  # Wait 2 seconds between each ticket update
   browser_timeout_seconds: 30
+
+# ========================================
+# FEEDBACK SYSTEM
+# ========================================
+feedback:
+  github_token: ""  # GitHub Personal Access Token for issue creation
+  repo: ""  # Repository for feedback in format "owner/repo"
+  auto_capture_logs: true
+  log_history_minutes: 5  # How many minutes of logs to capture
+  video_max_seconds: 30
+  screenshot_quality: 0.9  # 0.0 to 1.0
