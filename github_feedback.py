@@ -26,9 +26,6 @@ class GitHubFeedback:
         self.repo_name = repo_name
         self.client = None
         self.repo = None
-        
-        if token and repo_name:
-            self._connect()
     
     def _connect(self):
         """Establish connection to GitHub"""
@@ -37,7 +34,9 @@ class GitHubFeedback:
             self.repo = self.client.get_repo(self.repo_name)
             return True
         except GithubException as e:
-            raise Exception(f"Failed to connect to GitHub: {str(e)}")
+            return False
+        except Exception as e:
+            return False
     
     def validate_token(self):
         """
@@ -48,7 +47,12 @@ class GitHubFeedback:
         """
         try:
             if not self.client:
-                self._connect()
+                if not self._connect():
+                    return {
+                        'valid': False,
+                        'user': None,
+                        'error': 'Failed to connect to GitHub. Check token and repo name.'
+                    }
             
             user = self.client.get_user()
             return {
