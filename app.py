@@ -38,8 +38,13 @@ class SyncHandler(BaseHTTPRequestHandler):
         if self.path == '/' or self.path == '/index.html':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
             self.end_headers()
             self.wfile.write(HTML_TEMPLATE.encode())
+        elif self.path == '/assets/js/html2canvas.min.js':
+            self._serve_static_file('assets/js/html2canvas.min.js', 'application/javascript')
         elif self.path == '/api/status':
             self._handle_status()
         elif self.path == '/api/config':
@@ -55,6 +60,19 @@ class SyncHandler(BaseHTTPRequestHandler):
         elif self.path == '/api/feedback/network-error':
             self._handle_network_error()
         else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def _serve_static_file(self, filepath, content_type):
+        """Serve static files with caching"""
+        try:
+            with open(filepath, 'rb') as f:
+                self.send_response(200)
+                self.send_header('Content-type', content_type)
+                self.send_header('Cache-Control', 'public, max-age=31536000')
+                self.end_headers()
+                self.wfile.write(f.read())
+        except FileNotFoundError:
             self.send_response(404)
             self.end_headers()
     
@@ -426,7 +444,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GitHub-Jira Sync Tool</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="/assets/js/html2canvas.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
