@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waypoint - GitHub Jira Sync</title>
+    <link rel="stylesheet" href="/assets/css/modern-ui.css">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">🚀</div>
+                <h1>Waypoint</h1>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-tab="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="po">
+                    <span class="nav-icon">👔</span>
+                    <span>PO</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="dev">
+                    <span class="nav-icon">💻</span>
+                    <span>Dev</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="sm">
+                    <span class="nav-icon">📈</span>
+                    <span>SM</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="rules">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Automation</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="integrations">
+                    <span class="nav-icon">🔗</span>
+                    <span>Integrations</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="settings">
+                    <span class="nav-icon">⚡</span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-actions">
+                    <!-- Feedback Button -->
+                    <button class="theme-toggle-sidebar" id="feedbackBtn" title="Report a bug or request a feature">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4.414a1 1 0 0 0-.707.293L.854 15.146A.5.5 0 0 1 0 14.793V2zm5 4a1 1 0 1 0-2 0 1 1 0 0 0 2 0zm4 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+                        </svg>
+                    </button>
+                    
+                    <!-- Theme Toggle -->
+                    <button class="theme-toggle-sidebar" id="themeToggle" title="Toggle dark mode">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="sun-icon" viewBox="0 0 16 16">
+                            <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
+                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="moon-icon" viewBox="0 0 16 16">
+                            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278zM4.858 1.311A7.269 7.269 0 0 0 1.025 7.71c0 4.02 3.279 7.276 7.319 7.276a7.316 7.316 0 0 0 5.205-2.162c-.337.042-.68.063-1.029.063-4.61 0-8.343-3.714-8.343-8.29 0-1.167.242-2.278.681-3.286z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="user-card">
+                    <div class="user-avatar">👤</div>
+                    <div>
+                        <div class="user-name">Account</div>
+                        <div class="user-email">Manage</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Tab Content -->
+            <div class="content">
+                <!-- Dashboard Tab -->
+                <section id="dashboard" class="tab active">
+                    <div class="grid grid-cols-3">
+                        <div class="card stat-card">
+                            <div class="stat-number">0</div>
+                            <div class="stat-label">PRs Synced</div>
+                            <div class="stat-change">This week</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-number">0</div>
+                            <div class="stat-label">Tickets Updated</div>
+                            <div class="stat-change">This month</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-number">5</div>
+                            <div class="stat-label">Active Rules</div>
+                            <div class="stat-change">Configured</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recent Activity</h3>
+                            <span class="badge">Live</span>
+                        </div>
+                        <div class="empty-state">
+                            <p>No recent activity</p>
+                            <p class="text-secondary">Your sync will appear here</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Automation Rules Tab -->
+                <section id="rules" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Automation Rules</h3>
+                            <p class="text-secondary">Configure GitHub to Jira automation</p>
+                        </div>
+
+                        <!-- PR Opened -->
+                        <div class="rule-card">
+                            <div class="rule-title">
+                                <span class="rule-icon">🆕</span>
+                                <h4>When PR is Opened</h4>
+                            </div>
+                            
+                            <div class="rule-body">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-opened-enabled" checked>
+                                        <span>Enable this rule</span>
+                                    </label>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Move to Status</label>
+                                    <input type="text" id="pr-opened-status" value="In Review" placeholder="e.g., In Review">
+                                    <p class="form-hint">Leave empty to skip</p>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Add Label</label>
+                                    <input type="text" id="pr-opened-label" value="has-pr" placeholder="e.g., has-pr">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-opened-comment" checked>
+                                        <span>Add comment to ticket</span>
+                                    </label>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Comment Template</label>
+                                    <textarea id="pr-opened-comment-text" placeholder="Use {pr_url}, {branch_name}, {author}">🔗 PR opened: {pr_url}</textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PR Merged -->
+                        <div class="rule-card">
+                            <div class="rule-title">
+                                <span class="rule-icon">✅</span>
+                                <h4>When PR is Merged</h4>
+                                <span class="rule-subtitle">Branch-specific rules</span>
+                            </div>
+                            
+                            <div class="rule-body">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-merged-enabled" checked>
+                                        <span>Enable this rule</span>
+                                    </label>
+                                </div>
+
+                                <div id="branch-rules" class="branch-rules">
+                                    <!-- Will be populated by JavaScript -->
+                                </div>
+                                <button class="btn btn-secondary" id="add-rule">+ Add branch rule</button>
+                            </div>
+                        </div>
+
+                        <!-- PR Closed -->
+                        <div class="rule-card">
+                            <div class="rule-title">
+                                <span class="rule-icon">❌</span>
+                                <h4>When PR is Closed</h4>
+                            </div>
+                            
+                            <div class="rule-body">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-closed-enabled" checked>
+                                        <span>Enable this rule</span>
+                                    </label>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Add Label</label>
+                                    <input type="text" id="pr-closed-label" value="pr-closed" placeholder="e.g., pr-closed">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pr-closed-comment" checked>
+                                        <span>Add comment to ticket</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="card-footer">
+                            <button class="btn btn-primary" id="save-rules">Save Rules</button>
+                            <button class="btn btn-secondary" id="reset-rules">Reset</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- PO Tab -->
+                <section id="po" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Team Mode</h3>
+                            <p class="text-secondary">Choose your team's working style</p>
+                        </div>
+                        <div style="display: flex; gap: 20px; padding: 20px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="team-mode" value="scrum" onchange="toggleTeamMode('scrum')">
+                                <span>🏃 Scrum (Sprint-based)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="team-mode" value="kanban" checked onchange="toggleTeamMode('kanban')">
+                                <span>🌊 Kanban (Flow-based)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Kanban Metrics -->
+                    <div class="card" id="kanban-metrics">
+                        <div class="card-header">
+                            <h3>Flow Metrics</h3>
+                        </div>
+                        <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">8</div>
+                                <div class="stat-label">WIP</div>
+                                <div class="stat-change">Work in Progress</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">4.2</div>
+                                <div class="stat-label">Cycle Time</div>
+                                <div class="stat-change">Avg days</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">12</div>
+                                <div class="stat-label">Throughput</div>
+                                <div class="stat-change">Weekly</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">2</div>
+                                <div class="stat-label">Blocked</div>
+                                <div class="stat-change">Items</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scrum Metrics -->
+                    <div class="card" id="scrum-metrics" style="display: none;">
+                        <div class="card-header">
+                            <h3>Sprint Overview</h3>
+                        </div>
+                        <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">Sprint 24</div>
+                                <div class="stat-label">Current Sprint</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">65%</div>
+                                <div class="stat-label">Progress</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">38</div>
+                                <div class="stat-label">Velocity</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">5</div>
+                                <div class="stat-label">Days Left</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Features & Epics</h3>
+                            <p class="text-secondary">Track feature completeness and progress</p>
+                        </div>
+                        <div class="empty-state">
+                            <p>No features loaded</p>
+                            <p class="text-secondary">Import Jira data to view features and epics</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Dependency Canvas</h3>
+                            <p class="text-secondary">Visualize issue dependencies and blockers</p>
+                        </div>
+                        <div class="empty-state">
+                            <p>Dependency visualization available</p>
+                            <p class="text-secondary">Provide JSON data structure to load dependencies</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Dev Tab -->
+                <section id="dev" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>GitHub → Jira Automation</h3>
+                            <p class="text-secondary">Reduce admin burden with automated updates</p>
+                        </div>
+                        <div class="grid grid-cols-3" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">0</div>
+                                <div class="stat-label">PRs Synced</div>
+                                <div class="stat-change">Today</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">0</div>
+                                <div class="stat-label">Tickets Updated</div>
+                                <div class="stat-change">Auto-updated</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">Never</div>
+                                <div class="stat-label">Last Sync</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Active Automation Rules</h3>
+                            <p class="text-secondary">Rules are managed in the Automation tab</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>PR Merged → Move to Done</h4>
+                                    <p class="text-secondary">Auto-move tickets when PR merged</p>
+                                </div>
+                                <span class="badge badge-success">Active</span>
+                            </div>
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>PR Opened → Add Comment</h4>
+                                    <p class="text-secondary">Link PR to Jira ticket</p>
+                                </div>
+                                <span class="badge badge-success">Active</span>
+                            </div>
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>PR Closed → Add Label</h4>
+                                    <p class="text-secondary">Tag closed PRs</p>
+                                </div>
+                                <span class="badge badge-success">Active</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Manual Actions</h3>
+                        </div>
+                        <div style="padding: 20px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary">🔄 Sync All PRs</button>
+                            <button class="btn btn-secondary">📋 View Sync Log</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SM Tab -->
+                <section id="sm" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Team Health Overview</h3>
+                            <p class="text-secondary">Monitor team productivity and identify issues</p>
+                        </div>
+                        <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
+                            <div class="stat-card">
+                                <div class="stat-number">85</div>
+                                <div class="stat-label">Health Score</div>
+                                <div class="stat-change">Good</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">7</div>
+                                <div class="stat-label">Stale Tickets</div>
+                                <div class="stat-change">14+ days</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">12</div>
+                                <div class="stat-label">Hygiene Issues</div>
+                                <div class="stat-change">Needs attention</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">42</div>
+                                <div class="stat-label">Avg Velocity</div>
+                                <div class="stat-change">Points/sprint</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>📊 Insights</h3>
+                            <p class="text-secondary">AI-powered pattern detection</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="integration-item" style="border-left: 4px solid #FF991F;">
+                                <div class="integration-info">
+                                    <h4>⚠️ Scope Creep Detected</h4>
+                                    <p class="text-secondary">3 stories grew by 40% after sprint start</p>
+                                </div>
+                                <button class="btn btn-secondary btn-small">View Details</button>
+                            </div>
+                            <div class="integration-item" style="border-left: 4px solid #DE350B;">
+                                <div class="integration-info">
+                                    <h4>🐛 Defect Leakage Alert</h4>
+                                    <p class="text-secondary">5 production bugs in "Done" stories</p>
+                                </div>
+                                <button class="btn btn-secondary btn-small">View Details</button>
+                            </div>
+                            <div class="integration-item" style="border-left: 4px solid #0052CC;">
+                                <div class="integration-info">
+                                    <h4>📈 Velocity Trend Stable</h4>
+                                    <p class="text-secondary">40-45 points for last 4 sprints</p>
+                                </div>
+                                <button class="btn btn-secondary btn-small">View Details</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Hygiene Report</h3>
+                            <p class="text-secondary">Identify team process issues</p>
+                        </div>
+                        <div style="padding: 20px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary">🔍 Run Check</button>
+                            <button class="btn btn-secondary">📥 Export Report</button>
+                        </div>
+                        <div class="empty-state">
+                            <p>No hygiene issues detected</p>
+                            <p class="text-secondary">Run check to analyze team data</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Integrations Tab -->
+                <section id="integrations" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Connected Services</h3>
+                        </div>
+                        
+                        <div class="integration-item">
+                            <div class="integration-info">
+                                <h4>GitHub</h4>
+                                <p class="text-secondary">Pull request sync and webhooks</p>
+                            </div>
+                            <span class="badge badge-success">Connected</span>
+                        </div>
+
+                        <div class="integration-item">
+                            <div class="integration-info">
+                                <h4>Jira</h4>
+                                <p class="text-secondary">Issue tracking and status updates</p>
+                            </div>
+                            <span class="badge badge-success">Connected</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings Tab -->
+                <section id="settings" class="tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Settings</h3>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Jira URL</label>
+                            <input type="text" placeholder="https://your-company.atlassian.net">
+                        </div>
+
+                        <div class="form-group">
+                            <label>GitHub Token</label>
+                            <input type="password" placeholder="ghp_xxxxxxxxxxxx">
+                        </div>
+
+                        <div class="card-footer">
+                            <button class="btn btn-primary">Save Settings</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" style="position: fixed; bottom: 20px; right: 20px; padding: 16px 24px; background: #00875a; color: white; border-radius: 8px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 1000;"></div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🐛 Report Bug / Feedback</h2>
+                <span class="modal-close" onclick="closeFeedbackModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Title *</label>
+                    <input type="text" id="feedback-title" placeholder="Brief description of the issue">
+                </div>
+                
+                <div class="input-group">
+                    <label>Description *</label>
+                    <textarea id="feedback-description" placeholder="Please describe what happened, what you expected, and steps to reproduce..." rows="6"></textarea>
+                </div>
+                
+                <div class="input-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="feedback-include-logs" checked>
+                        <span>Include logs (last 5 minutes)</span>
+                    </label>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin: 20px 0;">
+                    <button class="btn btn-secondary" onclick="captureScreenshot()">
+                        📸 Capture Screenshot
+                    </button>
+                    <button class="btn btn-secondary" onclick="toggleVideoRecording()" id="record-video-btn">
+                        🎥 Record Video (30s)
+                    </button>
+                    <div id="recording-indicator" style="display: none; color: #DE350B; font-weight: 600; align-items: center; gap: 5px;">
+                        <span class="recording-pulse">●</span>
+                        <span id="recording-timer">00:00</span>
+                    </div>
+                </div>
+                
+                <div id="feedback-attachments" style="margin: 15px 0;">
+                    <!-- Attachment previews will be added here -->
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="closeFeedbackModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitFeedback()" id="submit-feedback-btn">
+                        Submit Feedback
+                    </button>
+                </div>
+                
+                <div id="feedback-status" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/assets/js/modern-ui.js"></script>
+</body>
+</html>

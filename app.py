@@ -19,6 +19,7 @@ from feedback_db import FeedbackDB
 from github_feedback import GitHubFeedback, LogCapture
 
 # Global state
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 driver = None
 sync_engine = None
 sync_thread = None
@@ -37,16 +38,18 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         """Handle GET requests"""
+        sys.stdout.write(f"[GET] {self.path}\n")
+        sys.stdout.flush()
+        
         if self.path == '/' or self.path == '/index.html':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html; charset=utf-8')
-            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Expires', '0')
-            self.end_headers()
-            self.wfile.write(HTML_TEMPLATE.encode('utf-8'))
-        elif self.path == '/assets/js/html2canvas.min.js':
-            self._serve_static_file('assets/js/html2canvas.min.js', 'application/javascript')
+            self._serve_static_file('modern-ui.html', 'text/html; charset=utf-8')
+        elif self.path.startswith('/assets/'):
+            # Serve static assets
+            filepath = self.path[1:]  # Remove leading slash
+            content_type = self._get_content_type(filepath)
+            sys.stdout.write(f"[STATIC] Serving {filepath} as {content_type}\n")
+            sys.stdout.flush()
+            self._serve_static_file(filepath, content_type)
         elif self.path == '/api/status':
             self._handle_status()
         elif self.path == '/api/config':
@@ -64,15 +67,58 @@ class SyncHandler(BaseHTTPRequestHandler):
     def _serve_static_file(self, filepath, content_type):
         """Serve static files with caching"""
         try:
-            with open(filepath, 'rb') as f:
-                self.send_response(200)
-                self.send_header('Content-type', content_type)
-                self.send_header('Cache-Control', 'public, max-age=31536000')
-                self.end_headers()
-                self.wfile.write(f.read())
-        except FileNotFoundError:
+            # Convert to absolute path
+            abs_filepath = os.path.join(BASE_DIR, filepath)
+            sys.stdout.write(f"[SERVE] Attempting to serve: {abs_filepath}\n")
+            sys.stdout.flush()
+            
+            # Handle HTML files without cache
+            if filepath.endswith('.html'):
+                with open(abs_filepath, 'rb') as f:
+                    self.send_response(200)
+                    self.send_header('Content-type', content_type)
+                    self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                    self.send_header('Pragma', 'no-cache')
+                    self.send_header('Expires', '0')
+                    self.end_headers()
+                    self.wfile.write(f.read())
+            else:
+                with open(abs_filepath, 'rb') as f:
+                    self.send_response(200)
+                    self.send_header('Content-type', content_type)
+                    self.send_header('Cache-Control', 'public, max-age=31536000')
+                    self.end_headers()
+                    self.wfile.write(f.read())
+        except FileNotFoundError as e:
+            sys.stdout.write(f"[404] File not found: {abs_filepath}\n")
+            sys.stdout.write(f"[404] Error: {e}\n")
+            sys.stdout.flush()
             self.send_response(404)
             self.end_headers()
+        except Exception as e:
+            sys.stdout.write(f"[ERROR] Failed to serve {filepath}: {e}\n")
+            sys.stdout.flush()
+            self.send_response(500)
+            self.end_headers()
+    
+    def _get_content_type(self, filepath):
+        """Get content type from file extension"""
+        if filepath.endswith('.js'):
+            return 'application/javascript'
+        elif filepath.endswith('.css'):
+            return 'text/css'
+        elif filepath.endswith('.html'):
+            return 'text/html; charset=utf-8'
+        elif filepath.endswith('.json'):
+            return 'application/json'
+        elif filepath.endswith('.png'):
+            return 'image/png'
+        elif filepath.endswith('.jpg') or filepath.endswith('.jpeg'):
+            return 'image/jpeg'
+        elif filepath.endswith('.svg'):
+            return 'image/svg+xml'
+        else:
+            return 'application/octet-stream'
     
     def do_POST(self):
         """Handle POST requests (API endpoints)"""
@@ -550,6 +596,8 @@ HTML_TEMPLATE = """
         .tab-content {
             display: none;
             padding: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
         }
         .tab-content.active {
             display: block;
@@ -3672,16 +3720,16 @@ def run_server():
             
             if token and repo:
                 github_feedback = GitHubFeedback(token=token, repo_name=repo)
-                print("✅ GitHub feedback system initialized")
+                print("[OK] GitHub feedback system initialized")
     except Exception as e:
-        print(f"⚠️  GitHub feedback not configured: {str(e)}")
+        print(f"[WARN] GitHub feedback not configured: {str(e)}")
     
     server_address = ('localhost', 5000)
     httpd = HTTPServer(server_address, SyncHandler)
-    print("🚀 Waypoint starting...")
-    print("📡 Server: http://localhost:5000")
-    print("🌐 Opening browser...")
-    print("⏳ Starting server (this will block)...")
+    print("[START] Waypoint starting...")
+    print("[SERVER] http://localhost:5000")
+    print("[BROWSER] Opening browser...")
+    print("[WAIT] Starting server (this will block)...")
     httpd.serve_forever()
 
 if __name__ == '__main__':
