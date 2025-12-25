@@ -1,0 +1,124 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name (e.g., v1.2.0)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release notes (optional - will use IMPLEMENTATION_COMPLETE.md if empty)'
+        required: false
+        type: string
+
+jobs:
+  create-release:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Validate tag format
+        run: |
+          $tag = "${{ github.event.inputs.tag_name }}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            Write-Error "Invalid tag format. Use format: v1.2.3"
+            exit 1
+          }
+          echo "Tag format valid: $tag"
+        shell: pwsh
+      
+      - name: Check if tag exists
+        run: |
+          $tag = "${{ github.event.inputs.tag_name }}"
+          $exists = git tag -l $tag
+          if ($exists) {
+            Write-Error "Tag $tag already exists!"
+            exit 1
+          }
+          echo "Tag $tag is available"
+        shell: pwsh
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Build executable
+        run: |
+          if (Test-Path "GitHubJiraSync.spec") {
+            pyinstaller GitHubJiraSync.spec
+          } elseif (Test-Path "JiraAutomationAssistant.spec") {
+            pyinstaller JiraAutomationAssistant.spec
+          } else {
+            pyinstaller --name="GitHubJiraSync" --onefile --windowed app.py
+          }
+        shell: pwsh
+      
+      - name: Prepare release assets
+        run: |
+          $tag = "${{ github.event.inputs.tag_name }}"
+          New-Item -ItemType Directory -Force -Path release
+          
+          # Find executable
+          $exePath = Get-ChildItem -Path "dist" -Filter "*.exe" -Recurse | Select-Object -First 1
+          
+          if ($exePath) {
+            Copy-Item $exePath.FullName -Destination "release/GitHubJiraSync-$tag.exe"
+            echo "Built: release/GitHubJiraSync-$tag.exe"
+          } else {
+            Write-Error "No executable found!"
+            exit 1
+          }
+        shell: pwsh
+      
+      - name: Create release notes
+        run: |
+          $customNotes = "${{ github.event.inputs.release_notes }}"
+          $tag = "${{ github.event.inputs.tag_name }}"
+          
+          if ($customNotes) {
+            $notes = $customNotes
+          } elseif (Test-Path "IMPLEMENTATION_COMPLETE.md") {
+            $notes = Get-Content "IMPLEMENTATION_COMPLETE.md" -Raw
+          } else {
+            $notes = "Release $tag`n`nSee commit history for changes."
+          }
+          
+          $notes | Out-File -FilePath "release/RELEASE_NOTES.md" -Encoding utf8
+        shell: pwsh
+      
+      - name: Create and push tag
+        run: |
+          $tag = "${{ github.event.inputs.tag_name }}"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a $tag -m "Release $tag"
+          git push origin $tag
+        shell: pwsh
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: Release ${{ github.event.inputs.tag_name }}
+          body_path: release/RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: |
+            release/*.exe
+            FEEDBACK_TEST_REPORT.md
+            IMPLEMENTATION_COMPLETE.md
+            README.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
