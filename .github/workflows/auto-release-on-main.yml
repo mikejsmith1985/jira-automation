@@ -5,11 +5,6 @@ on:
   push:
     branches:
       - main
-    # Only trigger if these files change (ignore docs-only changes)
-    paths-ignore:
-      - '*.md'
-      - '.gitignore'
-      - 'DOCUMENTATION_*.md'
 
 permissions:
   contents: write
@@ -28,23 +23,22 @@ jobs:
       - name: Check if we should create release
         id: should_release
         run: |
-          # Get the latest tag
-          $latestTag = git describe --tags --abbrev=0 2>$null
-          if (-not $latestTag) { $latestTag = "v0.0.0" }
+          # Try to get the latest tag
+          $tags = git tag --list 'v*' | Sort-Object { [version]$_.Substring(1) } -Descending | Select-Object -First 1
           
-          # Get the last commit that created a tag (if any)
-          $lastTagCommit = git rev-list -n 1 $latestTag 2>$null
-          $currentCommit = git rev-parse HEAD
-          
-          # If current commit is different from last tag commit, we should release
-          if ($lastTagCommit -ne $currentCommit) {
-            echo "should_release=true" >> $env:GITHUB_OUTPUT
+          if ($tags) {
+            $latestTag = $tags
             echo "latest_tag=$latestTag" >> $env:GITHUB_OUTPUT
-            echo "Commit is ahead of last tag, will create release"
+            Write-Host "Found latest tag: $latestTag"
           } else {
-            echo "should_release=false" >> $env:GITHUB_OUTPUT
-            echo "No new commits since last tag, skipping release"
+            $latestTag = "v0.0.0"
+            echo "latest_tag=$latestTag" >> $env:GITHUB_OUTPUT
+            Write-Host "No tags found, starting with v0.0.0"
           }
+          
+          # Always create release on main push
+          echo "should_release=true" >> $env:GITHUB_OUTPUT
+          Write-Host "Will create new release"
         shell: pwsh
       
       - name: Set up Python
@@ -64,10 +58,15 @@ jobs:
         if: steps.should_release.outputs.should_release == 'true'
         id: get_tag
         run: |
-          $latestTag = git describe --tags --abbrev=0 2>$null
-          if (-not $latestTag) { $latestTag = "v0.0.0" }
+          $tags = git tag --list 'v*' | Sort-Object { [version]$_.Substring(1) } -Descending | Select-Object -First 1
+          
+          if ($tags) {
+            $latestTag = $tags
+          } else {
+            $latestTag = "v0.0.0"
+          }
           echo "latest_tag=$latestTag" >> $env:GITHUB_OUTPUT
-          echo "Latest tag: $latestTag"
+          Write-Host "Latest tag: $latestTag"
         shell: pwsh
       
       - name: Calculate next version (patch bump)
