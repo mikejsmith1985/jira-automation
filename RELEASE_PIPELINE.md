@@ -1,5 +1,9 @@
 # Release Pipeline Documentation
 
+## ✅ STATUS: WORKING & TESTED!
+
+The automated release pipeline is **live and working**. The latest release (v1.2.1) was auto-generated when code was merged to main.
+
 ## 🚀 Automated Release Workflow
 
 The project now has a **fully automated release pipeline** that generates a new release whenever you merge code to the `main` branch.
