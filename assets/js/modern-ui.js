@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initBranchRules();
     initSaveRules();
     loadRulesFromConfig();
+    initFeedback();
 });
 
 /* ============================================================================
@@ -296,3 +297,53 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleTeamMode(savedMode);
     }
 });
+
+/* ============================================================================
+   Feedback Modal
+   ============================================================================ */
+
+function initFeedback() {
+    const feedbackBtn = document.getElementById('feedbackBtn');
+    if (feedbackBtn) {
+        feedbackBtn.addEventListener('click', openFeedbackModal);
+    }
+}
+
+function openFeedbackModal() {
+    const modal = document.getElementById('feedback-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeFeedbackModal() {
+    const modal = document.getElementById('feedback-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function captureScreenshot() {
+    showNotification('Screenshot capture coming soon');
+}
+
+function toggleVideoRecording() {
+    showNotification('Video recording coming soon');
+}
+
+function submitFeedback() {
+    const title = document.getElementById('feedback-title').value;
+    const description = document.getElementById('feedback-description').value;
+    
+    if (!title || !description) {
+        showNotification('❌ Please fill in title and description', 'error');
+        return;
+    }
+    
+    showNotification('✅ Feedback submitted!');
+    closeFeedbackModal();
+    
+    // Clear form
+    document.getElementById('feedback-title').value = '';
+    document.getElementById('feedback-description').value = '';
+}

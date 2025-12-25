@@ -47,17 +47,24 @@
             </nav>
 
             <div class="sidebar-footer">
-                <!-- Theme Toggle -->
-                <button class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
-                    <svg viewBox="0 0 24 24" class="sun-icon">
-                        <circle cx="12" cy="12" r="5"/>
-                        <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                    <svg viewBox="0 0 24 24" class="moon-icon">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                    </svg>
-                    <span class="theme-label">Dark Mode</span>
-                </button>
+                <div class="sidebar-actions">
+                    <!-- Feedback Button -->
+                    <button class="theme-toggle-sidebar" id="feedbackBtn" title="Report a bug or request a feature">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4.414a1 1 0 0 0-.707.293L.854 15.146A.5.5 0 0 1 0 14.793V2zm5 4a1 1 0 1 0-2 0 1 1 0 0 0 2 0zm4 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+                        </svg>
+                    </button>
+                    
+                    <!-- Theme Toggle -->
+                    <button class="theme-toggle-sidebar" id="themeToggle" title="Toggle dark mode">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="sun-icon" viewBox="0 0 16 16">
+                            <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
+                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="moon-icon" viewBox="0 0 16 16">
+                            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278zM4.858 1.311A7.269 7.269 0 0 0 1.025 7.71c0 4.02 3.279 7.276 7.319 7.276a7.316 7.316 0 0 0 5.205-2.162c-.337.042-.68.063-1.029.063-4.61 0-8.343-3.714-8.343-8.29 0-1.167.242-2.278.681-3.286z"/>
+                        </svg>
+                    </button>
+                </div>
                 
                 <div class="user-card">
                     <div class="user-avatar">👤</div>
@@ -505,6 +512,60 @@
 
     <!-- Notification Toast -->
     <div id="notification" style="position: fixed; bottom: 20px; right: 20px; padding: 16px 24px; background: #00875a; color: white; border-radius: 8px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 1000;"></div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🐛 Report Bug / Feedback</h2>
+                <span class="modal-close" onclick="closeFeedbackModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Title *</label>
+                    <input type="text" id="feedback-title" placeholder="Brief description of the issue">
+                </div>
+                
+                <div class="input-group">
+                    <label>Description *</label>
+                    <textarea id="feedback-description" placeholder="Please describe what happened, what you expected, and steps to reproduce..." rows="6"></textarea>
+                </div>
+                
+                <div class="input-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="feedback-include-logs" checked>
+                        <span>Include logs (last 5 minutes)</span>
+                    </label>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin: 20px 0;">
+                    <button class="btn btn-secondary" onclick="captureScreenshot()">
+                        📸 Capture Screenshot
+                    </button>
+                    <button class="btn btn-secondary" onclick="toggleVideoRecording()" id="record-video-btn">
+                        🎥 Record Video (30s)
+                    </button>
+                    <div id="recording-indicator" style="display: none; color: #DE350B; font-weight: 600; align-items: center; gap: 5px;">
+                        <span class="recording-pulse">●</span>
+                        <span id="recording-timer">00:00</span>
+                    </div>
+                </div>
+                
+                <div id="feedback-attachments" style="margin: 15px 0;">
+                    <!-- Attachment previews will be added here -->
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="closeFeedbackModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitFeedback()" id="submit-feedback-btn">
+                        Submit Feedback
+                    </button>
+                </div>
+                
+                <div id="feedback-status" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+    </div>
 
     <script src="/assets/js/modern-ui.js"></script>
 </body>

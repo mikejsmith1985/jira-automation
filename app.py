@@ -596,6 +596,8 @@ HTML_TEMPLATE = """
         .tab-content {
             display: none;
             padding: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
         }
         .tab-content.active {
             display: block;
