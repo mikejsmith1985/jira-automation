@@ -248,16 +248,27 @@ class GitHubScraper:
                 'commits': [],  # TODO: Could extract commit list later
                 'last_commit_message': '',
                 'merged_by': '',
-                'branch_name': ''
+                'branch_name': '',
+                'target_branch': ''  # NEW: Target branch (DEV, INT, etc.)
             }
             
-            # Step 3: Try to find the branch name
+            # Step 3: Try to find the source and target branch names
             try:
-                # Branch name is usually in a <span> with class "css-truncate-target"
-                branch_elem = self.driver.find_element(By.CSS_SELECTOR, 'span.css-truncate-target')
-                details['branch_name'] = branch_elem.text
+                # GitHub shows: "username wants to merge X commits into BASE from HEAD"
+                # Look for the base branch element
+                base_branch_elem = self.driver.find_element(By.CSS_SELECTOR, '.base-ref')
+                details['target_branch'] = base_branch_elem.text.strip()
+                
+                # Also get the source branch (head)
+                head_branch_elem = self.driver.find_element(By.CSS_SELECTOR, '.head-ref')
+                details['branch_name'] = head_branch_elem.text.strip()
             except:
-                pass  # If not found, leave empty
+                # Fallback: try older selectors
+                try:
+                    branch_elem = self.driver.find_element(By.CSS_SELECTOR, 'span.css-truncate-target')
+                    details['branch_name'] = branch_elem.text
+                except:
+                    pass  # If not found, leave empty
             
             # Step 4: Try to find the last commit message
             try:

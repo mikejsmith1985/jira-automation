@@ -124,6 +124,7 @@ class SyncEngine:
         """Build update payload based on PR status and config"""
         automation = self.config['automation']
         status = pr['status']
+        target_branch = pr.get('target_branch', '').upper()
         
         updates = {}
         
@@ -131,11 +132,16 @@ class SyncEngine:
         if status == 'open':
             rules = automation['pr_opened']
         elif status == 'merged':
-            rules = automation['pr_merged']
+            # For merged PRs, check branch-specific rules
+            rules = self._get_branch_rule(automation['pr_merged'], target_branch)
         elif status == 'closed':
             rules = automation['pr_closed']
         else:
             rules = automation.get('pr_updated', {})
+        
+        # Skip if disabled
+        if not rules.get('enabled', True):
+            return updates
         
         # Build comment from template
         if rules.get('add_comment'):
@@ -145,7 +151,8 @@ class SyncEngine:
                 branch_name=pr.get('branch', 'unknown'),
                 author=pr.get('author', 'unknown'),
                 commit_message=pr.get('last_commit_message', ''),
-                merger=pr.get('merged_by', '')
+                merger=pr.get('merged_by', ''),
+                target_branch=target_branch
             )
             updates['comment'] = comment
         
@@ -162,6 +169,23 @@ class SyncEngine:
             updates['pr_field'] = pr['url']
         
         return updates
+    
+    def _get_branch_rule(self, merged_config, target_branch):
+        """Get the appropriate branch rule for merged PRs"""
+        branch_rules = merged_config.get('branch_rules', [])
+        
+        # Try to find exact branch match
+        for rule in branch_rules:
+            if rule['branch'].upper() == target_branch:
+                return rule
+        
+        # Fall back to default rule
+        for rule in branch_rules:
+            if rule['branch'] == 'default':
+                return rule
+        
+        # If no rules defined, return empty
+        return {}
     
     def start_scheduled(self):
         """Start scheduled sync runs"""

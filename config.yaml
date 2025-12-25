@@ -1,212 +1,137 @@
-# GitHub-Jira Sync Configuration
-# This file controls how the app syncs GitHub Pull Requests with Jira tickets
-
-# ========================================
-# GITHUB SETTINGS
-# ========================================
-github:
-  base_url: "https://github.com"
-  organization: "your-org"  # Your GitHub organization name
-  repositories:
-    - "repo1"  # Add all repos you want to monitor
-    - "repo2"
-  # If API access available in future (leave empty for now)
-  api_token: ""
-
-# ========================================
-# JIRA SETTINGS
-# ========================================
-jira:
-  base_url: "https://your-company.atlassian.net"
-  project_keys:
-    - "PROJ"  # List all project keys to monitor
-    - "ABC"
-  # If API access available in future (leave empty for now)
-  api_token: ""
+automation:
   
-  # Custom Field Configuration
-  # To find field IDs: Edit a ticket, right-click a field, inspect HTML
-  custom_fields:
-    pr_link: "customfield_10001"  # Field for PR URL
-    fix_version: "customfield_10002"  # Field for fix version
-    # Add more fields as needed:
-    # branch_name: "customfield_10003"
-    # reviewer: "customfield_10004"
-
-# ========================================
-# TICKET KEY DETECTION
-# ========================================
-ticket_keys:
-  # Regex pattern to extract ticket keys from branch/PR names
-  # This looks for patterns like: ABC-123, PROJ-456
-  pattern: "([A-Z]+-\\d+)"
-  
-  # Examples of branch/PR naming that will work:
-  # - feature/ABC-123-add-login
-  # - bugfix/PROJ-456-fix-crash
-  # - [ABC-123] Add login feature
-  # - ABC-123: Fix critical bug
-
-# ========================================
-# WORKFLOWS (NEW!)
-# ========================================
-# You can define multiple workflows for different scenarios
-# Each workflow runs on its own schedule and has its own rules
-workflows:
-  
-  # Workflow 1: PR Sync (runs every hour)
-  pr_sync:
+  # When a PR is opened/created
+  pr_opened:
     enabled: true
-    description: "Sync GitHub PRs to Jira tickets hourly"
-    
-    # Schedule for this workflow
-    schedule:
-      frequency: "hourly"  # Options: hourly, daily, weekly
-      # For hourly: runs every hour during business hours
-      business_hours_only: true
-      timezone: "America/New_York"
-      start_hour: 9  # 9 AM
-      end_hour: 18   # 6 PM
-      weekdays_only: true
-      lookback_hours: 24  # How far back to check for PR updates
-    
-    # What to do when PR is opened
-    pr_opened:
-      add_comment: true
-      comment_template: "🔗 Pull Request opened: {pr_url}\nBranch: {branch_name}\nAuthor: {author}"
-      fields:
-        pr_link: "{pr_url}"  # Update the PR link field
-      labels:
-        - "has-pr"
-      set_status: ""  # Leave empty to not change status
-    
-    # What to do when PR is updated (new commits)
-    pr_updated:
-      add_comment: true
-      comment_template: "🔄 Pull Request updated: {pr_url}\nLatest commit: {commit_message}"
-      fields: {}  # No field updates
-      labels: []  # No new labels
-    
-    # What to do when PR is merged
-    pr_merged:
-      add_comment: true
-      comment_template: "✅ Pull Request merged: {pr_url}\nMerged by: {merger}"
-      fields: {}
-      labels:
-        - "merged"
-      set_status: "Done"  # Move ticket to Done
-    
-    # What to do when PR is closed (not merged)
-    pr_closed:
-      add_comment: true
-      comment_template: "❌ Pull Request closed without merging: {pr_url}"
-      fields: {}
-      labels:
-        - "pr-closed"
-      set_status: ""
+    add_comment: true
+    comment_template: "🔗 Pull Request opened: {pr_url}\nBranch: {branch_name}\nAuthor: {author}"
+    update_pr_field: true
+    add_label: "has-pr"
+    set_status: "In Review"  # Move to "In Review" when PR created
   
-  # Workflow 2: Weekly Version Check (runs every Monday)
-  weekly_version_check:
-    enabled: false  # Set to true when you want to use this
-    description: "Update fixVersion field every week"
-    
-    schedule:
-      frequency: "weekly"
-      day_of_week: "monday"  # monday, tuesday, etc.
-      time: "09:00"  # What time on that day
-      timezone: "America/New_York"
-      lookback_hours: 168  # Look back 1 week (7 days * 24 hours)
-    
-    # Custom JQL query for this workflow
-    # (instead of looking at PRs, run this query)
-    jql_query: "project = PROJ AND status = 'In Progress' AND fixVersion is EMPTY"
-    
-    # What to update for tickets found by this query
-    updates:
-      add_comment: true
-      comment_template: "🔖 Automated version update: Setting fixVersion to current sprint"
-      fields:
-        fix_version: "Sprint 23"  # You'd update this each sprint
-      labels:
-        - "auto-versioned"
-      set_status: ""
+  # When a PR is updated (new commits pushed)
+  pr_updated:
+    enabled: true
+    add_comment: true
+    comment_template: "🔄 Pull Request updated: {pr_url}\nLatest commit: {commit_message}"
+    update_pr_field: false
+    add_label: ""
+    set_status: ""
   
-  # Workflow 3: Example - Daily Label Cleanup
-  daily_label_cleanup:
-    enabled: false
-    description: "Remove old labels from closed tickets"
-    
-    schedule:
-      frequency: "daily"
-      time: "08:00"  # 8 AM every day
-      timezone: "America/New_York"
-      weekdays_only: true
-    
-    jql_query: "status = Closed AND labels = 'needs-review'"
-    
-    updates:
-      add_comment: true
-      comment_template: "🧹 Automated cleanup: Removing stale labels"
-      # Note: Removing labels would require a new function in jira_automator.py
-      # For now, you can only ADD labels
-      labels: []
-      set_status: ""
-
-# ========================================
-# SAVED FAVORITES (NEW!)
-# ========================================
-# Save commonly used workflows here for quick access
+  # When a PR is merged - rules depend on target branch
+  pr_merged:
+    enabled: true
+    # Branch-specific rules
+    branch_rules:
+      - branch: "DEV"
+        add_comment: true
+        comment_template: "✅ Merged to DEV: {pr_url}\n🧪 Ready for Testing"
+        set_status: "Ready for Testing"
+        add_label: "merged-dev"
+      
+      - branch: "INT"
+        add_comment: true
+        comment_template: "✅ Merged to INT: {pr_url}\n🔍 Ready for QA"
+        set_status: "Ready for QA"
+        add_label: "merged-int"
+      
+      - branch: "PVS"
+        add_comment: true
+        comment_template: "✅ Merged to PVS: {pr_url}\n🔍 Ready for QA"
+        set_status: "Ready for QA"
+        add_label: "merged-pvs"
+      
+      - branch: "REL"
+        add_comment: true
+        comment_template: "✅ Merged to REL: {pr_url}\n🚀 Released!"
+        set_status: ""  # Don't change status (Done comes from user)
+        add_label: "released"
+      
+      - branch: "PRD"
+        add_comment: true
+        comment_template: "✅ Merged to PRD: {pr_url}\n🚀 In Production!"
+        set_status: ""  # Don't change status (Done comes from user)
+        add_label: "in-production"
+      
+      # Default rule if branch doesn't match above
+      - branch: "default"
+        add_comment: true
+        comment_template: "✅ Pull Request merged: {pr_url}\nTarget: {target_branch}"
+        set_status: ""
+        add_label: "merged"
+  
+  # When a PR is closed without merging
+  pr_closed:
+    enabled: true
+    add_comment: true
+    comment_template: "❌ Pull Request closed without merging: {pr_url}"
+    update_pr_field: false
+    add_label: "pr-closed"
+    set_status: ""
 favorites:
-  
   favorite_1:
-    name: "Update PR Links"
-    description: "Manually update PR links for selected tickets"
-    jql_query: "project = PROJ AND status = 'In Review' AND 'PR Link' is EMPTY"
+    description: Manually update PR links for selected tickets
+    jql_query: project = PROJ AND status = 'In Review' AND 'PR Link' is EMPTY
+    name: Update PR Links
     updates:
       add_comment: false
       fields:
-        pr_link: "https://github.com/org/repo/pull/XXX"  # You'd change XXX each time
+        pr_link: https://github.com/org/repo/pull/XXX
       labels:
-        - "has-pr"
-      set_status: ""
-  
+      - has-pr
+      set_status: ''
   favorite_2:
-    name: "Sprint Version Update"
-    description: "Set fixVersion for all tickets in current sprint"
-    jql_query: "sprint = 'Current Sprint' AND fixVersion is EMPTY"
+    description: Set fixVersion for all tickets in current sprint
+    jql_query: sprint = 'Current Sprint' AND fixVersion is EMPTY
+    name: Sprint Version Update
     updates:
       add_comment: true
-      comment_template: "🔖 Set fixVersion to current sprint"
+      comment_template: "\U0001F516 Set fixVersion to current sprint"
       fields:
-        fix_version: "v2.1.0"  # Update this for each sprint
+        fix_version: v2.1.0
       labels: []
-      set_status: ""
-
-# ========================================
-# LOGGING
-# ========================================
+      set_status: ''
+feedback:
+  auto_capture_logs: true
+  github_token: YOUR_GITHUB_TOKEN_HERE
+  log_history_minutes: 5
+  repo: mikejsmith1985/jira-automation
+  screenshot_quality: 0.9
+  video_max_seconds: 30
+github:
+  api_token: ''
+  base_url: https://github.com
+  organization: your-org
+  repositories:
+  - repo1
+  - repo2
+jira:
+  api_token: ''
+  base_url: https://your-company.atlassian.net
+  custom_fields:
+    fix_version: customfield_10002
+    pr_link: customfield_10001
+  project_keys:
+  - PROJ
+  - ABC
 logging:
-  level: "INFO"  # DEBUG, INFO, WARN, ERROR
-  file: "jira-sync.log"
-  max_size_mb: 10
   backup_count: 5
-
-# ========================================
-# PERFORMANCE
-# ========================================
+  file: jira-sync.log
+  level: INFO
+  max_size_mb: 10
 performance:
+  browser_timeout_seconds: 30
+  delay_between_updates_seconds: 2
   max_prs_per_run: 50
   max_tickets_per_run: 100
-  delay_between_updates_seconds: 2  # Wait 2 seconds between each ticket update
-  browser_timeout_seconds: 30
-
-# ========================================
-# FEEDBACK SYSTEM
-# ========================================
-feedback:
-  github_token: ""  # GitHub Personal Access Token for issue creation
-  repo: ""  # Repository for feedback in format "owner/repo"
-  auto_capture_logs: true
-  log_history_minutes: 5  # How many minutes of logs to capture
-  video_max_seconds: 30
-  screenshot_quality: 0.9  # 0.0 to 1.0
+schedule:
+  business_hours_only: true
+  enabled: true
+  end_hour: 18
+  frequency: hourly
+  lookback_hours: 24
+  start_hour: 9
+  timezone: America/New_York
+  weekdays_only: true
+ticket_keys:
+  pattern: ([A-Z]+-\d+)

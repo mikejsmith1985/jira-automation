@@ -1,496 +1,10 @@
-"""
-Waypoint - Simplifying Jira administration and team flow
-A self-contained desktop app that syncs GitHub PRs with Jira tickets
-Uses Selenium WebDriver with Chrome (no additional browser installation needed)
-"""
-import os
-import sys
-import webbrowser
-import threading
-import time
-import json
-import yaml
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from sync_engine import SyncEngine
-from insights_engine import InsightsEngine
-from feedback_db import FeedbackDB
-from github_feedback import GitHubFeedback, LogCapture
 
-# Global state
-driver = None
-sync_engine = None
-sync_thread = None
-is_syncing = False
-insights_engine = None
-feedback_db = FeedbackDB()  # SQLite-based feedback storage
-github_feedback = None  # Optional GitHub sync
-log_capture = LogCapture()
-
-class SyncHandler(BaseHTTPRequestHandler):
-    """HTTP request handler for the web UI"""
-    
-    def log_message(self, format, *args):
-        """Suppress default logging"""
-        pass
-    
-    def do_GET(self):
-        """Handle GET requests"""
-        if self.path == '/' or self.path == '/index.html':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html; charset=utf-8')
-            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Expires', '0')
-            self.end_headers()
-            self.wfile.write(HTML_TEMPLATE.encode('utf-8'))
-        elif self.path == '/assets/js/html2canvas.min.js':
-            self._serve_static_file('assets/js/html2canvas.min.js', 'application/javascript')
-        elif self.path == '/api/status':
-            self._handle_status()
-        elif self.path == '/api/config':
-            self._handle_get_config()
-        elif self.path == '/api/insights':
-            self._handle_get_insights()
-        elif self.path == '/api/insights/trend':
-            self._handle_get_trend()
-        elif self.path == '/api/feedback/validate-token':
-            self._handle_validate_feedback_token()
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    def _serve_static_file(self, filepath, content_type):
-        """Serve static files with caching"""
-        try:
-            with open(filepath, 'rb') as f:
-                self.send_response(200)
-                self.send_header('Content-type', content_type)
-                self.send_header('Cache-Control', 'public, max-age=31536000')
-                self.end_headers()
-                self.wfile.write(f.read())
-        except FileNotFoundError:
-            self.send_response(404)
-            self.end_headers()
-    
-    def do_POST(self):
-        """Handle POST requests (API endpoints)"""
-        try:
-            # Special handlers that manage their own response
-            if self.path == '/api/feedback/console-log':
-                self._handle_console_log()
-                return
-            elif self.path == '/api/feedback/network-error':
-                self._handle_network_error()
-                return
-            
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            
-            try:
-                data = json.loads(post_data.decode())
-            except:
-                data = {}
-            
-            if self.path == '/api/init':
-                response = self.handle_init(data)
-            elif self.path == '/api/sync-now':
-                response = self.handle_sync_now()
-            elif self.path == '/api/start-scheduler':
-                response = self.handle_start_scheduler()
-            elif self.path == '/api/stop-scheduler':
-                response = self.handle_stop_scheduler()
-            elif self.path == '/api/config':
-                response = self.handle_save_config(data)
-            elif self.path == '/api/save-config':
-                response = self.handle_save_config(data)
-            elif self.path == '/api/insights/resolve':
-                response = self.handle_resolve_insight(data)
-            elif self.path == '/api/insights/run':
-                response = self.handle_run_insights(data)
-            elif self.path == '/api/feedback/submit':
-                response = self.handle_submit_feedback(data)
-            elif self.path == '/api/feedback/save-token':
-                response = self.handle_save_feedback_token(data)
-            else:
-                response = {'success': False, 'error': 'Unknown endpoint'}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
-        except Exception as e:
-            print(f"ERROR in do_POST: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            try:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
-            except:
-                pass
-    
-    def _handle_status(self):
-        """Return current sync status"""
-        global is_syncing
-        status = {
-            'is_syncing': is_syncing,
-            'has_driver': driver is not None,
-            'has_engine': sync_engine is not None
-        }
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(status).encode())
-    
-    def _handle_get_config(self):
-        """Return current configuration"""
-        try:
-            with open('config.yaml', 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(config).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def handle_init(self, data):
-        """Initialize browser"""
-        global driver, sync_engine
-        
-        try:
-            # Initialize Chrome WebDriver if not already done
-            if driver is None:
-                chrome_options = Options()
-                chrome_options.add_argument('--start-maximized')
-                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-                
-                driver = webdriver.Chrome(options=chrome_options)
-            
-            # Initialize sync engine
-            if sync_engine is None:
-                sync_engine = SyncEngine(driver)
-            
-            # Navigate to Jira for authentication
-            jira_url = data.get('jiraUrl', sync_engine.config['jira']['base_url'])
-            driver.get(jira_url)
-            
-            return {'success': True, 'message': 'Browser initialized. Please log in to Jira.'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_sync_now(self):
-        """Run sync immediately"""
-        global sync_engine, is_syncing
-        
-        if sync_engine is None:
-            return {'success': False, 'error': 'Please initialize browser first'}
-        
-        if is_syncing:
-            return {'success': False, 'error': 'Sync already in progress'}
-        
-        try:
-            is_syncing = True
-            sync_engine.sync_once()
-            is_syncing = False
-            return {'success': True, 'message': 'Sync completed'}
-        except Exception as e:
-            is_syncing = False
-            return {'success': False, 'error': str(e)}
-    
-    def handle_start_scheduler(self):
-        """Start scheduled sync"""
-        global sync_engine, sync_thread, is_syncing
-        
-        if sync_engine is None:
-            return {'success': False, 'error': 'Please initialize browser first'}
-        
-        if sync_thread and sync_thread.is_alive():
-            return {'success': False, 'error': 'Scheduler already running'}
-        
-        try:
-            sync_thread = threading.Thread(target=sync_engine.start_scheduled, daemon=True)
-            sync_thread.start()
-            return {'success': True, 'message': 'Scheduler started'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_stop_scheduler(self):
-        """Stop scheduled sync"""
-        # Note: Can't easily stop schedule thread, would need to implement stop flag
-        return {'success': False, 'error': 'Scheduler stop not implemented yet. Restart app to stop.'}
-    
-    def handle_save_config(self, data):
-        """Save configuration changes"""
-        try:
-            with open('config.yaml', 'w', encoding='utf-8') as f:
-                yaml.dump(data, f, default_flow_style=False)
-            return {'success': True, 'message': 'Configuration saved'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def _handle_get_insights(self):
-        """Return recent insights"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            days = int(self.headers.get('X-Days', 7))
-            insights = insights_engine.get_insights(days=days)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'insights': insights}).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def _handle_get_trend(self):
-        """Return metric trend data"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            metric_type = self.headers.get('X-Metric-Type', 'velocity')
-            days = int(self.headers.get('X-Days', 30))
-            trend = insights_engine.get_metric_trend(metric_type, days)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'trend': trend}).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def handle_resolve_insight(self, data):
-        """Mark insight as resolved"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            insight_id = data.get('id')
-            if not insight_id:
-                return {'success': False, 'error': 'Missing insight ID'}
-            
-            insights_engine.resolve_insight(insight_id)
-            return {'success': True, 'message': 'Insight resolved'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_run_insights(self, data):
-        """Run insights analysis on provided data"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            jira_data = data.get('jira_data', {})
-            insights = insights_engine.analyze_all(jira_data)
-            
-            return {'success': True, 'insights': insights}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def _handle_validate_feedback_token(self):
-        """Validate GitHub feedback token"""
-        global github_feedback
-        try:
-            if github_feedback and github_feedback.token:
-                result = github_feedback.validate_token()
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(result).encode())
-            else:
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'valid': False,
-                    'error': 'No token configured'
-                }).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def _handle_console_log(self):
-        """Receive and store console log from browser"""
-        global log_capture
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            log_entry = json.loads(post_data.decode('utf-8'))
-            
-            log_capture.add_console_log(log_entry)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True}).encode('utf-8'))
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
-    
-    def _handle_network_error(self):
-        """Receive and store network error from browser"""
-        global log_capture
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            error_entry = json.loads(post_data.decode('utf-8'))
-            
-            log_capture.add_network_error(error_entry)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True}).encode('utf-8'))
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
-    
-    def handle_submit_feedback(self, data):
-        """Submit feedback - save to SQLite only (GitHub handled by frontend)"""
-        global feedback_db, log_capture
-        try:
-            title = data.get('title', 'User Feedback')
-            description = data.get('description', '')
-            attachments = data.get('attachments', [])
-            include_logs = data.get('include_logs', True)
-            github_issue_url = data.get('github_issue_url')  # Comes from frontend if successful
-            github_issue_number = data.get('github_issue_number')
-            
-            # Build feedback body
-            body = description + "\n\n"
-            
-            if include_logs:
-                body += log_capture.export_all_logs()
-            
-            # Add system info
-            import platform
-            body += "\n\n## System Information\n"
-            body += f"- OS: {platform.system()} {platform.release()}\n"
-            body += f"- Python: {platform.python_version()}\n"
-            body += f"- Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            
-            # Save to SQLite (always succeeds)
-            logs_json = json.dumps(log_capture.console_logs + log_capture.network_errors) if include_logs else None
-            attachments_json = json.dumps(attachments) if attachments else None
-            
-            feedback_id = feedback_db.add_feedback(
-                title=title,
-                description=body,
-                logs=logs_json,
-                attachments=attachments_json
-            )
-            
-            # Update status based on whether GitHub sync happened
-            if github_issue_url:
-                feedback_db.update_status(feedback_id, 'synced', github_issue_url)
-                message = f'✅ Feedback submitted to GitHub (Issue #{github_issue_number})'
-            else:
-                feedback_db.update_status(feedback_id, 'local')
-                message = f'✅ Feedback saved locally (ID: {feedback_id})'
-            
-            return {
-                'success': True,
-                'feedback_id': feedback_id,
-                'message': message
-            }
-            
-        except Exception as e:
-            print(f"ERROR in handle_submit_feedback: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-    
-    def handle_save_feedback_token(self, data):
-        """Save GitHub feedback token to config"""
-        global github_feedback
-        try:
-            print(f"DEBUG: handle_save_feedback_token called with data keys: {data.keys()}")
-            token = data.get('token', '')
-            repo = data.get('repo', '')
-            print(f"DEBUG: token length={len(token)}, repo={repo}")
-            
-            if not token or not repo:
-                return {'success': False, 'error': 'Token and repo required'}
-            
-            # Load config
-            print("DEBUG: Loading config...")
-            with open('config.yaml', 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Update feedback section
-            if 'feedback' not in config:
-                config['feedback'] = {}
-            
-            config['feedback']['github_token'] = token
-            config['feedback']['repo'] = repo
-            
-            # Save config
-            print("DEBUG: Saving config...")
-            with open('config.yaml', 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, default_flow_style=False)
-            
-            # Initialize GitHub feedback client
-            print("DEBUG: Creating GitHubFeedback object...")
-            github_feedback = GitHubFeedback(token=token, repo_name=repo)
-            
-            # Validate token
-            print("DEBUG: Validating token...")
-            validation = github_feedback.validate_token()
-            print(f"DEBUG: Validation result: {validation}")
-            
-            if validation['valid']:
-                return {
-                    'success': True,
-                    'message': f"Token validated for user: {validation['user']}"
-                }
-            else:
-                return {
-                    'success': False,
-                    'error': validation['error']
-                }
-            
-        except Exception as e:
-            print(f"ERROR in handle_save_feedback_token: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-
-
-# HTML Template (embedded)
-HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waypoint - Jira Administration</title>
+    <title>GitHub-Jira Sync Tool</title>
     <script src="/assets/js/html2canvas.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1113,19 +627,19 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧭 Waypoint</h1>
-            <p>Simplifying Jira administration and team flow</p>
+            <h1>🔄 GitHub-Jira Sync Tool</h1>
+            <p>Automated synchronization between GitHub Pull Requests and Jira tickets</p>
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('dashboard', event)">📊 Dashboard</button>
-            <button class="tab" onclick="switchTab('po', event)">👔 PO</button>
-            <button class="tab" onclick="switchTab('dev', event)">💻 Dev</button>
-            <button class="tab" onclick="switchTab('sm', event)">📈 SM</button>
-            <button class="tab" onclick="switchTab('workflows', event)">⚙️ Workflows</button>
-            <button class="tab" onclick="switchTab('favorites', event)">⭐ Favorites</button>
-            <button class="tab" onclick="switchTab('logs', event)">📋 Logs</button>
-            <button class="tab" onclick="switchTab('settings', event)">🔧 Settings</button>
+            <button class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+            <button class="tab" onclick="switchTab('po')">👔 PO</button>
+            <button class="tab" onclick="switchTab('dev')">💻 Dev</button>
+            <button class="tab" onclick="switchTab('sm')">📈 SM</button>
+            <button class="tab" onclick="switchTab('workflows')">⚙️ Workflows</button>
+            <button class="tab" onclick="switchTab('favorites')">⭐ Favorites</button>
+            <button class="tab" onclick="switchTab('logs')">📋 Logs</button>
+            <button class="tab" onclick="switchTab('settings')">🔧 Settings</button>
         </div>
 
         <div id="status"></div>
@@ -1452,11 +966,11 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             </div>
 
             <div class="card">
-                <h2>📊 Insights</h2>
+                <h2>🤖 AI Insights</h2>
                 <p style="color: #5E6C84; margin-bottom: 15px;">
-                    Insights generated from your team's data. Click to see details.
+                    Automated insights generated from your team's data. Click to see details.
                 </p>
-                <div id="sm-insights">
+                <div id="sm-ai-insights">
                     <div class="favorite-item" style="border-left-color: #FF991F;">
                         <div class="favorite-header">
                             <div class="favorite-name">⚠️ Scope Creep Detected</div>
@@ -1502,70 +1016,12 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         <!-- WORKFLOWS TAB -->
         <div id="workflows" class="tab-content">
             <div class="card">
-                <h2>Automation Rules</h2>
+                <h2>Configured Workflows</h2>
                 <p style="color: #5E6C84; margin-bottom: 20px;">
-                    Define what happens when GitHub events occur. Changes save automatically.
+                    Workflows run automatically on schedule. Toggle to enable/disable.
                 </p>
-                
-                <!-- PR Opened Rules -->
-                <div style="margin-bottom: 30px; border-left: 4px solid #0052CC; padding-left: 15px;">
-                    <h3 style="margin-bottom: 10px;">🆕 PR Opened/Created</h3>
-                    <div class="input-group">
-                        <label style="display: flex; align-items: center; gap: 10px;">
-                            <input type="checkbox" id="pr-opened-enabled" onchange="saveAutomationRules()">
-                            <span>Enable this rule</span>
-                        </label>
-                    </div>
-                    <div class="input-group">
-                        <label>Move ticket to status:</label>
-                        <input type="text" id="pr-opened-status" placeholder="In Review" onchange="saveAutomationRules()">
-                        <small style="color: #5E6C84;">Status name must match Jira exactly</small>
-                    </div>
-                    <div class="input-group">
-                        <label>Add label:</label>
-                        <input type="text" id="pr-opened-label" placeholder="has-pr" onchange="saveAutomationRules()">
-                    </div>
-                    <div class="input-group">
-                        <label>
-                            <input type="checkbox" id="pr-opened-comment" onchange="saveAutomationRules()">
-                            Add comment to ticket
-                        </label>
-                    </div>
-                </div>
-                
-                <!-- PR Merged Rules -->
-                <div style="margin-bottom: 30px; border-left: 4px solid #00875A; padding-left: 15px;">
-                    <h3 style="margin-bottom: 10px;">✅ PR Merged (Branch-Specific)</h3>
-                    <p style="color: #5E6C84; font-size: 13px; margin-bottom: 15px;">
-                        Different actions based on which branch the PR was merged into.
-                    </p>
-                    
-                    <div id="branch-rules-list">
-                        <!-- Populated by JavaScript -->
-                    </div>
-                    
-                    <button onclick="addBranchRule()" class="btn-small">+ Add Branch Rule</button>
-                </div>
-                
-                <!-- PR Closed Rules -->
-                <div style="margin-bottom: 30px; border-left: 4px solid #DE350B; padding-left: 15px;">
-                    <h3 style="margin-bottom: 10px;">❌ PR Closed (Not Merged)</h3>
-                    <div class="input-group">
-                        <label style="display: flex; align-items: center; gap: 10px;">
-                            <input type="checkbox" id="pr-closed-enabled" onchange="saveAutomationRules()">
-                            <span>Enable this rule</span>
-                        </label>
-                    </div>
-                    <div class="input-group">
-                        <label>Add label:</label>
-                        <input type="text" id="pr-closed-label" placeholder="pr-closed" onchange="saveAutomationRules()">
-                    </div>
-                    <div class="input-group">
-                        <label>
-                            <input type="checkbox" id="pr-closed-comment" onchange="saveAutomationRules()">
-                            Add comment to ticket
-                        </label>
-                    </div>
+                <div id="workflows-list">
+                    <!-- Populated by JavaScript -->
                 </div>
             </div>
         </div>
@@ -1644,15 +1100,8 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
     <div id="feedback-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>📝 Report Feedback</h2>
-                <button 
-                    class="btn-close" 
-                    onclick="minimizeFeedbackModal()"
-                    title="Minimize (keeps your input)"
-                    style="display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: white; cursor: pointer; font-size: 24px; padding: 0; width: 32px; height: 32px;"
-                >
-                    <span style="line-height: 1;">−</span>
-                </button>
+                <h2>🐛 Report Bug / Feedback</h2>
+                <span class="modal-close" onclick="closeFeedbackModal()">&times;</span>
             </div>
             <div class="modal-body">
                 <div class="input-group">
@@ -1676,9 +1125,13 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                     <button class="btn-secondary btn-small" onclick="captureScreenshot()">
                         📸 Capture Screenshot
                     </button>
-                    <button class="btn-secondary btn-small" onclick="prepareRecording()" id="record-video-btn">
-                        🎥 Record Video (30s max)
+                    <button class="btn-secondary btn-small" onclick="toggleVideoRecording()" id="record-video-btn">
+                        🎥 Record Video (30s)
                     </button>
+                    <div id="recording-indicator" style="display: none; color: #DE350B; font-weight: 600; align-items: center; gap: 5px;">
+                        <span class="recording-pulse">●</span>
+                        <span id="recording-timer">00:00</span>
+                    </div>
                 </div>
                 
                 <div id="feedback-attachments" style="margin: 15px 0;">
@@ -1706,23 +1159,30 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             </div>
             <div class="modal-body">
                 <p style="color: #5E6C84; margin-bottom: 15px;">
-                    To submit feedback to GitHub, configure your Personal Access Token.<br>
-                    <strong>Feedback will be saved locally even if you skip this.</strong>
+                    To submit feedback, you need to configure a GitHub Personal Access Token.
                 </p>
                 
                 <div class="input-group">
-                    <label>GitHub Personal Access Token</label>
+                    <label>GitHub Personal Access Token *</label>
                     <input type="password" id="github-token-input" placeholder="ghp_xxxxxxxxxxxx">
                     <small style="color: #5E6C84; display: block; margin-top: 5px;">
-                        Create at: <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=Jira+Automation+Feedback" target="_blank" style="color: #60a5fa;">Generate Token →</a><br>
-                        Required scope: <code>public_repo</code>
+                        Create at: <a href="https://github.com/settings/tokens" target="_blank">GitHub Settings → Developer settings → Personal access tokens</a><br>
+                        Required scope: <code>repo</code> (Full control of private repositories)
+                    </small>
+                </div>
+                
+                <div class="input-group">
+                    <label>Repository (owner/repo) *</label>
+                    <input type="text" id="github-repo-input" placeholder="username/repo-name">
+                    <small style="color: #5E6C84; display: block; margin-top: 5px;">
+                        Example: octocat/Hello-World
                     </small>
                 </div>
                 
                 <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                    <button class="btn-secondary" onclick="closeGitHubTokenModal()">Skip (Save Locally Only)</button>
+                    <button class="btn-secondary" onclick="closeGitHubTokenModal()">Cancel</button>
                     <button class="btn-success" onclick="saveGitHubToken()">
-                        Save & Validate Token
+                        Save & Validate
                     </button>
                 </div>
                 
@@ -1737,20 +1197,11 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         let selectedPersona = localStorage.getItem('selectedPersona') || null;
 
         // Tab switching
-        function switchTab(tabName, event) {
+        function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             
-            if (event && event.target) {
-                event.target.classList.add('active');
-            } else {
-                // Find button by onclick attribute matching
-                document.querySelectorAll('.tab').forEach(btn => {
-                    if (btn.getAttribute('onclick')?.includes(`'${tabName}'`)) {
-                        btn.classList.add('active');
-                    }
-                });
-            }
+            event.target.classList.add('active');
             document.getElementById(tabName).classList.add('active');
             
             // Load data when switching to tabs
@@ -1925,7 +1376,7 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             }
         }
 
-        // Load automation rules
+        // Load workflows
         async function loadWorkflows() {
             try {
                 const response = await fetch('/api/config');
@@ -1936,170 +1387,44 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                 }
                 currentConfig = config;
                 
-                const automation = config.automation || {};
+                const workflowsList = document.getElementById('workflows-list');
+                workflowsList.innerHTML = '';
                 
-                // Load PR Opened rules
-                const prOpened = automation.pr_opened || {};
-                document.getElementById('pr-opened-enabled').checked = prOpened.enabled !== false;
-                document.getElementById('pr-opened-status').value = prOpened.set_status || '';
-                document.getElementById('pr-opened-label').value = prOpened.add_label || '';
-                document.getElementById('pr-opened-comment').checked = prOpened.add_comment !== false;
-                
-                // Load PR Closed rules
-                const prClosed = automation.pr_closed || {};
-                document.getElementById('pr-closed-enabled').checked = prClosed.enabled !== false;
-                document.getElementById('pr-closed-label').value = prClosed.add_label || '';
-                document.getElementById('pr-closed-comment').checked = prClosed.add_comment !== false;
-                
-                // Load PR Merged branch rules
-                loadBranchRules(automation.pr_merged || {});
-                
-                // Update stat
+                const workflows = config.workflows || {};
                 let count = 0;
-                if (prOpened.enabled !== false) count++;
-                if (prClosed.enabled !== false) count++;
-                if (automation.pr_merged && automation.pr_merged.enabled !== false) count++;
+                
+                for (const [key, workflow] of Object.entries(workflows)) {
+                    if (workflow.enabled) count++;
+                    
+                    const item = document.createElement('div');
+                    item.className = 'workflow-item';
+                    item.innerHTML = `
+                        <div class="workflow-info">
+                            <div class="workflow-name">${workflow.description || key}</div>
+                            <div class="workflow-desc">${key}</div>
+                            <div class="workflow-schedule">
+                                📅 ${workflow.schedule.frequency} 
+                                ${workflow.schedule.time || ''}
+                            </div>
+                        </div>
+                        <div class="workflow-actions">
+                            <label class="toggle">
+                                <input type="checkbox" ${workflow.enabled ? 'checked' : ''} 
+                                       onchange="toggleWorkflow('${key}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                            <button class="btn-small" onclick="runWorkflow('${key}')">
+                                ▶️ Run Now
+                            </button>
+                        </div>
+                    `;
+                    workflowsList.appendChild(item);
+                }
+                
                 document.getElementById('stat-workflows').textContent = count;
                 
             } catch (error) {
-                showStatus('Failed to load automation rules: ' + error.message, 'error');
-            }
-        }
-        
-        function loadBranchRules(prMerged) {
-            const container = document.getElementById('branch-rules-list');
-            container.innerHTML = '';
-            
-            const branchRules = prMerged.branch_rules || [];
-            
-            branchRules.forEach((rule, index) => {
-                if (rule.branch === 'default') return; // Skip default rule in UI
-                
-                const ruleDiv = document.createElement('div');
-                ruleDiv.className = 'branch-rule-item';
-                ruleDiv.style.cssText = 'background: #F4F5F7; padding: 15px; border-radius: 4px; margin-bottom: 10px;';
-                ruleDiv.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
-                        <div style="flex: 1;">
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px; font-weight: 600;">Branch Name:</label>
-                                <input type="text" value="${rule.branch}" 
-                                       onchange="updateBranchRule(${index}, 'branch', this.value)"
-                                       placeholder="DEV, INT, PVS, etc."
-                                       style="width: 150px;">
-                            </div>
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px;">Move to status:</label>
-                                <input type="text" value="${rule.set_status || ''}" 
-                                       onchange="updateBranchRule(${index}, 'set_status', this.value)"
-                                       placeholder="Ready for QA">
-                            </div>
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px;">Add label:</label>
-                                <input type="text" value="${rule.add_label || ''}" 
-                                       onchange="updateBranchRule(${index}, 'add_label', this.value)"
-                                       placeholder="merged-int">
-                            </div>
-                            <div class="input-group">
-                                <label style="font-size: 12px;">
-                                    <input type="checkbox" ${rule.add_comment !== false ? 'checked' : ''}
-                                           onchange="updateBranchRule(${index}, 'add_comment', this.checked)">
-                                    Add comment
-                                </label>
-                            </div>
-                        </div>
-                        <button class="btn-small btn-danger" onclick="removeBranchRule(${index})" 
-                                style="margin-top: 20px;">
-                            🗑️
-                        </button>
-                    </div>
-                `;
-                container.appendChild(ruleDiv);
-            });
-        }
-        
-        function addBranchRule() {
-            if (!currentConfig.automation) currentConfig.automation = {};
-            if (!currentConfig.automation.pr_merged) currentConfig.automation.pr_merged = {};
-            if (!currentConfig.automation.pr_merged.branch_rules) {
-                currentConfig.automation.pr_merged.branch_rules = [];
-            }
-            
-            currentConfig.automation.pr_merged.branch_rules.push({
-                branch: 'NEW',
-                add_comment: true,
-                comment_template: '✅ Merged to {target_branch}: {pr_url}',
-                set_status: '',
-                add_label: ''
-            });
-            
-            loadBranchRules(currentConfig.automation.pr_merged);
-            saveAutomationRules();
-        }
-        
-        function removeBranchRule(index) {
-            if (!currentConfig.automation?.pr_merged?.branch_rules) return;
-            currentConfig.automation.pr_merged.branch_rules.splice(index, 1);
-            loadBranchRules(currentConfig.automation.pr_merged);
-            saveAutomationRules();
-        }
-        
-        function updateBranchRule(index, field, value) {
-            if (!currentConfig.automation?.pr_merged?.branch_rules?.[index]) return;
-            currentConfig.automation.pr_merged.branch_rules[index][field] = value;
-            saveAutomationRules();
-        }
-        
-        async function saveAutomationRules() {
-            try {
-                // Build automation object from UI
-                const automation = {
-                    pr_opened: {
-                        enabled: document.getElementById('pr-opened-enabled').checked,
-                        add_comment: document.getElementById('pr-opened-comment').checked,
-                        comment_template: "🔗 Pull Request opened: {pr_url}\\nBranch: {branch_name}\\nAuthor: {author}",
-                        update_pr_field: true,
-                        add_label: document.getElementById('pr-opened-label').value,
-                        set_status: document.getElementById('pr-opened-status').value
-                    },
-                    pr_updated: {
-                        enabled: true,
-                        add_comment: true,
-                        comment_template: "🔄 Pull Request updated: {pr_url}",
-                        update_pr_field: false,
-                        add_label: "",
-                        set_status: ""
-                    },
-                    pr_merged: currentConfig.automation?.pr_merged || {
-                        enabled: true,
-                        branch_rules: []
-                    },
-                    pr_closed: {
-                        enabled: document.getElementById('pr-closed-enabled').checked,
-                        add_comment: document.getElementById('pr-closed-comment').checked,
-                        comment_template: "❌ Pull Request closed without merging: {pr_url}",
-                        update_pr_field: false,
-                        add_label: document.getElementById('pr-closed-label').value,
-                        set_status: ""
-                    }
-                };
-                
-                currentConfig.automation = automation;
-                
-                const response = await fetch('/api/save-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(currentConfig)
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    showStatus('Automation rules saved', 'success');
-                } else {
-                    showStatus('Failed to save: ' + result.error, 'error');
-                }
-            } catch (error) {
-                showStatus('Error saving rules: ' + error.message, 'error');
+                showStatus('Failed to load workflows: ' + error.message, 'error');
             }
         }
 
@@ -2417,10 +1742,14 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         // Export features to CSV
         function exportFeatures() {
             // TODO: Get actual feature data
-            const csv = 'Feature Key,Title,Progress,Completed,Total,Status\\n' +
-                        'PROJ-100,User Authentication,75%,6,8,In Progress\\n' +
-                        'PROJ-200,Payment Processing,40%,2,5,In Progress\\n' +
-                        'PROJ-300,Mobile App iOS,20%,1,5,In Progress\\n';
+            const csv = 'Feature Key,Title,Progress,Completed,Total,Status
+' +
+                        'PROJ-100,User Authentication,75%,6,8,In Progress
+' +
+                        'PROJ-200,Payment Processing,40%,2,5,In Progress
+' +
+                        'PROJ-300,Mobile App iOS,20%,1,5,In Progress
+';
             
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
@@ -2852,7 +2181,7 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         }
 
         function displayInsights(insights) {
-            const container = document.getElementById('sm-insights');
+            const container = document.getElementById('sm-ai-insights');
             container.innerHTML = '';
             
             insights.forEach(insight => {
@@ -2885,7 +2214,7 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         }
 
         function displayPlaceholderInsights() {
-            const container = document.getElementById('sm-insights');
+            const container = document.getElementById('sm-ai-insights');
             container.innerHTML = `
                 <div class="favorite-item" style="border-left-color: #0052CC;">
                     <div class="favorite-header">
@@ -2988,10 +2317,14 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         }
 
         function exportHygieneReport() {
-            const csv = 'Issue Type,Count,Severity,Description\\n' +
-                        'Stale Tickets,7,Medium,No updates in 14+ days\\n' +
-                        'Missing Story Points,5,Medium,Stories without estimates\\n' +
-                        'Long-Running Stories,3,High,In progress > 10 days\\n';
+            const csv = 'Issue Type,Count,Severity,Description
+' +
+                        'Stale Tickets,7,Medium,No updates in 14+ days
+' +
+                        'Missing Story Points,5,Medium,Stories without estimates
+' +
+                        'Long-Running Stories,3,High,In progress > 10 days
+';
             
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
@@ -3059,91 +2392,29 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         }
 
         function initFeedbackSystem() {
-            // Check if token exists in localStorage (like forge-terminal)
-            const savedToken = localStorage.getItem('jira_github_token');
-            if (savedToken) {
-                hasGitHubToken = true;
-                console.log('GitHub token found in localStorage');
-            } else {
-                hasGitHubToken = false;
-                console.log('No GitHub token - feedback will save locally only');
-            }
+            // Check if GitHub token is configured
+            fetch('/api/feedback/validate-token')
+                .then(r => r.json())
+                .then(data => {
+                    hasGitHubToken = data.valid;
+                    if (!hasGitHubToken) {
+                        console.log('GitHub token not configured for feedback system');
+                    }
+                })
+                .catch(console.error);
         }
 
         function openFeedbackModal() {
-            // Check if token is configured
-            const savedToken = localStorage.getItem('jira_github_token');
-            if (!savedToken) {
-                // Show setup modal first
+            if (!hasGitHubToken) {
                 document.getElementById('github-token-modal').style.display = 'block';
                 return;
             }
             
-            // Token exists, open feedback modal directly
             document.getElementById('feedback-modal').style.display = 'block';
-        }
-
-        function minimizeFeedbackModal() {
-            // Hide the modal
-            document.getElementById('feedback-modal').style.display = 'none';
-            
-            // Show minimized indicator
-            const indicator = document.getElementById('feedback-minimized-indicator');
-            if (!indicator) {
-                // Create indicator if it doesn't exist
-                const div = document.createElement('div');
-                div.id = 'feedback-minimized-indicator';
-                div.style.cssText = `
-                    position: fixed;
-                    bottom: 20px;
-                    right: 90px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                    cursor: pointer;
-                    z-index: 998;
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: transform 0.2s;
-                `;
-                div.innerHTML = '📝 Feedback (minimized)';
-                div.onclick = restoreFeedbackModal;
-                div.onmouseenter = function() { this.style.transform = 'scale(1.05)'; };
-                div.onmouseleave = function() { this.style.transform = 'scale(1)'; };
-                document.body.appendChild(div);
-            } else {
-                indicator.style.display = 'flex';
-            }
-            
-            addLog('info', 'Feedback modal minimized (data preserved)');
-        }
-
-        function restoreFeedbackModal() {
-            // Show the modal
-            document.getElementById('feedback-modal').style.display = 'block';
-            
-            // Hide minimized indicator
-            const indicator = document.getElementById('feedback-minimized-indicator');
-            if (indicator) {
-                indicator.style.display = 'none';
-            }
-            
-            addLog('info', 'Feedback modal restored');
         }
 
         function closeFeedbackModal() {
             document.getElementById('feedback-modal').style.display = 'none';
-            
-            // Hide minimized indicator if visible
-            const indicator = document.getElementById('feedback-minimized-indicator');
-            if (indicator) {
-                indicator.style.display = 'none';
-            }
-            
             // Reset form
             document.getElementById('feedback-title').value = '';
             document.getElementById('feedback-description').value = '';
@@ -3152,7 +2423,7 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             
             // Stop recording if active
             if (mediaRecorder && mediaRecorder.state === 'recording') {
-                stopRecordingAndRestore();
+                stopVideoRecording();
             }
         }
 
@@ -3162,38 +2433,35 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
 
         async function saveGitHubToken() {
             const token = document.getElementById('github-token-input').value.trim();
+            const repo = document.getElementById('github-repo-input').value.trim();
             
-            if (!token) {
-                showTokenStatus('Please enter a token', 'error');
+            if (!token || !repo) {
+                showTokenStatus('Please fill in both fields', 'error');
                 return;
             }
             
             showTokenStatus('Validating token...', 'info');
             
             try {
-                // Validate token by calling GitHub API directly
-                const response = await fetch('https://api.github.com/user', {
-                    headers: {
-                        'Authorization': `token ${token}`
-                    }
+                const response = await fetch('/api/feedback/save-token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token, repo})
                 });
+                const data = await response.json();
                 
-                if (response.ok) {
-                    const userData = await response.json();
-                    // Save to localStorage (like forge-terminal does)
-                    localStorage.setItem('jira_github_token', token);
-                    showTokenStatus(`✅ Token validated for user: ${userData.login}`, 'success');
+                if (data.success) {
+                    showTokenStatus(data.message, 'success');
                     hasGitHubToken = true;
                     setTimeout(() => {
                         closeGitHubTokenModal();
                         openFeedbackModal();
                     }, 1500);
                 } else {
-                    const errorData = await response.json();
-                    showTokenStatus('Invalid token: ' + errorData.message, 'error');
+                    showTokenStatus('Error: ' + data.error, 'error');
                 }
             } catch (error) {
-                showTokenStatus('Validation failed: ' + error.message, 'error');
+                showTokenStatus('Failed to save token: ' + error.message, 'error');
             }
         }
 
@@ -3233,57 +2501,20 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             }
         }
 
-        // Recording flow: Step 1 - User clicks "Record Video" button
-        function prepareRecording() {
-            // Minimize modal
-            minimizeFeedbackModal();
-            
-            // Show "Start Recording" overlay button
-            const overlay = document.createElement('div');
-            overlay.id = 'recording-start-overlay';
-            overlay.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                z-index: 99999;
-                background: rgba(0, 0, 0, 0.9);
-                padding: 20px;
-                border-radius: 12px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            `;
-            overlay.innerHTML = `
-                <div style="color: white; text-align: center;">
-                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 10px;">Ready to Record</div>
-                    <div style="font-size: 14px; color: #aaa; margin-bottom: 15px;">Navigate to where you want to start</div>
-                    <button id="start-record-btn" style="
-                        background: #DE350B;
-                        color: white;
-                        border: none;
-                        padding: 12px 24px;
-                        border-radius: 6px;
-                        font-size: 16px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: background 0.2s;
-                    ">⏺ Start Recording</button>
-                </div>
-            `;
-            document.body.appendChild(overlay);
-            
-            document.getElementById('start-record-btn').onclick = startActualRecording;
-            
-            addLog('info', 'Recording prepared - waiting for user to click Start');
+        async function toggleVideoRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopVideoRecording();
+            } else {
+                startVideoRecording();
+            }
         }
 
-        // Recording flow: Step 2 - User clicks "Start Recording"
-        async function startActualRecording() {
-            // Remove the start overlay
-            const startOverlay = document.getElementById('recording-start-overlay');
-            if (startOverlay) startOverlay.remove();
-            
+        async function startVideoRecording() {
             try {
+                addLog('info', 'Starting video recording...');
+                
                 const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { mediaSource: 'screen' },
+                    video: { mediaSource: 'browser' },
                     audio: false
                 });
                 
@@ -3312,106 +2543,45 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                             type: 'video'
                         });
                         renderAttachments();
-                        
-                        // Remove recording overlay
-                        const overlay = document.getElementById('recording-timer-overlay');
-                        if (overlay) overlay.remove();
-                        
-                        // Restore modal
-                        restoreFeedbackModal();
-                        showFeedbackStatus('✅ Video recording saved', 'success');
+                        showStatus('✅ Video recording saved', 'success');
                     };
                     
                     reader.readAsDataURL(blob);
+                    
                     stream.getTracks().forEach(track => track.stop());
                 };
                 
                 mediaRecorder.start();
                 recordingStartTime = Date.now();
                 
-                // Show recording timer overlay
-                const overlay = document.createElement('div');
-                overlay.id = 'recording-timer-overlay';
-                overlay.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    z-index: 99999;
-                    background: rgba(222, 53, 11, 0.95);
-                    padding: 15px 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                `;
-                overlay.innerHTML = `
-                    <span style="color: white; font-size: 24px; animation: pulse 1s infinite;">⏺</span>
-                    <div style="color: white;">
-                        <div style="font-weight: 600; font-size: 16px;" id="recording-timer-text">00:0</div>
-                        <div style="font-size: 12px; opacity: 0.9;">Recording...</div>
-                    </div>
-                    <button id="stop-record-btn" style="
-                        background: rgba(0,0,0,0.3);
-                        color: white;
-                        border: 1px solid rgba(255,255,255,0.3);
-                        padding: 8px 16px;
-                        border-radius: 6px;
-                        font-size: 14px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        margin-left: 8px;
-                    ">⏹ Stop</button>
-                `;
-                
-                // Add pulse animation
-                const style = document.createElement('style');
-                style.textContent = '@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }';
-                document.head.appendChild(style);
-                
-                document.body.appendChild(overlay);
-                
-                document.getElementById('stop-record-btn').onclick = stopRecording;
+                document.getElementById('recording-indicator').style.display = 'flex';
+                document.getElementById('record-video-btn').textContent = '⏹️ Stop Recording';
                 
                 // Update timer
-                recordingInterval = setInterval(() => {
-                    if (recordingStartTime) {
-                        const elapsed = Date.now() - recordingStartTime;
-                        const seconds = Math.floor(elapsed / 1000);
-                        const ms = Math.floor((elapsed % 1000) / 100);
-                        const timerEl = document.getElementById('recording-timer-text');
-                        if (timerEl) {
-                            timerEl.textContent = `${String(seconds).padStart(2, '0')}:${ms}`;
-                        }
-                    }
-                }, 100);
+                recordingInterval = setInterval(updateRecordingTimer, 100);
                 
                 // Auto-stop after 30 seconds
                 setTimeout(() => {
                     if (mediaRecorder && mediaRecorder.state === 'recording') {
-                        stopRecording();
+                        stopVideoRecording();
                     }
                 }, 30000);
                 
-                addLog('info', 'Recording started (30s max)');
+                showStatus('🎥 Recording started (max 30s)', 'info');
                 
             } catch (error) {
-                // Remove any overlays on error
-                const startOverlay = document.getElementById('recording-start-overlay');
-                if (startOverlay) startOverlay.remove();
-                
-                restoreFeedbackModal();
-                showFeedbackStatus('❌ Recording failed: ' + error.message, 'error');
+                showStatus('❌ Recording failed: ' + error.message, 'error');
                 addLog('error', 'Video recording failed: ' + error.message);
             }
         }
 
-        // Recording flow: Step 3 - Stop recording (manual or auto)
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
+        function stopVideoRecording() {
+            if (mediaRecorder) {
                 mediaRecorder.stop();
                 clearInterval(recordingInterval);
-                addLog('info', 'Recording stopped');
+                document.getElementById('recording-indicator').style.display = 'none';
+                document.getElementById('record-video-btn').textContent = '🎥 Record Video (30s)';
+                addLog('info', 'Video recording stopped');
             }
         }
 
@@ -3470,107 +2640,10 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             submitBtn.disabled = true;
             submitBtn.textContent = 'Submitting...';
             
-            // Get GitHub token from localStorage (like forge-terminal)
-            const githubToken = localStorage.getItem('jira_github_token');
-            const repoName = 'mikejsmith1985/jira-automation';
+            showFeedbackStatus('Submitting feedback to GitHub...', 'info');
+            addLog('info', 'Submitting feedback issue');
             
-            let githubIssueUrl = null;
-            let githubIssueNumber = null;
-            
-            // Try to create GitHub issue (frontend, won't crash server)
-            if (githubToken) {
-                try {
-                    showFeedbackStatus('Creating GitHub issue...', 'info');
-                    
-                    // Build issue body
-                    let body = description + '\\n\\n';
-                    
-                    // Add logs if requested
-                    if (includeLogs) {
-                        body += '## Application Logs\\n```\\n';
-                        body += logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()}: ${l.message}`).join('\\n');
-                        body += '\\n```\\n\\n';
-                    }
-                    
-                    // Add system info
-                    body += '## System Information\\n';
-                    body += `- User Agent: ${navigator.userAgent}\\n`;
-                    body += `- Timestamp: ${new Date().toISOString()}\\n`;
-                    
-                    // Upload screenshots to GitHub repo (if any)
-                    const imageUrls = [];
-                    for (let i = 0; i < feedbackAttachments.length; i++) {
-                        const attachment = feedbackAttachments[i];
-                        if (attachment.type === 'image') {
-                            try {
-                                showFeedbackStatus(`Uploading screenshot ${i + 1}/${feedbackAttachments.length}...`, 'info');
-                                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                                const filename = `feedback-${timestamp}-${i}.png`;
-                                const content = attachment.content;
-                                
-                                const uploadRes = await fetch(`https://api.github.com/repos/${repoName}/contents/feedback-screenshots/${filename}`, {
-                                    method: 'PUT',
-                                    headers: {
-                                        'Authorization': `token ${githubToken}`,
-                                        'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                        message: 'Upload feedback screenshot',
-                                        content: content,
-                                    })
-                                });
-                                
-                                if (uploadRes.ok) {
-                                    const uploadData = await uploadRes.json();
-                                    imageUrls.push(uploadData.content.download_url);
-                                }
-                            } catch (err) {
-                                console.warn('Screenshot upload failed:', err);
-                            }
-                        }
-                    }
-                    
-                    // Add screenshots to body
-                    if (imageUrls.length > 0) {
-                        body += '\\n## Screenshots\\n';
-                        imageUrls.forEach(url => {
-                            body += `![screenshot](${url})\\n\\n`;
-                        });
-                    }
-                    
-                    // Create the issue via GitHub API
-                    showFeedbackStatus('Creating issue...', 'info');
-                    const issueRes = await fetch(`https://api.github.com/repos/${repoName}/issues`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `token ${githubToken}`,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            title: title,
-                            body: body,
-                            labels: ['user-feedback', 'bug']
-                        })
-                    });
-                    
-                    if (issueRes.ok) {
-                        const issueData = await issueRes.json();
-                        githubIssueUrl = issueData.html_url;
-                        githubIssueNumber = issueData.number;
-                        addLog('success', `GitHub issue #${githubIssueNumber} created`);
-                    } else {
-                        const errorData = await issueRes.json();
-                        addLog('warn', `GitHub issue creation failed: ${errorData.message}`);
-                    }
-                } catch (error) {
-                    console.error('GitHub submission failed:', error);
-                    addLog('warn', 'GitHub submission failed, saving locally only');
-                }
-            }
-            
-            // Always save to SQLite (via backend)
             try {
-                showFeedbackStatus('Saving feedback...', 'info');
                 const response = await fetch('/api/feedback/submit', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -3578,29 +2651,25 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                         title: title,
                         description: description,
                         attachments: feedbackAttachments,
-                        include_logs: includeLogs,
-                        github_issue_url: githubIssueUrl,
-                        github_issue_number: githubIssueNumber
+                        include_logs: includeLogs
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    if (githubIssueUrl) {
-                        showFeedbackStatus(
-                            `✅ Feedback submitted! <a href="${githubIssueUrl}" target="_blank" style="color: inherit;">View issue #${githubIssueNumber}</a>`,
-                            'success'
-                        );
-                    } else {
-                        showFeedbackStatus('✅ Feedback saved locally (configure GitHub token to sync)', 'success');
-                    }
+                    showFeedbackStatus(
+                        `✅ Feedback submitted! <a href="${data.issue_url}" target="_blank">View issue #${data.issue_number}</a>`,
+                        'success'
+                    );
+                    addLog('success', `Feedback submitted as issue #${data.issue_number}`);
                     
                     setTimeout(() => {
                         closeFeedbackModal();
                     }, 3000);
                 } else {
                     showFeedbackStatus('❌ Error: ' + data.error, 'error');
+                    addLog('error', 'Feedback submission failed: ' + data.error);
                 }
                 
             } catch (error) {
@@ -3650,43 +2719,3 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
     </script>
 </body>
 </html>
-"""
-
-def open_browser():
-    """Open default browser to the app"""
-    time.sleep(1.5)
-    webbrowser.open('http://localhost:5000')
-
-def run_server():
-    """Run the HTTP server"""
-    global github_feedback
-    
-    # Initialize GitHub feedback if token exists in config
-    try:
-        with open('config.yaml', 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-            
-        if 'feedback' in config:
-            token = config['feedback'].get('github_token')
-            repo = config['feedback'].get('repo')
-            
-            if token and repo:
-                github_feedback = GitHubFeedback(token=token, repo_name=repo)
-                print("✅ GitHub feedback system initialized")
-    except Exception as e:
-        print(f"⚠️  GitHub feedback not configured: {str(e)}")
-    
-    server_address = ('localhost', 5000)
-    httpd = HTTPServer(server_address, SyncHandler)
-    print("🚀 Waypoint starting...")
-    print("📡 Server: http://localhost:5000")
-    print("🌐 Opening browser...")
-    print("⏳ Starting server (this will block)...")
-    httpd.serve_forever()
-
-if __name__ == '__main__':
-    # Start browser opener in background
-    threading.Thread(target=open_browser, daemon=True).start()
-    
-    # Run server
-    run_server()

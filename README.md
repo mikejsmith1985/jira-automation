@@ -1,27 +1,55 @@
-# Jira Hygiene Assistant - Python Edition
+# Waypoint: GitHub-Jira Sync Tool
+**Simplifying Jira administration and team flow.**
 
-A self-contained desktop application for automated Jira ticket hygiene checks using browser automation.
+A self-contained desktop application that syncs GitHub PRs with Jira tickets and provides team insights, all using browser automation (no API access required).
 
-## ✨ Features
+## ✨ Core Features
 
-- 🔍 **Find stale tickets** - Tickets with no updates in 7+ days
-- 📝 **Find missing descriptions** - Tickets without descriptions
-- 📅 **Find missing due dates** - Tickets lacking due dates
-- 🔧 **Custom JQL queries** - Run any Jira Query Language search
-- 💬 **Bulk actions** - Add comments to multiple tickets at once
-- 🌐 **Browser automation** - Works through Jira web UI (no API needed)
-- 📦 **Self-contained** - Single .exe file, no installation required
+### 👔 Product Owner (PO) Persona
+- **Features & Epics View** - Track feature completeness with visual progress bars
+- **Dependency Canvas** - Interactive visualization of issue dependencies with drag-and-drop
+- **Team Mode Toggle** - Switch between Scrum (velocity) and Kanban (WIP, cycle time) metrics
+- **Export Reports** - Download feature tracking and dependency data as CSV
+
+### 💻 Developer (Dev) Persona
+- **GitHub → Jira Auto-Sync** - Link PRs to Jira tickets via commit messages and branch names
+- **Multi-Workflow System** - Define custom workflows for different scenarios (hourly, daily, weekly)
+- **Flexible Updates** - Update multiple fields, labels, and statuses per ticket
+- **Favorites** - Save common tasks for one-click execution
+
+### 📊 Scrum Master (SM) Persona
+- **Team Health Insights** - Rule-based detection of scope creep, defect leakage, stale tickets
+- **Hygiene Reports** - Identify missing estimates, long-running stories, blocked items
+- **Trend Analysis** - Track velocity, cycle time, and throughput over time
+- **SQLite Persistence** - Store insights and metrics history locally
+
+### 🐛 Feedback System
+- **Floating Bug Button** - Always-visible feedback modal in app corner
+- **Auto-Capture** - Logs, console errors, screenshots, and 30-second video recordings
+- **GitHub Integration** - Submit issues directly from the app with all attachments
+- **Privacy-Focused** - Browser tab recording only, no full-screen capture
 
 ## 🚀 Quick Start
 
+### Running from Source (Development):
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Run the app
+python app.py
+```
+
+The app starts automatically and opens http://localhost:5000 in your browser.
+
 ### Running the Packaged Application:
 
-1. Download `JiraHygieneAssistant.exe`
+1. Download `GitHubJiraSync.exe` from releases
 2. Double-click to run
-3. Browser will open automatically to http://localhost:5000
-4. Enter your Jira URL and click "Connect to Jira"
-5. Log in to Jira in the browser window that opens
-6. Use the app to run queries and perform bulk actions
+3. Browser opens to http://localhost:5000
+4. Select your persona (PO, Dev, or SM)
+5. Configure your Jira URL and GitHub organization in Settings
 
 ## 🛠️ Development Setup
 
@@ -33,67 +61,66 @@ A self-contained desktop application for automated Jira ticket hygiene checks us
 ### Installation:
 
 ```bash
-# 1. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 2. Install Playwright browsers
-playwright install chromium
-
-# 3. Run the app
+# Run the application
 python app.py
 ```
 
-The app will start and open http://localhost:5000 in your browser.
-
 ## 📦 Building the Executable
 
-Create a build script to package as standalone .exe:
-
 ```powershell
-# See build.ps1 for automated build process
+# Build standalone .exe with PyInstaller
 .\build.ps1
 ```
 
-Output: `dist\JiraHygieneAssistant.exe`
+Output: `dist\GitHubJiraSync.exe` (~50MB self-contained executable)
 
 ## 🏗️ Architecture
 
+The application uses a **Selenium-based browser automation** approach with a Python HTTP server and embedded web UI:
+
 ```
-┌─────────────────────────────────────────┐
-│  Web UI (Embedded HTML/JS)              │
-│  - Configuration form                   │
-│  - Query buttons                        │
-│  - Results display                      │
-│  - Bulk action controls                 │
-└────────────────┬────────────────────────┘
+┌─────────────────────────────────────────────┐
+│  Web UI (Embedded HTML/JS/CSS)              │
+│  - Persona selection (PO/Dev/SM)            │
+│  - Dashboard, Workflows, Insights, Settings │
+│  - Dependency Canvas visualization          │
+│  - Feedback modal with attachments          │
+└────────────────┬────────────────────────────┘
                  │ HTTP (localhost:5000)
                  ↓
-┌─────────────────────────────────────────┐
-│  Flask Backend (Python)                 │
-│  - REST API endpoints                   │
-│  - Session management                   │
-│  - Query orchestration                  │
-└────────────────┬────────────────────────┘
-                 │ Playwright API
+┌─────────────────────────────────────────────┐
+│  Python HTTP Server (app.py)                │
+│  - REST API endpoints                       │
+│  - Workflow orchestration                   │
+│  - Insights engine processing               │
+│  - Feedback system handling                 │
+│  - SQLite database management               │
+└────────────────┬────────────────────────────┘
+                 │ Selenium API
                  ↓
-┌─────────────────────────────────────────┐
-│  Browser Automation (Playwright)        │
-│  - Chromium browser control             │
-│  - Navigate Jira web UI                 │
-│  - Extract ticket data                  │
-│  - Add comments via UI                  │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│  Browser Automation (Selenium WebDriver)    │
+│  - Chrome/Chromium browser control          │
+│  - Navigate Jira web UI                     │
+│  - Extract ticket data (scraping)           │
+│  - Update tickets (field, label, status)    │
+│  - Add comments to issues                   │
+└─────────────────────────────────────────────┘
 ```
 
-## 📂 Project Structure
+### Key Components
 
-```
-jira-automation/
-├── app.py                  # Main Flask application with embedded UI
-├── requirements.txt        # Python dependencies
-├── build.ps1              # Build script (creates .exe)
-└── README.md              # This file
-```
+- **app.py** - HTTP server, web UI, API endpoints, workflow orchestration
+- **sync_engine.py** - Coordinates GitHub scraping with Jira automation
+- **github_scraper.py** - Extracts PR information from GitHub web UI
+- **jira_automator.py** - Updates Jira tickets via browser automation
+- **insights_engine.py** - Rule-based pattern detection (scope creep, defects, hygiene)
+- **feedback_db.py** - SQLite storage for insights, metrics, and logs
+- **github_feedback.py** - GitHub API integration for issue submission
+- **config.yaml** - Workflow definitions, field mappings, scheduling rules
 
 ## 🚨 Troubleshooting
 
@@ -101,47 +128,82 @@ jira-automation/
 
 **Problem:** "Python not found" or module errors
 ```bash
-# Solution: Ensure Python 3.10+ is installed
+# Ensure Python 3.10+ is installed
 python --version
 
 # Reinstall dependencies
 pip install -r requirements.txt
-playwright install chromium
 ```
 
 ### Browser automation fails:
 
-**Problem:** Can't find Jira elements
-- **Cause:** Jira's HTML structure varies by version
-- **Solution:** Update selectors in `app.py`
+**Problem:** Can't find Jira elements or page won't load
+- **Cause:** Jira HTML structure may vary by version or instance
+- **Solution:** Update CSS selectors in `jira_automator.py`
 
-**Problem:** Session expired
-- **Cause:** Not logged into Jira
-- **Solution:** Log in manually when browser window opens
+**Problem:** Session expired or login loops
+- **Cause:** Browser not logged into Jira
+- **Solution:** Browser window will appear on first run - log in manually
 
-## 🔐 Security
+**Problem:** PRs not syncing from GitHub
+- **Cause:** GitHub scraping depends on GitHub's HTML structure
+- **Solution:** Check GitHub hasn't changed their PR page layout; update selectors in `github_scraper.py`
 
-- ✅ **No credential storage** - Uses your browser session
-- ✅ **Local only** - Runs on localhost
+### Database issues:
+
+**Problem:** Insights not appearing or persisting
+- **Solution:** Delete `data/insights.db` and restart the app to rebuild
+
+### Feedback system not working:
+
+**Problem:** "No token configured" message
+- **Solution:** Go to Settings, add your GitHub Personal Access Token (create at https://github.com/settings/tokens)
+- **Required scopes:** `repo` (full control of private repositories)
+
+## 🔐 Security & Privacy
+
+- ✅ **Browser Session Based** - Uses existing Jira login, no credentials stored
+- ✅ **No Cloud Dependencies** - All data stays local by default
 - ✅ **Transparent** - Watch browser automation in real-time
-- ✅ **Open source** - All code is reviewable
+- ✅ **Privacy-First Video** - Records browser tab only, not full screen
+- ✅ **Open Source** - All code is reviewable on GitHub
+- ⚠️ **Note:** GitHub token stored in `config.yaml`. For production, consider encrypting sensitive config values.
 
 ## 📝 Changelog
 
-### Version 1.0.0 (Current)
+### Version 1.2.0 (Current - Feedback System)
+- ✅ Floating bug button feedback modal
+- ✅ Auto-capture console logs, errors, screenshots, and 30s video
+- ✅ GitHub issue submission with attachments
+- ✅ Privacy-focused (browser tab recording only)
+- ✅ Comprehensive unit tests (9 tests, 88.9% pass rate)
 
-- ✅ Flask web server with embedded UI
-- ✅ Playwright browser automation
-- ✅ Pre-built hygiene queries
-- ✅ Custom JQL support
-- ✅ Bulk comment functionality
+### Version 1.1.0
+- ✅ Persona-based interface (PO/Dev/SM)
+- ✅ Dependency Canvas with drag-and-drop
+- ✅ Rule-based Insights Engine
+- ✅ Team hygiene detection
+- ✅ SQLite persistence for metrics
+- ✅ Scrum/Kanban mode toggle
+- ✅ Export features and reports to CSV
 
-### Planned Features:
+### Version 1.0.0
+- ✅ GitHub-Jira sync via browser automation
+- ✅ Multi-workflow system with scheduling
+- ✅ Favorites system for quick tasks
+- ✅ Custom JQL query support
+- ✅ Multiple field updates per ticket
+- ✅ Comprehensive logging
 
-- [ ] More bulk actions (assign, transition)
-- [ ] Export results to CSV
-- [ ] Scheduled automation
-- [ ] Query templates
+## 🎯 Planned Features (v1.3.0+)
+
+- [ ] Canvas PNG export
+- [ ] Real-time sync status dashboard
+- [ ] Advanced scheduler management (start/stop/pause)
+- [ ] Trend visualization charts
+- [ ] PDF/PowerPoint report exports
+- [ ] Integration with local LLM for advanced insights
+- [ ] Bi-directional Jira ↔ GitHub sync
 
 ## 📄 License
 

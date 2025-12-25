@@ -1,490 +1,4 @@
-"""
-Waypoint - Simplifying Jira administration and team flow
-A self-contained desktop app that syncs GitHub PRs with Jira tickets
-Uses Selenium WebDriver with Chrome (no additional browser installation needed)
-"""
-import os
-import sys
-import webbrowser
-import threading
-import time
-import json
-import yaml
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from sync_engine import SyncEngine
-from insights_engine import InsightsEngine
-from feedback_db import FeedbackDB
-from github_feedback import GitHubFeedback, LogCapture
 
-# Global state
-driver = None
-sync_engine = None
-sync_thread = None
-is_syncing = False
-insights_engine = None
-feedback_db = FeedbackDB()  # SQLite-based feedback storage
-github_feedback = None  # Optional GitHub sync
-log_capture = LogCapture()
-
-class SyncHandler(BaseHTTPRequestHandler):
-    """HTTP request handler for the web UI"""
-    
-    def log_message(self, format, *args):
-        """Suppress default logging"""
-        pass
-    
-    def do_GET(self):
-        """Handle GET requests"""
-        if self.path == '/' or self.path == '/index.html':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html; charset=utf-8')
-            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Expires', '0')
-            self.end_headers()
-            self.wfile.write(HTML_TEMPLATE.encode('utf-8'))
-        elif self.path == '/assets/js/html2canvas.min.js':
-            self._serve_static_file('assets/js/html2canvas.min.js', 'application/javascript')
-        elif self.path == '/api/status':
-            self._handle_status()
-        elif self.path == '/api/config':
-            self._handle_get_config()
-        elif self.path == '/api/insights':
-            self._handle_get_insights()
-        elif self.path == '/api/insights/trend':
-            self._handle_get_trend()
-        elif self.path == '/api/feedback/validate-token':
-            self._handle_validate_feedback_token()
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    def _serve_static_file(self, filepath, content_type):
-        """Serve static files with caching"""
-        try:
-            with open(filepath, 'rb') as f:
-                self.send_response(200)
-                self.send_header('Content-type', content_type)
-                self.send_header('Cache-Control', 'public, max-age=31536000')
-                self.end_headers()
-                self.wfile.write(f.read())
-        except FileNotFoundError:
-            self.send_response(404)
-            self.end_headers()
-    
-    def do_POST(self):
-        """Handle POST requests (API endpoints)"""
-        try:
-            # Special handlers that manage their own response
-            if self.path == '/api/feedback/console-log':
-                self._handle_console_log()
-                return
-            elif self.path == '/api/feedback/network-error':
-                self._handle_network_error()
-                return
-            
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            
-            try:
-                data = json.loads(post_data.decode())
-            except:
-                data = {}
-            
-            if self.path == '/api/init':
-                response = self.handle_init(data)
-            elif self.path == '/api/sync-now':
-                response = self.handle_sync_now()
-            elif self.path == '/api/start-scheduler':
-                response = self.handle_start_scheduler()
-            elif self.path == '/api/stop-scheduler':
-                response = self.handle_stop_scheduler()
-            elif self.path == '/api/config':
-                response = self.handle_save_config(data)
-            elif self.path == '/api/save-config':
-                response = self.handle_save_config(data)
-            elif self.path == '/api/insights/resolve':
-                response = self.handle_resolve_insight(data)
-            elif self.path == '/api/insights/run':
-                response = self.handle_run_insights(data)
-            elif self.path == '/api/feedback/submit':
-                response = self.handle_submit_feedback(data)
-            elif self.path == '/api/feedback/save-token':
-                response = self.handle_save_feedback_token(data)
-            else:
-                response = {'success': False, 'error': 'Unknown endpoint'}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
-        except Exception as e:
-            print(f"ERROR in do_POST: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            try:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
-            except:
-                pass
-    
-    def _handle_status(self):
-        """Return current sync status"""
-        global is_syncing
-        status = {
-            'is_syncing': is_syncing,
-            'has_driver': driver is not None,
-            'has_engine': sync_engine is not None
-        }
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(status).encode())
-    
-    def _handle_get_config(self):
-        """Return current configuration"""
-        try:
-            with open('config.yaml', 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(config).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def handle_init(self, data):
-        """Initialize browser"""
-        global driver, sync_engine
-        
-        try:
-            # Initialize Chrome WebDriver if not already done
-            if driver is None:
-                chrome_options = Options()
-                chrome_options.add_argument('--start-maximized')
-                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-                
-                driver = webdriver.Chrome(options=chrome_options)
-            
-            # Initialize sync engine
-            if sync_engine is None:
-                sync_engine = SyncEngine(driver)
-            
-            # Navigate to Jira for authentication
-            jira_url = data.get('jiraUrl', sync_engine.config['jira']['base_url'])
-            driver.get(jira_url)
-            
-            return {'success': True, 'message': 'Browser initialized. Please log in to Jira.'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_sync_now(self):
-        """Run sync immediately"""
-        global sync_engine, is_syncing
-        
-        if sync_engine is None:
-            return {'success': False, 'error': 'Please initialize browser first'}
-        
-        if is_syncing:
-            return {'success': False, 'error': 'Sync already in progress'}
-        
-        try:
-            is_syncing = True
-            sync_engine.sync_once()
-            is_syncing = False
-            return {'success': True, 'message': 'Sync completed'}
-        except Exception as e:
-            is_syncing = False
-            return {'success': False, 'error': str(e)}
-    
-    def handle_start_scheduler(self):
-        """Start scheduled sync"""
-        global sync_engine, sync_thread, is_syncing
-        
-        if sync_engine is None:
-            return {'success': False, 'error': 'Please initialize browser first'}
-        
-        if sync_thread and sync_thread.is_alive():
-            return {'success': False, 'error': 'Scheduler already running'}
-        
-        try:
-            sync_thread = threading.Thread(target=sync_engine.start_scheduled, daemon=True)
-            sync_thread.start()
-            return {'success': True, 'message': 'Scheduler started'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_stop_scheduler(self):
-        """Stop scheduled sync"""
-        # Note: Can't easily stop schedule thread, would need to implement stop flag
-        return {'success': False, 'error': 'Scheduler stop not implemented yet. Restart app to stop.'}
-    
-    def handle_save_config(self, data):
-        """Save configuration changes"""
-        try:
-            with open('config.yaml', 'w', encoding='utf-8') as f:
-                yaml.dump(data, f, default_flow_style=False)
-            return {'success': True, 'message': 'Configuration saved'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def _handle_get_insights(self):
-        """Return recent insights"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            days = int(self.headers.get('X-Days', 7))
-            insights = insights_engine.get_insights(days=days)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'insights': insights}).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def _handle_get_trend(self):
-        """Return metric trend data"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            metric_type = self.headers.get('X-Metric-Type', 'velocity')
-            days = int(self.headers.get('X-Days', 30))
-            trend = insights_engine.get_metric_trend(metric_type, days)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'trend': trend}).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def handle_resolve_insight(self, data):
-        """Mark insight as resolved"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            insight_id = data.get('id')
-            if not insight_id:
-                return {'success': False, 'error': 'Missing insight ID'}
-            
-            insights_engine.resolve_insight(insight_id)
-            return {'success': True, 'message': 'Insight resolved'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_run_insights(self, data):
-        """Run insights analysis on provided data"""
-        global insights_engine
-        try:
-            if insights_engine is None:
-                insights_engine = InsightsEngine()
-            
-            jira_data = data.get('jira_data', {})
-            insights = insights_engine.analyze_all(jira_data)
-            
-            return {'success': True, 'insights': insights}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def _handle_validate_feedback_token(self):
-        """Validate GitHub feedback token"""
-        global github_feedback
-        try:
-            if github_feedback and github_feedback.token:
-                result = github_feedback.validate_token()
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(result).encode())
-            else:
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'valid': False,
-                    'error': 'No token configured'
-                }).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def _handle_console_log(self):
-        """Receive and store console log from browser"""
-        global log_capture
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            log_entry = json.loads(post_data.decode('utf-8'))
-            
-            log_capture.add_console_log(log_entry)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True}).encode('utf-8'))
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
-    
-    def _handle_network_error(self):
-        """Receive and store network error from browser"""
-        global log_capture
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            error_entry = json.loads(post_data.decode('utf-8'))
-            
-            log_capture.add_network_error(error_entry)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True}).encode('utf-8'))
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
-    
-    def handle_submit_feedback(self, data):
-        """Submit feedback - save to SQLite only (GitHub handled by frontend)"""
-        global feedback_db, log_capture
-        try:
-            title = data.get('title', 'User Feedback')
-            description = data.get('description', '')
-            attachments = data.get('attachments', [])
-            include_logs = data.get('include_logs', True)
-            github_issue_url = data.get('github_issue_url')  # Comes from frontend if successful
-            github_issue_number = data.get('github_issue_number')
-            
-            # Build feedback body
-            body = description + "\n\n"
-            
-            if include_logs:
-                body += log_capture.export_all_logs()
-            
-            # Add system info
-            import platform
-            body += "\n\n## System Information\n"
-            body += f"- OS: {platform.system()} {platform.release()}\n"
-            body += f"- Python: {platform.python_version()}\n"
-            body += f"- Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            
-            # Save to SQLite (always succeeds)
-            logs_json = json.dumps(log_capture.console_logs + log_capture.network_errors) if include_logs else None
-            attachments_json = json.dumps(attachments) if attachments else None
-            
-            feedback_id = feedback_db.add_feedback(
-                title=title,
-                description=body,
-                logs=logs_json,
-                attachments=attachments_json
-            )
-            
-            # Update status based on whether GitHub sync happened
-            if github_issue_url:
-                feedback_db.update_status(feedback_id, 'synced', github_issue_url)
-                message = f'✅ Feedback submitted to GitHub (Issue #{github_issue_number})'
-            else:
-                feedback_db.update_status(feedback_id, 'local')
-                message = f'✅ Feedback saved locally (ID: {feedback_id})'
-            
-            return {
-                'success': True,
-                'feedback_id': feedback_id,
-                'message': message
-            }
-            
-        except Exception as e:
-            print(f"ERROR in handle_submit_feedback: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-    
-    def handle_save_feedback_token(self, data):
-        """Save GitHub feedback token to config"""
-        global github_feedback
-        try:
-            print(f"DEBUG: handle_save_feedback_token called with data keys: {data.keys()}")
-            token = data.get('token', '')
-            repo = data.get('repo', '')
-            print(f"DEBUG: token length={len(token)}, repo={repo}")
-            
-            if not token or not repo:
-                return {'success': False, 'error': 'Token and repo required'}
-            
-            # Load config
-            print("DEBUG: Loading config...")
-            with open('config.yaml', 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Update feedback section
-            if 'feedback' not in config:
-                config['feedback'] = {}
-            
-            config['feedback']['github_token'] = token
-            config['feedback']['repo'] = repo
-            
-            # Save config
-            print("DEBUG: Saving config...")
-            with open('config.yaml', 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, default_flow_style=False)
-            
-            # Initialize GitHub feedback client
-            print("DEBUG: Creating GitHubFeedback object...")
-            github_feedback = GitHubFeedback(token=token, repo_name=repo)
-            
-            # Validate token
-            print("DEBUG: Validating token...")
-            validation = github_feedback.validate_token()
-            print(f"DEBUG: Validation result: {validation}")
-            
-            if validation['valid']:
-                return {
-                    'success': True,
-                    'message': f"Token validated for user: {validation['user']}"
-                }
-            else:
-                return {
-                    'success': False,
-                    'error': validation['error']
-                }
-            
-        except Exception as e:
-            print(f"ERROR in handle_save_feedback_token: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-
-
-# HTML Template (embedded)
-HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -2057,7 +1571,9 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                     pr_opened: {
                         enabled: document.getElementById('pr-opened-enabled').checked,
                         add_comment: document.getElementById('pr-opened-comment').checked,
-                        comment_template: "🔗 Pull Request opened: {pr_url}\\nBranch: {branch_name}\\nAuthor: {author}",
+                        comment_template: "🔗 Pull Request opened: {pr_url}
+Branch: {branch_name}
+Author: {author}",
                         update_pr_field: true,
                         add_label: document.getElementById('pr-opened-label').value,
                         set_status: document.getElementById('pr-opened-status').value
@@ -2417,10 +1933,10 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         // Export features to CSV
         function exportFeatures() {
             // TODO: Get actual feature data
-            const csv = 'Feature Key,Title,Progress,Completed,Total,Status\\n' +
-                        'PROJ-100,User Authentication,75%,6,8,In Progress\\n' +
-                        'PROJ-200,Payment Processing,40%,2,5,In Progress\\n' +
-                        'PROJ-300,Mobile App iOS,20%,1,5,In Progress\\n';
+            const csv = 'Feature Key,Title,Progress,Completed,Total,Status\n' +
+                        'PROJ-100,User Authentication,75%,6,8,In Progress\n' +
+                        'PROJ-200,Payment Processing,40%,2,5,In Progress\n' +
+                        'PROJ-300,Mobile App iOS,20%,1,5,In Progress\n';
             
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
@@ -2988,10 +2504,10 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         }
 
         function exportHygieneReport() {
-            const csv = 'Issue Type,Count,Severity,Description\\n' +
-                        'Stale Tickets,7,Medium,No updates in 14+ days\\n' +
-                        'Missing Story Points,5,Medium,Stories without estimates\\n' +
-                        'Long-Running Stories,3,High,In progress > 10 days\\n';
+            const csv = 'Issue Type,Count,Severity,Description\n' +
+                        'Stale Tickets,7,Medium,No updates in 14+ days\n' +
+                        'Missing Story Points,5,Medium,Stories without estimates\n' +
+                        'Long-Running Stories,3,High,In progress > 10 days\n';
             
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
@@ -3483,19 +2999,19 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                     showFeedbackStatus('Creating GitHub issue...', 'info');
                     
                     // Build issue body
-                    let body = description + '\\n\\n';
+                    let body = description + '\n\n';
                     
                     // Add logs if requested
                     if (includeLogs) {
-                        body += '## Application Logs\\n```\\n';
-                        body += logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()}: ${l.message}`).join('\\n');
-                        body += '\\n```\\n\\n';
+                        body += '## Application Logs\n```\n';
+                        body += logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()}: ${l.message}`).join('\n');
+                        body += '\n```\n\n';
                     }
                     
                     // Add system info
-                    body += '## System Information\\n';
-                    body += `- User Agent: ${navigator.userAgent}\\n`;
-                    body += `- Timestamp: ${new Date().toISOString()}\\n`;
+                    body += '## System Information\n';
+                    body += `- User Agent: ${navigator.userAgent}\n`;
+                    body += `- Timestamp: ${new Date().toISOString()}\n`;
                     
                     // Upload screenshots to GitHub repo (if any)
                     const imageUrls = [];
@@ -3532,9 +3048,9 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                     
                     // Add screenshots to body
                     if (imageUrls.length > 0) {
-                        body += '\\n## Screenshots\\n';
+                        body += '\n## Screenshots\n';
                         imageUrls.forEach(url => {
-                            body += `![screenshot](${url})\\n\\n`;
+                            body += `![screenshot](${url})\n\n`;
                         });
                     }
                     
@@ -3650,43 +3166,4 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
     </script>
 </body>
 </html>
-"""
 
-def open_browser():
-    """Open default browser to the app"""
-    time.sleep(1.5)
-    webbrowser.open('http://localhost:5000')
-
-def run_server():
-    """Run the HTTP server"""
-    global github_feedback
-    
-    # Initialize GitHub feedback if token exists in config
-    try:
-        with open('config.yaml', 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-            
-        if 'feedback' in config:
-            token = config['feedback'].get('github_token')
-            repo = config['feedback'].get('repo')
-            
-            if token and repo:
-                github_feedback = GitHubFeedback(token=token, repo_name=repo)
-                print("✅ GitHub feedback system initialized")
-    except Exception as e:
-        print(f"⚠️  GitHub feedback not configured: {str(e)}")
-    
-    server_address = ('localhost', 5000)
-    httpd = HTTPServer(server_address, SyncHandler)
-    print("🚀 Waypoint starting...")
-    print("📡 Server: http://localhost:5000")
-    print("🌐 Opening browser...")
-    print("⏳ Starting server (this will block)...")
-    httpd.serve_forever()
-
-if __name__ == '__main__':
-    # Start browser opener in background
-    threading.Thread(target=open_browser, daemon=True).start()
-    
-    # Run server
-    run_server()

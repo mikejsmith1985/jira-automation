@@ -1,103 +1,644 @@
-# 🎓 GitHub-Jira Sync Tool - Beginner's Guide
+# 🎓 GitHub-Jira Sync Tool - Complete Architectural Guide
 
-**Welcome!** This document explains how every file in this application works, written for someone who's new to programming.
+**Purpose:** This document explains how every component in the application works and how they fit together. Perfect for understanding the system before diving into code.
 
 ## 📚 Table of Contents
 
 1. [What Does This App Do?](#what-does-this-app-do)
-2. [How All The Files Work Together](#how-all-the-files-work-together)
-3. [Individual File Explanations](#individual-file-explanations)
-4. [How To Use The App](#how-to-use-the-app)
-5. [Customizing For Your Needs](#customizing-for-your-needs)
+2. [The Three Personas](#the-three-personas)
+3. [How All Components Work Together](#how-all-components-work-together)
+4. [Individual Component Explanations](#individual-component-explanations)
+5. [Data Flow: From Trigger to Jira Update](#data-flow-from-trigger-to-jira-update)
+6. [The Feedback System](#the-feedback-system)
+7. [Configuration & Customization](#configuration--customization)
 
 ---
 
 ## What Does This App Do?
 
-Imagine you're a teacher with two different notebooks:
-- **Notebook 1 (GitHub)**: Where students submit their homework
-- **Notebook 2 (Jira)**: Where you track which homework needs grading
+Imagine you manage two different systems:
+- **System 1 (GitHub):** Where developers submit code changes (Pull Requests)
+- **System 2 (Jira):** Where you track work items and status
 
-Every time a student submits homework, you have to:
-1. Look at Notebook 1
-2. Write in Notebook 2: "Student submitted homework"
-3. Maybe update the grade when they fix it
-4. Mark it "Done" when everything's complete
+Every time something happens in GitHub, you have to manually update Jira:
+1. "A PR was opened for feature X"
+2. "The PR got merged, so mark ticket X as done"
+3. "A PR had a review comment, add that feedback to the ticket"
 
-**This app does all that automatically!** It watches GitHub (Notebook 1) and updates Jira (Notebook 2) for you.
+**This app automates all of that.** It watches GitHub and automatically updates Jira tickets for you.
 
-### Real Example:
+### Real-World Example:
 
-1. Developer creates Pull Request "ABC-123: Fix login bug"
+1. Developer creates Pull Request: "ABC-123: Fix login bug"
 2. App sees "ABC-123" in the PR title
 3. App finds ticket ABC-123 in Jira
-4. App adds comment: "PR opened: https://github.com/..."
+4. App adds comment: "PR opened: https://github.com/org/repo/pull/456"
 5. App adds label "has-pr"
-6. When PR is merged, app changes ticket to "Done"
+6. Developers review and approve
+7. PR gets merged
+8. App moves ticket ABC-123 to "Done" status automatically
+9. No manual work needed! ✨
 
 ---
 
-## How All The Files Work Together
+## The Three Personas
 
-Think of this app like a restaurant kitchen:
+This app serves three different types of users with different goals:
+
+### 👔 **Product Owner (PO) - The Planner**
+**Goal:** Visualize features and track progress for decision-making
+
+**What they need:**
+- "Which features are blocked?"
+- "What's the status of our Q1 roadmap?"
+- "What dependencies are blocking us?"
+- "Can we ship this release?"
+
+**Features:**
+- **Features & Epics View** - See all features with child issues and progress bars
+- **Dependency Canvas** - Visual map of how issues block each other
+- **Export Reports** - Download data for presentations
+
+**Data source:** Manual upload of feature structures (JSON/YAML)
+
+---
+
+### 💻 **Developer (Dev) - The Automator**
+**Goal:** Reduce manual work by automating Jira updates from GitHub
+
+**What they need:**
+- "Every PR should link to the Jira ticket"
+- "When a PR is merged, mark the ticket done"
+- "Run our sync every hour automatically"
+
+**Features:**
+- **Multi-Workflow System** - Define different rules for different scenarios
+- **Flexible Scheduling** - Run hourly, daily, or weekly
+- **Favorites** - Save common tasks for one-click execution
+- **Multiple Updates** - Update fields, labels, status all at once
+
+**Data source:** GitHub PRs (scraped via Selenium)
+
+---
+
+### 📊 **Scrum Master (SM) - The Health Monitor**
+**Goal:** Identify team issues and track team health metrics
+
+**What they need:**
+- "How is our velocity trending?"
+- "Are we stalling on any work?"
+- "Do we have scope creep?"
+- "What tickets need attention?"
+
+**Features:**
+- **Insights Engine** - Automatic detection of problems (scope creep, defects, stale work)
+- **Team Health Metrics** - Velocity, cycle time, WIP, burndown
+- **Hygiene Checks** - Missing estimates, long-running stories, blockers
+- **Trend Analysis** - See velocity and cycle time changes over time
+- **Persistent Storage** - Historical data in SQLite database
+
+**Data source:** Jira data (scraped via Selenium) + GitHub PRs
+
+---
+
+## How All Components Work Together
+
+Think of the application like a restaurant kitchen with specialized chefs:
 
 ```
-config.yaml
-└─ The Recipe Book
-   Tells everyone what to make and when
+┌─────────────────────────────────────────────────┐
+│              WEB INTERFACE (app.py)              │
+│  • User selects their persona                   │
+│  • Configures workflows and settings            │
+│  • Views insights and reports                   │
+│  • Submits feedback via floating bug button     │
+└────────┬────────────────────────────┬───────────┘
+         │                            │
+    HTTP Requests              HTTP Requests
+         │                            │
+┌────────▼──────────┐        ┌───────▼────────────┐
+│  SCHEDULER/RUNNER │        │  GITHUB FEEDBACK   │
+│  (sync_engine.py)│        │  (github_feedback) │
+└────────┬──────────┘        └────────────────────┘
+         │
+    Coordinates Work
+         │
+    ┌────┴────┐
+    │          │
+    ▼          ▼
+┌──────────────────────┐   ┌──────────────────────┐
+│  GITHUB SCRAPER      │   │  JIRA AUTOMATOR      │
+│  (github_scraper.py) │   │  (jira_automator.py) │
+│                      │   │                      │
+│ • Opens GitHub       │   │ • Opens Jira tickets │
+│ • Finds PRs          │   │ • Updates fields     │
+│ • Extracts metadata  │   │ • Adds comments      │
+│ • Returns PR list    │   │ • Changes status     │
+└──────────────────────┘   │ • Adds labels        │
+                           └──────────────────────┘
+    Selenium WebDriver (Browser Automation)
+         │
+         ▼
+    ┌──────────────────────────────┐
+    │   Chrome/Chromium Browser    │
+    │  (User watches automation!)  │
+    └──────────────────────────────┘
 
-app.py
-└─ The Head Chef
-   Takes orders from the waiter (web browser)
-   Tells other chefs what to do
-
-sync_engine.py
-└─ The Kitchen Manager
-   Schedules when things happen
-   Makes sure all chefs work together
-
-github_scraper.py
-└─ The Prep Cook
-   Goes to GitHub
-   Finds all the Pull Requests
-   Brings back the information
-
-jira_automator.py
-└─ The Line Cook
-   Goes to Jira
-   Updates tickets
-   Adds comments and changes fields
-
-requirements.txt
-└─ The Shopping List
-   Lists all the ingredients (Python libraries) we need
-
-build.ps1
-└─ The Packaging System
-   Wraps everything into one file (.exe)
+┌─────────────────────────────────────────────────┐
+│           INSIGHTS & STORAGE                    │
+│  • insights_engine.py (pattern detection)       │
+│  • feedback_db.py (SQLite database)             │
+│  • Historical metrics and insights              │
+└─────────────────────────────────────────────────┘
 ```
 
-### The Flow (Like an Assembly Line):
+### The Flow in Action:
+
+**Scenario:** Developer creates PR "ABC-123: Fix login bug"
 
 ```
-1. ⏰ SCHEDULER (sync_engine.py)
-   "It's 9:00 AM! Time to check for updates"
-   ↓
+1. 🕐 SCHEDULER (sync_engine.py)
+   └─> "It's 9:00 AM! Time to check GitHub for new PRs"
 
 2. 🔍 GITHUB SCRAPER (github_scraper.py)
-   "I found 5 new PRs!"
-   ↓
+   └─> Opens GitHub in browser
+   └─> Finds PR #456: "ABC-123: Fix login bug"
+   └─> Extracts: title, URL, author, status
+   └─> Returns to scheduler
 
 3. 🧠 SYNC ENGINE (sync_engine.py)
-   "PR #1 has ticket ABC-123, let me update it"
-   ↓
+   └─> "I found ticket ABC-123 in the PR title"
+   └─> "What should I do? Let me check config.yaml"
+   └─> "PR opened → add comment, add label, set field"
 
 4. ✏️ JIRA AUTOMATOR (jira_automator.py)
-   "Opening ABC-123... adding comment... done!"
-   ↓
+   └─> Opens ABC-123 in Jira
+   └─> Adds comment: "PR opened: https://github.com/..."
+   └─> Adds label: "has-pr"
+   └─> Updates PR Link field
+   └─> Saves
 
-5. 📊 LOGGING
-   "Updated 5 tickets successfully"
+5. 📊 LOGGING & INSIGHTS
+   └─> Records: "Updated ABC-123 successfully"
+   └─> Stores metrics in SQLite
+   └─> Updates team velocity stats
+
+✅ Done! All automated, no manual work!
+```
+
+---
+
+## Individual Component Explanations
+
+### **app.py - The Web Server & UI**
+
+**Purpose:** HTTP server that provides the web interface and API
+
+**What it does:**
+- Starts a Python HTTP server on localhost:5000
+- Serves embedded HTML/CSS/JavaScript to browser
+- Handles user interactions (clicks, form submissions)
+- Routes requests to appropriate handlers
+- Manages global state (driver, sync_engine, database connections)
+- Provides REST API endpoints
+
+**Key Sections:**
+```python
+# The HTTP request handler class
+class SyncHandler(BaseHTTPRequestHandler):
+    def do_GET(self):    # Handle GET requests (fetch page, config, status)
+    def do_POST(self):   # Handle POST requests (init, sync, save config)
+
+# API Endpoints
+/api/init              # Initialize browser
+/api/sync-now          # Run sync immediately
+/api/start-scheduler   # Start scheduled syncs
+/api/config            # Get/save configuration
+/api/insights          # Get insights
+/api/feedback/submit   # Submit feedback to GitHub
+```
+
+**Why separate file?** Because it's the "waiter" that takes orders from the user and tells other components what to do.
+
+---
+
+### **sync_engine.py - The Orchestrator**
+
+**Purpose:** Coordinates all the work and schedules when things happen
+
+**What it does:**
+- Loads configuration from config.yaml
+- Initializes GitHubScraper and JiraAutomator
+- Runs sync cycles (one-time or scheduled)
+- Processes each PR found
+- Matches PRs to Jira tickets
+- Calls JiraAutomator to update tickets
+- Logs everything to file and database
+- Handles scheduling (hourly, daily, weekly)
+
+**Key Methods:**
+```python
+sync_once()              # Run a single sync cycle
+_process_pr(pr)          # Process one PR
+start_scheduled()        # Start running on schedule
+```
+
+**Why separate file?** Because the scheduling and orchestration logic is complex and should be independent from the web UI.
+
+---
+
+### **github_scraper.py - The GitHub Reader**
+
+**Purpose:** Extracts Pull Request information from GitHub
+
+**How it works:**
+1. Opens GitHub.com in the browser (via Selenium)
+2. Navigates to the Pull Requests page for a specific repository
+3. Finds all PR elements on the page
+4. Extracts from each PR: title, URL, author, status, branch name
+5. Looks for Jira ticket keys in the PR title (like "ABC-123")
+6. Returns a list of PR dictionaries
+
+**Why Selenium instead of GitHub API?**
+- The team doesn't have GitHub API access yet
+- Selenium works like a human visiting the page
+- Can scrape any GitHub.com page without authentication issues
+
+**Key Methods:**
+```python
+get_recent_prs(repo_name, hours_back=24)  # Get PRs updated in last X hours
+get_pr_details(pr_url)                     # Get detailed info about one PR
+```
+
+**Example Output:**
+```python
+{
+    'repo': 'my-awesome-app',
+    'number': '456',
+    'title': 'ABC-123: Fix login bug',
+    'url': 'https://github.com/org/my-awesome-app/pull/456',
+    'status': 'merged',  # or 'open' or 'closed'
+    'author': 'john_doe',
+    'branch': 'feature/ABC-123-fix-login',
+    'ticket_keys': ['ABC-123']  # Jira keys found in title
+}
+```
+
+---
+
+### **jira_automator.py - The Jira Updater**
+
+**Purpose:** Updates Jira tickets via browser automation
+
+**How it works:**
+1. Opens a Jira ticket in the browser
+2. Finds the comment box
+3. Types the comment message
+4. Clicks save
+5. Updates custom fields (like PR link)
+6. Adds labels
+7. Changes ticket status
+8. All done! ✨
+
+**Why this approach?**
+- No Jira API access available
+- Selenium can click buttons just like a human would
+- Works with any Jira configuration
+
+**Key Methods:**
+```python
+update_ticket(ticket_key, updates)  # Main method: does all updates
+_add_comment(text)                  # Add comment to ticket
+_update_fields(fields)              # Update custom fields
+_add_labels(labels)                 # Add labels to ticket
+_set_status(status)                 # Change ticket status
+```
+
+**Example Usage:**
+```python
+jira.update_ticket('ABC-123', {
+    'comment': '🔗 PR opened: https://github.com/...',
+    'fields': {
+        'customfield_10001': 'https://github.com/org/repo/pull/456'
+    },
+    'labels': ['has-pr', 'in-review'],
+    'status': 'In Review'
+})
+```
+
+---
+
+### **insights_engine.py - The Pattern Detector**
+
+**Purpose:** Automatically detects team issues without needing AI/LLM
+
+**What it detects:**
+- **Scope Creep** - Stories growing by >30% after sprint start
+- **Defect Leakage** - Production bugs escaping QA (>20% alert)
+- **Velocity Trends** - Significant velocity changes (±15%)
+- **Stale Tickets** - No updates in 14+ days
+- **Missing Estimates** - Stories without story points
+- **Long Runners** - Stories in progress >10 days
+- **Blocked Items** - Stories stuck in a status
+
+**How it works:**
+1. Takes Jira data as input (usually scraped)
+2. Runs rule-based checks (no AI/LLM)
+3. Generates insights with severity levels
+4. Stores in SQLite database
+5. Returns to UI for display
+
+**Example Rule (Scope Creep):**
+```python
+if story['story_points'] > story['initial_story_points'] * 1.3:
+    # Growth > 30%
+    insight = {
+        'type': 'scope_creep',
+        'severity': 'warning',
+        'message': f"Story {key} grew from {initial} to {current} points"
+    }
+```
+
+---
+
+### **feedback_db.py - The Data Vault**
+
+**Purpose:** Stores insights, metrics, and logs in SQLite
+
+**What it stores:**
+- Team insights (scope creep, defects, etc.)
+- Historical metrics (velocity per sprint, cycle time trends)
+- Application logs (sync runs, errors, user actions)
+- Feedback entries (user-submitted bug reports)
+
+**Why SQLite?**
+- No server needed (just a file)
+- Can query historical data
+- Persists across app restarts
+- Lightweight and fast
+
+**Database Tables:**
+```
+insights          - Detected team issues
+metrics_history   - Historical velocity, cycle time, WIP
+logs              - Application operation logs
+feedback          - User-submitted feedback
+```
+
+---
+
+### **github_feedback.py - The Feedback System**
+
+**Purpose:** Captures logs, screenshots, video and submits issues to GitHub
+
+**What it captures:**
+- **Console Logs** - All JavaScript console.log/console.error calls
+- **Network Errors** - Failed API requests and network failures
+- **Screenshots** - Full page screenshot at time of feedback
+- **Video** - 30-second screen recording of browser tab
+- **System Info** - Browser, OS, app version
+
+**How it works:**
+1. User clicks 🐛 bug button in corner
+2. Feedback modal opens
+3. User enters title and description
+4. User optionally captures screenshot or video
+5. System auto-captures console logs (last 5 minutes)
+6. User clicks submit
+7. Submits GitHub issue via GitHub API with all attachments
+8. Issue created with logs, screenshot, video as comments
+
+**Why important?**
+- Users can report bugs without leaving the app
+- We get rich diagnostic data (logs, screenshots, video)
+- All issues go to one place (GitHub)
+- Privacy-focused (browser tab only, not full screen)
+
+---
+
+### **config.yaml - The Configuration File**
+
+**Purpose:** Centralized configuration for all workflows, settings, and mappings
+
+**What it contains:**
+
+```yaml
+github:
+  base_url: "https://github.com"
+  organization: "your-org"  # Your GitHub org
+  repositories: ["repo1", "repo2"]
+
+jira:
+  base_url: "https://your-company.atlassian.net"
+  project_keys: ["PROJ", "ABC"]
+  custom_fields:
+    pr_link: "customfield_10001"  # Maps field names to IDs
+
+workflows:
+  pr_sync:
+    enabled: true
+    schedule:
+      frequency: "hourly"
+      business_hours_only: true
+    pr_opened:
+      add_comment: true
+      labels: ["has-pr"]
+      set_status: ""  # Don't change status
+
+favorites:
+  favorite_1:
+    name: "Update PR Links"
+    jql_query: "status = 'In Review' AND 'PR Link' is EMPTY"
+    updates:
+      fields:
+        pr_link: "https://github.com/..."
+```
+
+**Why separate file?**
+- Users can customize without editing Python code
+- Easy to enable/disable workflows
+- Portable across machines
+- Non-technical users can update it
+
+---
+
+## Data Flow: From Trigger to Jira Update
+
+Let's trace what happens when a developer opens a PR:
+
+```
+1️⃣  GITHUB EVENT
+    └─> Developer creates PR: "ABC-123: Fix login"
+    └─> PR is now at: https://github.com/org/repo/pull/456
+
+2️⃣  SCHEDULER TRIGGER (sync_engine.py)
+    └─> Scheduled time arrives (e.g., hourly)
+    └─> Calls: sync_engine.sync_once()
+
+3️⃣  GITHUB SCRAPING (github_scraper.py)
+    └─> Opens GitHub in Selenium browser
+    └─> Navigates to: https://github.com/org/repo/pulls
+    └─> Finds PR row in HTML table
+    └─> Extracts: title, status, author, URL, branch
+    └─> Regex search in title: "ABC-123"
+    └─> Returns to sync_engine
+
+4️⃣  TICKET MATCHING (sync_engine.py)
+    └─> Ticket key found: "ABC-123"
+    └─> Looks up workflow rules in config.yaml
+    └─> Event: "pr_opened"
+    └─> Gets actions: add comment, add label, update field
+
+5️⃣  JIRA UPDATE (jira_automator.py)
+    └─> Navigates to: https://jira.com/browse/ABC-123
+    └─> Adds comment: "🔗 PR opened: https://github.com/..."
+    └─> Adds label: "has-pr"
+    └─> Updates field: "customfield_10001" = "https://github.com/..."
+    └─> Saves all changes
+
+6️⃣  LOGGING & METRICS (feedback_db.py)
+    └─> Records in SQLite:
+    └─> "Updated ABC-123: comment, label, field"
+    └─> Timestamp: 2025-12-25 09:15:00
+    └─> Status: success
+
+7️⃣  INSIGHTS CHECK (insights_engine.py)
+    └─> Analyzes team metrics
+    └─> Updates velocity, WIP, cycle time
+    └─> Detects any issues
+    └─> Stores in SQLite
+
+✅ COMPLETE
+   └─> User sees "Sync successful" in web UI
+   └─> Can view logs and metrics on SM tab
+```
+
+---
+
+## The Feedback System
+
+The floating 🐛 bug button provides a way for users to report issues with rich diagnostic data:
+
+### Flow:
+1. User clicks bug button → Modal opens
+2. User enters title: "Canvas not loading"
+3. User enters description: "When I upload JSON, nothing happens"
+4. User clicks "Capture Screenshot" → Page screenshot taken
+5. User clicks "Record Video" → 30s browser recording
+6. User clicks "Submit" → GitHub issue created with:
+   - Title and description
+   - Automatically captured logs (Python + browser)
+   - Screenshot (as PNG attachment)
+   - Video (as MP4/WebM attachment)
+   - System info (browser, OS, app version)
+7. Issue appears in GitHub repo
+8. Developer can investigate with full diagnostic context
+
+### Why this approach?
+- **Privacy:** Records browser tab only, not full screen
+- **Rich Diagnostics:** Logs + screenshot + video = easy to debug
+- **Low Friction:** Built into app, users don't leave to report issues
+- **Centralized:** All feedback in GitHub Issues
+
+---
+
+## Configuration & Customization
+
+### Adding a New Workflow
+
+In `config.yaml`:
+```yaml
+workflows:
+  daily_label_cleanup:
+    enabled: true
+    description: "Remove old labels from closed tickets"
+    schedule:
+      frequency: "daily"
+      time: "08:00"
+    jql_query: "status = Closed AND labels = 'needs-review'"
+    updates:
+      comment_template: "Removing stale labels"
+      labels: []  # (Could remove labels if function added)
+      set_status: ""
+```
+
+### Adding a Custom Field Mapping
+
+In `config.yaml`:
+```yaml
+jira:
+  custom_fields:
+    pr_link: "customfield_10001"
+    fix_version: "customfield_10002"
+    reviewer: "customfield_10003"  # New field!
+```
+
+Then use in workflow updates:
+```yaml
+pr_opened:
+  fields:
+    pr_link: "{pr_url}"
+    reviewer: "{author}"  # Set reviewer to PR author
+```
+
+### Extending with New Rules
+
+In `insights_engine.py`, add a new detection rule:
+```python
+def detect_bottleneck(self, jira_data):
+    """Detect when one team member has too much work"""
+    for assignee in get_assignees(jira_data):
+        open_count = count_open_by_assignee(assignee, jira_data)
+        if open_count > 10:
+            return {
+                'type': 'bottleneck',
+                'severity': 'warning',
+                'assignee': assignee,
+                'open_count': open_count
+            }
+```
+
+---
+
+## Summary: The Big Picture
+
+```
+USER (Browser)
+   ↓
+Web UI (app.py)
+   ↓
+Orchestration (sync_engine.py)
+   ├─→ Read from GitHub (github_scraper.py)
+   ├─→ Write to Jira (jira_automator.py)
+   ├─→ Detect patterns (insights_engine.py)
+   ├─→ Store data (feedback_db.py)
+   └─→ Submit feedback (github_feedback.py)
+   ↓
+Browser (Selenium) ← Automates clicking/typing
+   ↓
+Jira & GitHub (Actual systems updated)
+```
+
+**Key principle:** Separate concerns into modules, each with one clear responsibility. The orchestrator (sync_engine) ties them all together based on configuration.
+
+---
+
+## Next Steps to Understand Better
+
+1. **Read the source code** - Start with `app.py` main function
+2. **Trace a workflow** - See what happens when you click "Run Sync"
+3. **Check the logs** - Understand what each component logs
+4. **Run in debug mode** - Add print statements to see data flow
+5. **Customize a workflow** - Add your own workflow to config.yaml
+6. **Write a test** - Try updating a test Jira ticket manually
+
+---
+
+**Built with:** Selenium WebDriver + Python HTTP server + SQLite + GitHub API
+
+**No dependencies on:** Jira API, GitHub API (optional), cloud services
+
+**Fully self-contained:** Runs on one machine, no external services required ✨
 ```
 
 ---
