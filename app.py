@@ -1513,7 +1513,7 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
     </div>
 
     <!-- Floating Feedback Button -->
-    <button id="feedback-btn" class="feedback-floating-btn" onclick="openFeedbackModal()">
+    <button id="feedback-btn" class="feedback-floating-btn">
         🐛
     </button>
 
@@ -3103,6 +3103,12 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             loadWorkflows();
             loadSettings();
             initFeedbackSystem();
+            
+            // Attach feedback button event listener
+            const feedbackBtn = document.getElementById('feedback-btn');
+            if (feedbackBtn) {
+                feedbackBtn.addEventListener('click', openFeedbackModal);
+            }
             
             // Restore selected persona if exists
             if (selectedPersona) {
