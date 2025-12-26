@@ -123,6 +123,9 @@ jobs:
         run: |
           $iconPath = "assets/icon.ico"
           $cmd = "python -m PyInstaller --onefile --windowed --name=JiraAutomationAssistant"
+          $cmd += " --add-data 'modern-ui.html;.'"
+          $cmd += " --add-data 'assets;assets'"
+          $cmd += " --add-data 'config.yaml;.'"
           
           if (Test-Path $iconPath) {
             $cmd += " --icon=$iconPath"

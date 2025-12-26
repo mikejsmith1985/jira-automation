@@ -27,8 +27,17 @@ from extensions.reporting import EnhancedInsightsEngine, ReportGenerator
 from storage import get_data_store, get_config_manager
 
 # Global state
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "1.2.10"
+def get_base_dir():
+    """Get base directory, accounting for PyInstaller bundling"""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        return sys._MEIPASS
+    else:
+        # Running as script
+        return os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = get_base_dir()
+APP_VERSION = "1.2.11"
 driver = None
 sync_engine = None
 sync_thread = None
