@@ -1,9 +1,11 @@
-name: Auto Release on Main Push
+name: Auto Release on Main Push (DISABLED - Use Manual Release)
 
 on:
-  push:
-    branches:
-      - main
+  # DISABLED: Causing version conflicts. Use .github/workflows/manual-release.yml instead
+  # push:
+  #   branches:
+  #     - main
+  workflow_dispatch:  # Only allow manual triggers
 
 permissions:
   contents: write
