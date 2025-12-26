@@ -559,14 +559,19 @@ input[type="checkbox"] {
 }
 
 .branch-rule {
-    display: grid;
-    grid-template-columns: 120px 1fr auto;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
-    align-items: start;
-    padding: 12px;
+    padding: 16px;
     background: var(--bg-secondary);
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid var(--border);
+    transition: all 0.3s ease;
+}
+
+.branch-rule:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
 }
 
 .branch-rule input {
@@ -577,6 +582,113 @@ input[type="checkbox"] {
 .branch-rule button {
     padding: 8px 12px;
     height: 36px;
+}
+
+/* Branch Rule Container - Enhanced Layout */
+.branch-rule-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all 0.3s ease;
+}
+
+.branch-rule-container:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+}
+
+.branch-rule-content {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.branch-rule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
+.branch-rule-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.branch-rule-field label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.3px;
+}
+
+.branch-rule-field input {
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.branch-rule-field input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.branch-rule-field input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.branch-rule-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.branch-rule-checkbox label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    margin: 0;
+}
+
+.branch-rule-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.branch-rule-delete {
+    height: 40px;
+    width: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    font-weight: 600;
+}
+
+.branch-rule-delete:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 /* ============================================================================
@@ -1248,57 +1360,40 @@ small {
 }
 
 /* ============================================================================
-   Branch Rules
+   Branch Rules (Legacy - superseded by branch-rule-container)
    ============================================================================ */
 
 .branch-rules {
     display: grid;
-    gap: var(--spacing-md);
+    gap: 12px;
 }
 
 .branch-rule {
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    padding: var(--spacing-md);
+    padding: 16px;
     background: var(--bg-secondary);
     transition: all 0.3s ease;
 }
 
 .branch-rule:hover {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px var(--color-primary-light);
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
 }
 
 .branch-rule-header {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-md);
-    padding-bottom: var(--spacing-md);
-    border-bottom: 1px solid var(--border-color);
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
 }
 
 .branch-name {
     font-weight: 600;
-    color: var(--color-primary);
+    color: var(--accent);
     min-width: 80px;
-}
-
-.branch-rule-delete {
-    margin-left: auto;
-    background: var(--color-danger);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: var(--spacing-sm) var(--spacing-md);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 12px;
-}
-
-.branch-rule-delete:hover {
-    background: var(--color-danger-hover);
-    transform: scale(1.05);
 }
 
 /* ============================================================================

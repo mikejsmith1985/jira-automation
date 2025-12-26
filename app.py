@@ -602,6 +602,9 @@ HTML_TEMPLATE = """
         .tab-content.active {
             display: block;
         }
+        #settings {
+            padding-left: 50px;
+        }
         .card {
             background: #F4F5F7;
             border-radius: 8px;
@@ -2024,40 +2027,38 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                 if (rule.branch === 'default') return; // Skip default rule in UI
                 
                 const ruleDiv = document.createElement('div');
-                ruleDiv.className = 'branch-rule-item';
-                ruleDiv.style.cssText = 'background: #F4F5F7; padding: 15px; border-radius: 4px; margin-bottom: 10px;';
+                ruleDiv.className = 'branch-rule-container';
                 ruleDiv.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
-                        <div style="flex: 1;">
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px; font-weight: 600;">Branch Name:</label>
+                    <div class="branch-rule-content">
+                        <div class="branch-rule-grid">
+                            <div class="branch-rule-field">
+                                <label>Branch Name</label>
                                 <input type="text" value="${rule.branch}" 
                                        onchange="updateBranchRule(${index}, 'branch', this.value)"
-                                       placeholder="DEV, INT, PVS, etc."
-                                       style="width: 150px;">
+                                       placeholder="e.g., DEV, INT, PVS">
                             </div>
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px;">Move to status:</label>
+                            <div class="branch-rule-field">
+                                <label>Move to Status</label>
                                 <input type="text" value="${rule.set_status || ''}" 
                                        onchange="updateBranchRule(${index}, 'set_status', this.value)"
-                                       placeholder="Ready for QA">
+                                       placeholder="e.g., Ready for QA">
                             </div>
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px;">Add label:</label>
+                            <div class="branch-rule-field">
+                                <label>Add Label</label>
                                 <input type="text" value="${rule.add_label || ''}" 
                                        onchange="updateBranchRule(${index}, 'add_label', this.value)"
-                                       placeholder="merged-int">
+                                       placeholder="e.g., merged-dev">
                             </div>
-                            <div class="input-group">
-                                <label style="font-size: 12px;">
+                            <div class="branch-rule-field branch-rule-checkbox">
+                                <label>
                                     <input type="checkbox" ${rule.add_comment !== false ? 'checked' : ''}
                                            onchange="updateBranchRule(${index}, 'add_comment', this.checked)">
-                                    Add comment
+                                    <span>Add comment</span>
                                 </label>
                             </div>
                         </div>
-                        <button class="btn-small btn-danger" onclick="removeBranchRule(${index})" 
-                                style="margin-top: 20px;">
+                        <button class="btn-small btn-danger branch-rule-delete" onclick="removeBranchRule(${index})" 
+                                title="Delete this branch rule">
                             🗑️
                         </button>
                     </div>
