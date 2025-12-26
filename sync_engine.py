@@ -27,8 +27,9 @@ class SyncEngine:
         # Setup logging
         self._setup_logging()
         
-        # Track processed PRs to avoid duplicates
-        self.processed_prs = set()
+        # Track PR states to detect changes (not just "seen before")
+        # Format: {'repo-123': 'open', 'repo-124': 'merged'}
+        self.pr_states = {}
         
     def _setup_logging(self):
         """Setup logging configuration"""
@@ -62,18 +63,32 @@ class SyncEngine:
             # Process each PR
             for pr in prs:
                 try:
-                    # Skip if already processed recently
+                    # Check if PR state has changed
                     pr_id = f"{pr['repo']}-{pr['number']}"
-                    if pr_id in self.processed_prs:
-                        continue
+                    current_status = pr['status']
+                    previous_status = self.pr_states.get(pr_id)
                     
-                    updated_count = self._process_pr(pr)
-                    total_updated += updated_count
+                    # Only process if:
+                    # 1. Never seen before (previous_status is None)
+                    # 2. Status changed (open -> merged, open -> closed, etc.)
+                    if previous_status is None:
+                        self.logger.info(f"  🆕 New PR detected: {pr_id} ({current_status})")
+                        should_process = True
+                    elif previous_status != current_status:
+                        self.logger.info(f"  🔄 PR state changed: {pr_id} ({previous_status} → {current_status})")
+                        should_process = True
+                    else:
+                        self.logger.debug(f"  ⏭️ Skipping {pr_id} (no state change)")
+                        should_process = False
                     
-                    # Mark as processed
-                    self.processed_prs.add(pr_id)
+                    if should_process:
+                        updated_count = self._process_pr(pr)
+                        total_updated += updated_count
+                        
+                        # Update state tracking
+                        self.pr_states[pr_id] = current_status
                     
-                    # Delay between updates
+                    # Delay between checks
                     delay = self.config['performance']['delay_between_updates_seconds']
                     time.sleep(delay)
                     
@@ -83,9 +98,12 @@ class SyncEngine:
         
         self.logger.info(f"✅ Sync cycle complete. Updated {total_updated} tickets.")
         
-        # Clear processed set periodically (keep last 1000)
-        if len(self.processed_prs) > 1000:
-            self.processed_prs.clear()
+        # Clear old state tracking periodically (keep last 1000)
+        if len(self.pr_states) > 1000:
+            self.logger.info("🧹 Clearing old PR state tracking (keeping last 1000)")
+            # Keep only the most recent 1000 entries
+            recent_items = list(self.pr_states.items())[-1000:]
+            self.pr_states = dict(recent_items)
     
     def _process_pr(self, pr):
         """Process a single PR and update linked Jira tickets"""

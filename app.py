@@ -17,6 +17,7 @@ from sync_engine import SyncEngine
 from insights_engine import InsightsEngine
 from feedback_db import FeedbackDB
 from github_feedback import GitHubFeedback, LogCapture
+from version_checker import VersionChecker
 
 # Extension system imports
 from extensions import get_extension_manager, ExtensionCapability
@@ -27,6 +28,7 @@ from storage import get_data_store, get_config_manager
 
 # Global state
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+APP_VERSION = "1.2.4"  # Should match latest release tag
 driver = None
 sync_engine = None
 sync_thread = None
@@ -35,6 +37,7 @@ insights_engine = None
 feedback_db = FeedbackDB()  # SQLite-based feedback storage
 github_feedback = None  # Optional GitHub sync
 log_capture = LogCapture()
+version_checker = None  # Version update checker
 
 # Extension system globals
 extension_manager = None
@@ -74,6 +77,12 @@ class SyncHandler(BaseHTTPRequestHandler):
             self._handle_get_trend()
         elif self.path == '/api/feedback/validate-token':
             self._handle_validate_feedback_token()
+        elif self.path == '/api/version':
+            self._handle_get_version()
+        elif self.path == '/api/version/check':
+            self._handle_check_updates()
+        elif self.path == '/api/version/releases':
+            self._handle_list_releases()
         else:
             self.send_response(404)
             self.end_headers()
@@ -420,6 +429,70 @@ class SyncHandler(BaseHTTPRequestHandler):
                     'valid': False,
                     'error': 'No token configured'
                 }).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def _handle_get_version(self):
+        """Get current version"""
+        try:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'version': APP_VERSION
+            }).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def _handle_check_updates(self):
+        """Check for available updates"""
+        global version_checker
+        try:
+            if version_checker is None:
+                version_checker = VersionChecker(
+                    current_version=APP_VERSION,
+                    owner='mikejsmith1985',
+                    repo='jira-automation'
+                )
+            
+            # Force fresh check (ignore cache)
+            use_cache = self.headers.get('X-Force-Check', 'false').lower() != 'true'
+            result = version_checker.check_for_update(use_cache=use_cache)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def _handle_list_releases(self):
+        """List recent releases"""
+        global version_checker
+        try:
+            if version_checker is None:
+                version_checker = VersionChecker(
+                    current_version=APP_VERSION,
+                    owner='mikejsmith1985',
+                    repo='jira-automation'
+                )
+            
+            limit = int(self.headers.get('X-Limit', '10'))
+            result = version_checker.list_recent_releases(limit=limit)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
         except Exception as e:
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
