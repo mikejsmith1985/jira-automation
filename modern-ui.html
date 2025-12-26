@@ -233,6 +233,30 @@
                 <section id="po" class="tab">
                     <div class="card">
                         <div class="card-header">
+                            <h3>📊 Load Data Structure</h3>
+                            <p class="text-secondary">Provide a URL to your feature/epic data structure or paste JSON directly</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>Data Source URL</label>
+                                <input type="text" id="po-data-url" class="input-field" placeholder="https://example.com/features.json">
+                                <small class="text-secondary">URL should return JSON with features/epics structure</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Or Paste JSON Data</label>
+                                <textarea id="po-data-json" class="input-field" rows="4" placeholder='{"features": [{"key": "FEAT-1", "summary": "Feature Name", "children": [...]}]}'></textarea>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" onclick="loadPODataFromUrl()">📥 Load from URL</button>
+                                <button class="btn btn-secondary" onclick="loadPODataFromJson()">📋 Load from JSON</button>
+                                <button class="btn btn-secondary" onclick="exportPOData()">📤 Export Data</button>
+                            </div>
+                            <p id="po-load-result" style="margin-top: 10px;"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
                             <h3>Team Mode</h3>
                             <p class="text-secondary">Choose your team's working style</p>
                         </div>
@@ -248,29 +272,41 @@
                         </div>
                     </div>
 
+                    <!-- Feature Tree Display -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Feature Tree</h3>
+                            <p class="text-secondary">Loaded features and their child issues</p>
+                        </div>
+                        <div id="po-feature-tree" style="padding: 20px;">
+                            <p class="text-secondary">No data loaded. Use the form above to load a data structure.</p>
+                        </div>
+                    </div>
+
                     <!-- Kanban Metrics -->
                     <div class="card" id="kanban-metrics">
                         <div class="card-header">
                             <h3>Flow Metrics</h3>
+                            <p class="text-secondary">Calculated from loaded data</p>
                         </div>
                         <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
                             <div class="stat-card">
-                                <div class="stat-number">8</div>
+                                <div class="stat-number" id="po-wip">-</div>
                                 <div class="stat-label">WIP</div>
                                 <div class="stat-change">Work in Progress</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-number">4.2</div>
+                                <div class="stat-number" id="po-cycle-time">-</div>
                                 <div class="stat-label">Cycle Time</div>
                                 <div class="stat-change">Avg days</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-number">12</div>
+                                <div class="stat-number" id="po-throughput">-</div>
                                 <div class="stat-label">Throughput</div>
                                 <div class="stat-change">Weekly</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-number">2</div>
+                                <div class="stat-number" id="po-blocked">-</div>
                                 <div class="stat-label">Blocked</div>
                                 <div class="stat-change">Items</div>
                             </div>
@@ -281,10 +317,11 @@
                     <div class="card" id="scrum-metrics" style="display: none;">
                         <div class="card-header">
                             <h3>Sprint Overview</h3>
+                            <p class="text-secondary">Calculated from loaded data</p>
                         </div>
                         <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
                             <div class="stat-card">
-                                <div class="stat-number">Sprint 24</div>
+                                <div class="stat-number" id="po-sprint">-</div>
                                 <div class="stat-label">Current Sprint</div>
                             </div>
                             <div class="stat-card">
@@ -365,7 +402,7 @@
                             <h3>Manual Actions</h3>
                         </div>
                         <div style="padding: 20px; display: flex; gap: 10px;">
-                            <button class="btn btn-primary" onclick="initBrowser()">🌐 Open Browser</button>
+                            <button class="btn btn-primary" onclick="openJiraBrowser()">🌐 Open Jira Browser</button>
                             <button class="btn btn-primary" onclick="syncNow()">🔄 Sync Now</button>
                             <button class="btn btn-secondary" onclick="showSyncLog()">📋 View Log</button>
                         </div>
@@ -377,27 +414,50 @@
                 <section id="sm" class="tab">
                     <div class="card">
                         <div class="card-header">
+                            <h3>📊 Scrape Metrics from Jira</h3>
+                            <p class="text-secondary">Use Selenium to fetch real data from Jira</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>JQL Query</label>
+                                <input type="text" id="sm-jql-query" class="input-field" placeholder="project = PROJ AND status = 'In Progress'">
+                                <small class="text-secondary">Query to filter issues for metrics</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Or Board URL</label>
+                                <input type="text" id="sm-board-url" class="input-field" placeholder="https://your-company.atlassian.net/jira/software/projects/PROJ/boards/1">
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" onclick="scrapeMetrics()">🔍 Scrape Metrics</button>
+                                <button class="btn btn-secondary" onclick="refreshMetrics()">🔄 Refresh</button>
+                            </div>
+                            <p id="sm-scrape-result" style="margin-top: 10px;"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
                             <h3>Team Health Overview</h3>
-                            <p class="text-secondary">Monitor team productivity and identify issues</p>
+                            <p class="text-secondary">Calculated from scraped data</p>
                         </div>
                         <div class="grid grid-cols-4" style="padding: 20px; gap: 15px;">
                             <div class="stat-card">
-                                <div class="stat-number">85</div>
+                                <div class="stat-number" id="sm-health-score">-</div>
                                 <div class="stat-label">Health Score</div>
-                                <div class="stat-change">Good</div>
+                                <div class="stat-change">Load data to calculate</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-number">7</div>
+                                <div class="stat-number" id="sm-stale-tickets">-</div>
                                 <div class="stat-label">Stale Tickets</div>
                                 <div class="stat-change">14+ days</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-number">12</div>
-                                <div class="stat-label">Hygiene Issues</div>
-                                <div class="stat-change">Needs attention</div>
+                                <div class="stat-number" id="sm-total-issues">-</div>
+                                <div class="stat-label">Total Issues</div>
+                                <div class="stat-change">Scraped</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-number">42</div>
+                                <div class="stat-number" id="sm-velocity">-</div>
                                 <div class="stat-label">Avg Velocity</div>
                                 <div class="stat-change">Points/sprint</div>
                             </div>
@@ -406,46 +466,36 @@
 
                     <div class="card">
                         <div class="card-header">
-                            <h3>📊 Insights</h3>
-                            <p class="text-secondary">AI-powered pattern detection</p>
+                            <h3>📋 Scraped Issues</h3>
+                            <p class="text-secondary">Issues retrieved from Jira</p>
                         </div>
-                        <div style="padding: 20px;">
-                            <div class="integration-item" style="border-left: 4px solid #FF991F;">
-                                <div class="integration-info">
-                                    <h4>⚠️ Scope Creep Detected</h4>
-                                    <p class="text-secondary">3 stories grew by 40% after sprint start</p>
-                                </div>
-                                <button class="btn btn-secondary btn-small">View Details</button>
-                            </div>
-                            <div class="integration-item" style="border-left: 4px solid #DE350B;">
-                                <div class="integration-info">
-                                    <h4>🐛 Defect Leakage Alert</h4>
-                                    <p class="text-secondary">5 production bugs in "Done" stories</p>
-                                </div>
-                                <button class="btn btn-secondary btn-small">View Details</button>
-                            </div>
-                            <div class="integration-item" style="border-left: 4px solid #0052CC;">
-                                <div class="integration-info">
-                                    <h4>📈 Velocity Trend Stable</h4>
-                                    <p class="text-secondary">40-45 points for last 4 sprints</p>
-                                </div>
-                                <button class="btn btn-secondary btn-small">View Details</button>
-                            </div>
+                        <div id="sm-issues-list" style="padding: 20px;">
+                            <p class="text-secondary">No data scraped yet. Use the form above to scrape from Jira.</p>
                         </div>
                     </div>
 
                     <div class="card">
                         <div class="card-header">
-                            <h3>Hygiene Report</h3>
+                            <h3>📊 Insights</h3>
+                            <p class="text-secondary">Patterns detected from scraped data</p>
+                        </div>
+                        <div id="sm-insights" style="padding: 20px;">
+                            <p class="text-secondary">Scrape data to generate insights</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>🔍 Team Hygiene Check</h3>
                             <p class="text-secondary">Identify team process issues</p>
                         </div>
                         <div style="padding: 20px; display: flex; gap: 10px;">
-                            <button class="btn btn-primary">🔍 Run Check</button>
-                            <button class="btn btn-secondary">📥 Export Report</button>
+                            <button class="btn btn-primary" onclick="runHygieneCheck()">🔍 Run Check</button>
+                            <button class="btn btn-secondary" onclick="exportReport()">📥 Export Report</button>
                         </div>
-                        <div class="empty-state">
+                        <div id="sm-hygiene-results" class="empty-state">
                             <p>No hygiene issues detected</p>
-                            <p class="text-secondary">Run check to analyze team data</p>
+                            <p class="text-secondary">Run check after scraping data</p>
                         </div>
                     </div>
                 </section>
@@ -455,13 +505,13 @@
                     <div class="card">
                         <div class="card-header">
                             <h3>Integration Status</h3>
-                            <p class="text-secondary">Configure connections to GitHub and Jira</p>
+                            <p class="text-secondary">Real-time status of connections</p>
                         </div>
                         
                         <div id="integrations-status-container">
                             <div class="integration-item">
                                 <div class="integration-info">
-                                    <h4>GitHub</h4>
+                                    <h4>GitHub API</h4>
                                     <p class="text-secondary">Pull request sync via GitHub API</p>
                                     <p id="github-org-info" class="text-secondary" style="font-size: 11px;"></p>
                                 </div>
@@ -470,9 +520,10 @@
 
                             <div class="integration-item">
                                 <div class="integration-info">
-                                    <h4>Jira</h4>
-                                    <p class="text-secondary">Ticket updates via Selenium browser automation</p>
+                                    <h4>Jira (Selenium)</h4>
+                                    <p class="text-secondary">Browser automation for ticket updates</p>
                                     <p id="jira-url-info" class="text-secondary" style="font-size: 11px;"></p>
+                                    <p id="jira-browser-status" class="text-secondary" style="font-size: 11px;"></p>
                                 </div>
                                 <span id="jira-status-badge" class="badge badge-secondary">Loading...</span>
                             </div>
@@ -490,7 +541,30 @@
                     
                     <div class="card">
                         <div class="card-header">
-                            <h3>Configure GitHub</h3>
+                            <h3>🌐 Jira Browser Session</h3>
+                            <p class="text-secondary">Open browser, login manually, then use for scraping</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>Jira Base URL</label>
+                                <input type="text" id="jira-url-input" class="input-field" placeholder="https://your-company.atlassian.net">
+                            </div>
+                            <div class="form-group">
+                                <label>Project Keys (comma-separated)</label>
+                                <input type="text" id="jira-projects-input" class="input-field" placeholder="PROJ, ABC, XYZ">
+                            </div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <button class="btn btn-primary" onclick="openJiraBrowser()">🌐 Open Jira Browser</button>
+                                <button class="btn btn-secondary" onclick="checkJiraLogin()">🔍 Check Login Status</button>
+                                <button class="btn btn-secondary" onclick="saveJiraSettings()">💾 Save Settings</button>
+                            </div>
+                            <p id="jira-action-result" style="margin-top: 10px;"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Configure GitHub API</h3>
                         </div>
                         <div style="padding: 20px;">
                             <div class="form-group">
@@ -507,24 +581,6 @@
                                 <button class="btn btn-primary" onclick="saveGitHubSettings()">Save GitHub Settings</button>
                             </div>
                             <p id="github-test-result" style="margin-top: 10px;"></p>
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Configure Jira</h3>
-                            <p class="text-secondary">Jira uses browser automation - no API token needed</p>
-                        </div>
-                        <div style="padding: 20px;">
-                            <div class="form-group">
-                                <label>Jira Base URL</label>
-                                <input type="text" id="jira-url-input" class="input-field" placeholder="https://your-company.atlassian.net">
-                            </div>
-                            <div class="form-group">
-                                <label>Project Keys (comma-separated)</label>
-                                <input type="text" id="jira-projects-input" class="input-field" placeholder="PROJ, ABC, XYZ">
-                            </div>
-                            <button class="btn btn-primary" onclick="saveJiraSettings()">Save Jira Settings</button>
                         </div>
                     </div>
                 </section>

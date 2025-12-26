@@ -37,7 +37,7 @@ def get_base_dir():
         return os.path.dirname(os.path.abspath(__file__))
 
 BASE_DIR = get_base_dir()
-APP_VERSION = "1.2.12"
+APP_VERSION = "1.2.13"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -90,6 +90,8 @@ class SyncHandler(BaseHTTPRequestHandler):
             self._handle_get_config()
         elif self.path == '/api/integrations/status':
             self._handle_integrations_status()
+        elif self.path == '/api/selenium/status':
+            self._handle_selenium_status()
         elif self.path == '/api/automation/rules':
             self._handle_get_automation_rules()
         elif self.path == '/api/insights':
@@ -240,6 +242,14 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self.handle_test_github_connection(data)
             elif self.path == '/api/automation/save':
                 response = self.handle_save_automation_rules(data)
+            elif self.path == '/api/selenium/open-jira':
+                response = self.handle_open_jira_browser(data)
+            elif self.path == '/api/selenium/check-login':
+                response = self.handle_check_jira_login()
+            elif self.path == '/api/po/load-data':
+                response = self.handle_load_po_data(data)
+            elif self.path == '/api/sm/scrape-metrics':
+                response = self.handle_scrape_sm_metrics(data)
             else:
                 response = {'success': False, 'error': 'Unknown endpoint'}
             
@@ -288,7 +298,8 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'error': str(e)}).encode())
     
     def _handle_integrations_status(self):
-        """Return real integration status based on config"""
+        """Return real integration status based on config AND Selenium state"""
+        global driver
         try:
             config_path = os.path.join(BASE_DIR, 'config.yaml') if getattr(sys, 'frozen', False) else 'config.yaml'
             try:
@@ -310,6 +321,37 @@ class SyncHandler(BaseHTTPRequestHandler):
             feedback_token = feedback_config.get('github_token', '')
             feedback_configured = bool(feedback_token and feedback_token != '' and feedback_token != 'YOUR_GITHUB_TOKEN_HERE')
             
+            # Check REAL Selenium browser state for Jira
+            jira_browser_open = False
+            jira_logged_in = False
+            jira_current_url = None
+            
+            if driver is not None:
+                try:
+                    jira_current_url = driver.current_url
+                    jira_browser_open = True
+                    
+                    # Check if logged in
+                    if 'atlassian.net' in jira_current_url or 'jira' in jira_current_url.lower():
+                        from selenium.webdriver.common.by import By
+                        logged_in_indicators = [
+                            '[data-testid="profile-avatar"]',
+                            '[data-testid="app-switcher"]',
+                            '.aui-avatar',
+                            '#user-options',
+                            '[data-username]'
+                        ]
+                        for selector in logged_in_indicators:
+                            try:
+                                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                                if elements:
+                                    jira_logged_in = True
+                                    break
+                            except:
+                                pass
+                except:
+                    jira_browser_open = False
+            
             status = {
                 'github': {
                     'configured': github_connected,
@@ -322,7 +364,10 @@ class SyncHandler(BaseHTTPRequestHandler):
                     'configured': jira_configured,
                     'base_url': jira_url,
                     'project_keys': jira_config.get('project_keys', []),
-                    'note': 'Jira uses Selenium browser automation (no API token needed)'
+                    'browser_open': jira_browser_open,
+                    'logged_in': jira_logged_in,
+                    'current_url': jira_current_url,
+                    'status': 'Connected' if jira_logged_in else ('Browser Open - Please Login' if jira_browser_open else ('URL Configured' if jira_configured else 'Not Configured'))
                 },
                 'feedback': {
                     'configured': feedback_configured,
@@ -563,6 +608,273 @@ class SyncHandler(BaseHTTPRequestHandler):
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
+    def _handle_selenium_status(self):
+        """Return REAL Selenium browser status"""
+        global driver
+        try:
+            status = {
+                'browser_open': False,
+                'current_url': None,
+                'jira_logged_in': False,
+                'session_active': False
+            }
+            
+            if driver is not None:
+                try:
+                    # Check if browser is still open
+                    current_url = driver.current_url
+                    status['browser_open'] = True
+                    status['current_url'] = current_url
+                    status['session_active'] = True
+                    
+                    # Check if logged in to Jira (look for common logged-in indicators)
+                    if 'atlassian.net' in current_url or 'jira' in current_url.lower():
+                        try:
+                            # Look for user avatar or profile menu (indicates logged in)
+                            from selenium.webdriver.common.by import By
+                            logged_in_indicators = [
+                                '[data-testid="profile-avatar"]',
+                                '[data-testid="app-switcher"]',
+                                '.aui-avatar',
+                                '#user-options',
+                                '[data-username]'
+                            ]
+                            for selector in logged_in_indicators:
+                                try:
+                                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                                    if elements:
+                                        status['jira_logged_in'] = True
+                                        break
+                                except:
+                                    pass
+                        except:
+                            pass
+                except:
+                    # Browser was closed
+                    status['browser_open'] = False
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(status).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def handle_open_jira_browser(self, data):
+        """Open Selenium browser and navigate to Jira for manual login"""
+        global driver, sync_engine
+        
+        try:
+            jira_url = data.get('jiraUrl', '')
+            if not jira_url:
+                # Try to get from config
+                try:
+                    with open('config.yaml', 'r') as f:
+                        config = yaml.safe_load(f)
+                    jira_url = config.get('jira', {}).get('base_url', '')
+                except:
+                    pass
+            
+            if not jira_url or 'your-company' in jira_url:
+                return {'success': False, 'error': 'Please configure Jira URL first'}
+            
+            # Initialize Chrome WebDriver if not already done
+            if driver is None:
+                chrome_options = Options()
+                chrome_options.add_argument('--start-maximized')
+                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                chrome_options.add_experimental_option('useAutomationExtension', False)
+                
+                driver = webdriver.Chrome(options=chrome_options)
+            
+            # Initialize sync engine
+            if sync_engine is None:
+                sync_engine = SyncEngine(driver)
+            
+            # Navigate to Jira
+            driver.get(jira_url)
+            
+            return {
+                'success': True, 
+                'message': f'Browser opened. Please log in to Jira at {jira_url}',
+                'url': jira_url
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_check_jira_login(self):
+        """Check if user is logged in to Jira"""
+        global driver
+        
+        if driver is None:
+            return {'success': False, 'logged_in': False, 'error': 'Browser not open'}
+        
+        try:
+            current_url = driver.current_url
+            
+            # Check for login indicators
+            from selenium.webdriver.common.by import By
+            logged_in = False
+            user_info = None
+            
+            logged_in_indicators = [
+                ('[data-testid="profile-avatar"]', 'avatar'),
+                ('[data-testid="app-switcher"]', 'app-switcher'),
+                ('.aui-avatar', 'avatar'),
+                ('#user-options', 'user-menu'),
+                ('[data-username]', 'username')
+            ]
+            
+            for selector, indicator_type in logged_in_indicators:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        logged_in = True
+                        if indicator_type == 'username':
+                            user_info = elements[0].get_attribute('data-username')
+                        break
+                except:
+                    pass
+            
+            return {
+                'success': True,
+                'logged_in': logged_in,
+                'current_url': current_url,
+                'user': user_info
+            }
+        except Exception as e:
+            return {'success': False, 'logged_in': False, 'error': str(e)}
+    
+    def handle_load_po_data(self, data):
+        """Load PO data from URL or uploaded structure"""
+        try:
+            source_type = data.get('source_type', 'url')  # 'url' or 'data'
+            
+            if source_type == 'url':
+                url = data.get('url', '')
+                if not url:
+                    return {'success': False, 'error': 'No URL provided'}
+                
+                # Fetch the URL
+                import requests
+                response = requests.get(url, timeout=30)
+                if response.status_code != 200:
+                    return {'success': False, 'error': f'Failed to fetch URL: {response.status_code}'}
+                
+                # Try to parse as JSON
+                try:
+                    structure = response.json()
+                except:
+                    return {'success': False, 'error': 'URL did not return valid JSON'}
+            else:
+                # Direct data upload
+                structure = data.get('data', {})
+            
+            if not structure:
+                return {'success': False, 'error': 'No data provided'}
+            
+            # Store the data for the PO view
+            # Save to a local file for persistence
+            with open('po_data.json', 'w', encoding='utf-8') as f:
+                json.dump(structure, f, indent=2)
+            
+            # Calculate summary stats
+            features = structure.get('features', [])
+            total_issues = sum(len(f.get('children', [])) for f in features) + len(features)
+            
+            return {
+                'success': True,
+                'message': f'Loaded {len(features)} features, {total_issues} total issues',
+                'summary': {
+                    'features': len(features),
+                    'total_issues': total_issues
+                },
+                'data': structure
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_scrape_sm_metrics(self, data):
+        """Scrape SM metrics from Jira using Selenium"""
+        global driver
+        
+        if driver is None:
+            return {'success': False, 'error': 'Browser not open. Please open Jira browser first.'}
+        
+        try:
+            jql = data.get('jql', '')
+            board_url = data.get('board_url', '')
+            
+            if not jql and not board_url:
+                return {'success': False, 'error': 'Provide either a JQL query or board URL'}
+            
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
+            
+            issues = []
+            
+            if board_url:
+                # Navigate to board and scrape
+                driver.get(board_url)
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="software-board.board"],.ghx-issue,.js-issue'))
+                )
+                
+                # Scrape issue cards
+                issue_elements = driver.find_elements(By.CSS_SELECTOR, '[data-testid="software-board.board-container.board.card-container"], .ghx-issue, .js-issue')
+                for el in issue_elements:
+                    try:
+                        key = el.get_attribute('data-issue-key') or el.find_element(By.CSS_SELECTOR, '.ghx-key, [data-testid*="key"]').text
+                        issues.append({'key': key})
+                    except:
+                        pass
+            
+            elif jql:
+                # Navigate to issue search with JQL
+                base_url = driver.current_url.split('/browse')[0].split('/jira')[0]
+                search_url = f"{base_url}/issues/?jql={jql.replace(' ', '%20')}"
+                driver.get(search_url)
+                
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="issue-table"], .issue-table, .navigator-content'))
+                )
+                
+                # Scrape issue rows
+                issue_rows = driver.find_elements(By.CSS_SELECTOR, '[data-testid="issue-table-row"], .issuerow, tr.issue-row')
+                for row in issue_rows:
+                    try:
+                        key_el = row.find_element(By.CSS_SELECTOR, '[data-testid="issue-key"], .issuekey a, td.issuekey a')
+                        issues.append({
+                            'key': key_el.text,
+                            'url': key_el.get_attribute('href')
+                        })
+                    except:
+                        pass
+            
+            # Calculate basic metrics
+            metrics = {
+                'total_issues': len(issues),
+                'issues_scraped': issues[:20],  # Return first 20
+                'scrape_time': time.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            # Save metrics for SM view
+            with open('sm_metrics.json', 'w', encoding='utf-8') as f:
+                json.dump({'issues': issues, 'metrics': metrics}, f, indent=2)
+            
+            return {
+                'success': True,
+                'message': f'Scraped {len(issues)} issues from Jira',
+                'metrics': metrics
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
     def _handle_get_insights(self):
         """Return recent insights"""
         global insights_engine
