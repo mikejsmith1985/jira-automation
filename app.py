@@ -18,6 +18,13 @@ from insights_engine import InsightsEngine
 from feedback_db import FeedbackDB
 from github_feedback import GitHubFeedback, LogCapture
 
+# Extension system imports
+from extensions import get_extension_manager, ExtensionCapability
+from extensions.jira import JiraExtension
+from extensions.github import GitHubExtension
+from extensions.reporting import EnhancedInsightsEngine, ReportGenerator
+from storage import get_data_store, get_config_manager
+
 # Global state
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 driver = None
@@ -28,6 +35,13 @@ insights_engine = None
 feedback_db = FeedbackDB()  # SQLite-based feedback storage
 github_feedback = None  # Optional GitHub sync
 log_capture = LogCapture()
+
+# Extension system globals
+extension_manager = None
+data_store = None
+config_manager = None
+enhanced_insights = None
+report_generator = None
 
 class SyncHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the web UI"""
@@ -159,6 +173,40 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self.handle_submit_feedback(data)
             elif self.path == '/api/feedback/save-token':
                 response = self.handle_save_feedback_token(data)
+            # Extension system endpoints
+            elif self.path == '/api/extensions':
+                response = self._handle_list_extensions()
+            elif self.path.startswith('/api/extensions/') and '/config' in self.path:
+                ext_name = self.path.split('/')[3]
+                response = self._handle_extension_config(ext_name, data)
+            elif self.path.startswith('/api/extensions/') and '/test' in self.path:
+                ext_name = self.path.split('/')[3]
+                response = self._handle_extension_test(ext_name)
+            # Data import/export endpoints
+            elif self.path == '/api/data/import':
+                response = self._handle_data_import(data)
+            elif self.path == '/api/data/export':
+                response = self._handle_data_export(data)
+            elif self.path == '/api/data/features':
+                response = self._handle_get_features()
+            elif self.path == '/api/data/dependencies':
+                response = self._handle_get_dependencies()
+            # Jira-specific endpoints
+            elif self.path == '/api/jira/query':
+                response = self._handle_jira_query(data)
+            elif self.path == '/api/jira/update':
+                response = self._handle_jira_update(data)
+            elif self.path == '/api/jira/bulk-update':
+                response = self._handle_jira_bulk_update(data)
+            elif self.path == '/api/jira/test-connection':
+                response = self._handle_jira_test_connection()
+            # Reporting endpoints
+            elif self.path == '/api/reports/daily-scrum':
+                response = self._handle_daily_scrum_report(data)
+            elif self.path == '/api/reports/generate':
+                response = self._handle_generate_report(data)
+            elif self.path == '/api/reports/insights':
+                response = self._handle_get_insights()
             else:
                 response = {'success': False, 'error': 'Unknown endpoint'}
             
@@ -527,6 +575,354 @@ class SyncHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
+    
+    # ========== Extension System Handlers ==========
+    
+    def _handle_list_extensions(self):
+        """List all registered extensions"""
+        global extension_manager
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            extensions = extension_manager.list_extensions()
+            return {'success': True, 'extensions': extensions}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_extension_config(self, ext_name, data):
+        """Get or update extension configuration"""
+        global extension_manager
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            if data:
+                result = extension_manager.configure_extension(ext_name, data)
+                return result
+            else:
+                config = extension_manager.get_extension_config(ext_name)
+                schema = extension_manager.get_extension_schema(ext_name)
+                return {'success': True, 'config': config, 'schema': schema}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_extension_test(self, ext_name):
+        """Test extension connection"""
+        global extension_manager
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            return extension_manager.test_extension(ext_name)
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    # ========== Data Import/Export Handlers ==========
+    
+    def _handle_data_import(self, data):
+        """Import data from an extension"""
+        global extension_manager, data_store, driver
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            extension_name = data.get('extension', 'jira')
+            query = data.get('query', {})
+            
+            ext = extension_manager.get_extension(extension_name)
+            if not ext:
+                return {'success': False, 'error': f'Extension {extension_name} not found'}
+            
+            if ext.status.value != 'ready':
+                ext.initialize(extension_manager.get_extension_config(extension_name), driver=driver)
+            
+            result = ext.extract_data(query)
+            
+            if result.get('success'):
+                import_id = data_store.save_import(
+                    extension=extension_name,
+                    data=result.get('data', []),
+                    query=query.get('jql', str(query))
+                )
+                
+                features = ext.transform_to_features(result)
+                dependencies = ext.transform_to_dependencies(result)
+                
+                data_store.save_features(features, import_id)
+                data_store.save_dependencies(dependencies, import_id)
+                
+                data_store.log_action('import', extension_name, {
+                    'query': query,
+                    'count': result.get('count', 0)
+                })
+                
+                return {
+                    'success': True,
+                    'count': result.get('count', 0),
+                    'import_id': import_id,
+                    'features_count': len(features),
+                    'message': f'Imported {result.get("count", 0)} items'
+                }
+            else:
+                return result
+                
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_data_export(self, data):
+        """Export data to specified format"""
+        global extension_manager, data_store, report_generator
+        try:
+            if not report_generator:
+                report_generator = ReportGenerator()
+            
+            format = data.get('format', 'csv')
+            data_type = data.get('type', 'features')
+            
+            if data_type == 'features':
+                export_data = data_store.get_latest_features() or []
+            elif data_type == 'dependencies':
+                export_data = data_store.get_latest_dependencies() or {}
+            else:
+                export_data = data.get('data', [])
+            
+            ext = extension_manager.get_extension('jira')
+            if ext and format == 'csv':
+                content = ext.export_to_csv(export_data)
+            else:
+                content = report_generator.generate('export', {'data': export_data}, format)
+            
+            return {'success': True, 'content': content, 'format': format}
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_get_features(self):
+        """Get current feature structure"""
+        global data_store
+        try:
+            if not data_store:
+                data_store = get_data_store()
+            
+            features = data_store.get_latest_features()
+            return {'success': True, 'features': features or []}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_get_dependencies(self):
+        """Get current dependency graph"""
+        global data_store
+        try:
+            if not data_store:
+                data_store = get_data_store()
+            
+            dependencies = data_store.get_latest_dependencies()
+            return {'success': True, 'dependencies': dependencies or {}}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    # ========== Jira-Specific Handlers ==========
+    
+    def _handle_jira_query(self, data):
+        """Execute JQL query"""
+        global extension_manager, driver
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            jira_ext = extension_manager.get_extension('jira')
+            if not jira_ext:
+                return {'success': False, 'error': 'Jira extension not found'}
+            
+            if jira_ext.status.value != 'ready':
+                config = extension_manager.get_extension_config('jira')
+                jira_ext.initialize(config, driver=driver)
+            
+            jql = data.get('jql', '')
+            max_results = data.get('max_results', 500)
+            
+            result = jira_ext.extract_data({
+                'jql': jql,
+                'max_results': max_results
+            })
+            
+            return result
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_jira_update(self, data):
+        """Update single Jira issue"""
+        global extension_manager, driver
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            jira_ext = extension_manager.get_extension('jira')
+            if not jira_ext:
+                return {'success': False, 'error': 'Jira extension not found'}
+            
+            issue_key = data.get('issue_key', '')
+            updates = data.get('updates', {})
+            
+            result = jira_ext.update_single(issue_key, updates)
+            
+            data_store.log_action('update_single', 'jira', {
+                'issue_key': issue_key,
+                'updates': updates
+            }, success=result.get('success', False))
+            
+            return result
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_jira_bulk_update(self, data):
+        """Bulk update Jira issues"""
+        global extension_manager, data_store
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            jira_ext = extension_manager.get_extension('jira')
+            if not jira_ext:
+                return {'success': False, 'error': 'Jira extension not found'}
+            
+            jql = data.get('jql', '')
+            updates = data.get('updates', {})
+            template_name = data.get('template')
+            
+            if template_name:
+                result = jira_ext.execute_bulk_template(template_name)
+            else:
+                result = jira_ext.update_bulk({'jql': jql}, updates)
+            
+            data_store.log_action('bulk_update', 'jira', {
+                'jql': jql,
+                'updates': updates,
+                'template': template_name,
+                'updated': result.get('updated', 0),
+                'failed': result.get('failed', 0)
+            }, success=result.get('success', False))
+            
+            return result
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_jira_test_connection(self):
+        """Test Jira connection"""
+        global extension_manager, driver
+        try:
+            if not extension_manager:
+                self._init_extension_system()
+            
+            jira_ext = extension_manager.get_extension('jira')
+            if not jira_ext:
+                return {'success': False, 'error': 'Jira extension not found'}
+            
+            if jira_ext.status.value != 'ready':
+                config = extension_manager.get_extension_config('jira')
+                jira_ext.initialize(config, driver=driver)
+            
+            return jira_ext.test_connection()
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    # ========== Reporting Handlers ==========
+    
+    def _handle_daily_scrum_report(self, data):
+        """Generate daily scrum report"""
+        global extension_manager, enhanced_insights, data_store
+        try:
+            if not enhanced_insights:
+                custom_rules = config_manager.get_insight_rules() if config_manager else []
+                enhanced_insights = EnhancedInsightsEngine(custom_rules)
+            
+            jira_ext = extension_manager.get_extension('jira') if extension_manager else None
+            
+            if jira_ext and jira_ext.status.value == 'ready':
+                jql = data.get('jql', '')
+                result = jira_ext.generate_daily_scrum_report(jql)
+                
+                if result.get('success'):
+                    return result
+            
+            latest_import = data_store.get_latest_import('jira') if data_store else None
+            if latest_import:
+                issues = latest_import.get('data', [])
+                insights = enhanced_insights.generate_daily_scrum_insights(issues)
+                return {'success': True, 'report': insights}
+            
+            return {'success': False, 'error': 'No data available. Import data first.'}
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_generate_report(self, data):
+        """Generate custom report"""
+        global report_generator, data_store
+        try:
+            if not report_generator:
+                report_generator = ReportGenerator()
+            
+            report_type = data.get('type', 'metrics')
+            format = data.get('format', 'html')
+            
+            latest_import = data_store.get_latest_import('jira') if data_store else None
+            if not latest_import:
+                return {'success': False, 'error': 'No data available'}
+            
+            report_data = data.get('data', latest_import.get('data', []))
+            
+            content = report_generator.generate(report_type, {'data': report_data}, format)
+            
+            return {'success': True, 'content': content, 'format': format}
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_get_insights(self):
+        """Get active insights"""
+        global enhanced_insights, data_store
+        try:
+            if not enhanced_insights:
+                custom_rules = config_manager.get_insight_rules() if config_manager else []
+                enhanced_insights = EnhancedInsightsEngine(custom_rules)
+            
+            insights = enhanced_insights.get_active_insights(days=7)
+            return {'success': True, 'insights': insights}
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    # ========== Initialization Helpers ==========
+    
+    def _init_extension_system(self):
+        """Initialize the extension system"""
+        global extension_manager, data_store, config_manager, driver
+        
+        if not extension_manager:
+            extension_manager = get_extension_manager()
+            data_store = get_data_store()
+            config_manager = get_config_manager()
+            
+            jira_ext = JiraExtension()
+            github_ext = GitHubExtension()
+            
+            extension_manager.register_extension(jira_ext)
+            extension_manager.register_extension(github_ext)
+            
+            if driver:
+                jira_config = config_manager.get_extension_config('jira')
+                if not jira_config:
+                    jira_config = {
+                        'base_url': config_manager.get('jira.base_url', ''),
+                        'project_key': config_manager.get('jira.project_key', '')
+                    }
+                jira_ext.initialize(jira_config, driver=driver)
 
 
 # HTML Template (embedded)
@@ -601,6 +997,9 @@ HTML_TEMPLATE = """
         }
         .tab-content.active {
             display: block;
+        }
+        #settings {
+            padding-left: 50px;
         }
         .card {
             background: #F4F5F7;
@@ -2024,40 +2423,38 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                 if (rule.branch === 'default') return; // Skip default rule in UI
                 
                 const ruleDiv = document.createElement('div');
-                ruleDiv.className = 'branch-rule-item';
-                ruleDiv.style.cssText = 'background: #F4F5F7; padding: 15px; border-radius: 4px; margin-bottom: 10px;';
+                ruleDiv.className = 'branch-rule-container';
                 ruleDiv.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
-                        <div style="flex: 1;">
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px; font-weight: 600;">Branch Name:</label>
+                    <div class="branch-rule-content">
+                        <div class="branch-rule-grid">
+                            <div class="branch-rule-field">
+                                <label>Branch Name</label>
                                 <input type="text" value="${rule.branch}" 
                                        onchange="updateBranchRule(${index}, 'branch', this.value)"
-                                       placeholder="DEV, INT, PVS, etc."
-                                       style="width: 150px;">
+                                       placeholder="e.g., DEV, INT, PVS">
                             </div>
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px;">Move to status:</label>
+                            <div class="branch-rule-field">
+                                <label>Move to Status</label>
                                 <input type="text" value="${rule.set_status || ''}" 
                                        onchange="updateBranchRule(${index}, 'set_status', this.value)"
-                                       placeholder="Ready for QA">
+                                       placeholder="e.g., Ready for QA">
                             </div>
-                            <div class="input-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 12px;">Add label:</label>
+                            <div class="branch-rule-field">
+                                <label>Add Label</label>
                                 <input type="text" value="${rule.add_label || ''}" 
                                        onchange="updateBranchRule(${index}, 'add_label', this.value)"
-                                       placeholder="merged-int">
+                                       placeholder="e.g., merged-dev">
                             </div>
-                            <div class="input-group">
-                                <label style="font-size: 12px;">
+                            <div class="branch-rule-field branch-rule-checkbox">
+                                <label>
                                     <input type="checkbox" ${rule.add_comment !== false ? 'checked' : ''}
                                            onchange="updateBranchRule(${index}, 'add_comment', this.checked)">
-                                    Add comment
+                                    <span>Add comment</span>
                                 </label>
                             </div>
                         </div>
-                        <button class="btn-small btn-danger" onclick="removeBranchRule(${index})" 
-                                style="margin-top: 20px;">
+                        <button class="btn-small btn-danger branch-rule-delete" onclick="removeBranchRule(${index})" 
+                                title="Delete this branch rule">
                             🗑️
                         </button>
                     </div>

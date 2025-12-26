@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selenium Walkthrough - PO User Flow</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            line-height: 1.6;
+            color: #2d3748;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header {
+            background: white;
+            padding: 50px 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 40px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 48px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+        }
+        .subtitle { font-size: 20px; color: #718096; }
+        section {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+        h2 { font-size: 32px; font-weight: 700; margin-bottom: 24px; color: #2d3748; }
+        h3 { font-size: 22px; font-weight: 600; margin: 24px 0 16px; color: #4a5568; }
+        .step-box {
+            background: linear-gradient(135deg, #f0fdf4 0%, #f5f3ff 100%);
+            border-left: 4px solid #48bb78;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .code-box {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Monaco', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        .diagram {
+            background: #f7fafc;
+            border: 2px solid #cbd5e0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre;
+            margin: 20px 0;
+        }
+        .key-insight {
+            background: #fef5e7;
+            border-left: 4px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        ul, ol { margin-left: 24px; margin-top: 12px; }
+        li { margin-bottom: 8px; color: #4a5568; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f7fafc; font-weight: 600; }
+        .flow-step { display: flex; gap: 16px; margin: 20px 0; }
+        .flow-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 How Selenium Powers Waypoint</h1>
+            <p class="subtitle">A Complete Walkthrough of the PO User Flow</p>
+        </header>
+
+        <section>
+            <h2>❓ What Exactly IS Selenium?</h2>
+            <p style="font-size: 18px; margin-bottom: 20px;">
+                <strong>Selenium is a robot that controls your Chrome browser.</strong> It can:
+            </p>
+            <ul>
+                <li>Open web pages</li>
+                <li>Find buttons and input fields</li>
+                <li>Click buttons</li>
+                <li>Type text into fields</li>
+                <li>Submit forms</li>
+                <li>Read what's on the page</li>
+            </ul>
+            <p style="margin-top: 20px;">
+                In Waypoint, Selenium automates clicking around in Jira <strong>without needing a REST API.</strong>
+            </p>
+        </section>
+
+        <section>
+            <h2>🎬 The Complete PO User Journey</h2>
+            
+            <div class="flow-step">
+                <div class="flow-number">1</div>
+                <div>
+                    <h3>You Launch Waypoint</h3>
+                    <p><strong>What you do:</strong> Double-click GitHubJiraSync.exe</p>
+                    <div class="step-box">
+                        <strong>What Selenium does:</strong> Launches a Chrome browser in the background.
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">2</div>
+                <div>
+                    <h3>You Click "Initialize"</h3>
+                    <p><strong>What you do:</strong> Enter your Jira URL, configure settings</p>
+                    <div class="step-box">
+                        <strong>What Selenium does:</strong> Navigates the Chrome browser to your Jira instance (https://your-company.atlassian.net)
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">3</div>
+                <div>
+                    <h3>You Log In to Jira (CRITICAL!)</h3>
+                    <p><strong>What you do:</strong> Enter username and password in the Chrome browser</p>
+                    <div class="step-box">
+                        <strong>What Selenium does:</strong> Watches and waits. It does NOT log in for you. Instead, it:
+                        <ul style="margin-top: 12px;">
+                            <li>Waits for you to authenticate manually</li>
+                            <li>Saves your session cookies in Chrome</li>
+                            <li>Uses that authenticated session for all future requests</li>
+                        </ul>
+                    </div>
+                    <div class="key-insight">
+                        <strong>Why?</strong> Selenium doesn't need your password. Once you log in, the browser session is authenticated. Selenium then uses that session to interact with Jira as if you're clicking yourself!
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">4</div>
+                <div>
+                    <h3>You Click "Dev" Tab → "Sync Now"</h3>
+                    <p><strong>What you do:</strong> Click the sync button</p>
+                    <div class="step-box">
+                        <strong>What Selenium does:</strong> NOW THE MAGIC HAPPENS! This is where Selenium actually automates Jira.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>✨ The Selenium Magic: Inside "Sync Now"</h2>
+            
+            <h3>Behind the Scenes (Step by Step)</h3>
+            
+            <div class="diagram">┌──────────────────────────────────────────┐
+│ You click "Sync Now"                 │
+└─────────────────┬──────────────────┘
+                  │
+                  ▼
+    ┌─────────────────────────────────┐
+    │ SyncEngine (Backend)            │
+    │ • Gets recent PRs from GitHub   │
+    │ • Example: PR #456: "Auth Fix"  │
+    │   References ticket: MYPROJ-101 │
+    └─────────────────┬───────────────┘
+                      │
+                      ▼
+    ┌─────────────────────────────────────┐
+    │ FOR EACH PR → Selenium Activates!   │
+    │                                     │
+    │ 1. Open Jira ticket:                │
+    │    driver.get(                      │
+    │    "https://company/browse/         │
+    │     MYPROJ-101"                     │
+    │    )                                │
+    │                                     │
+    │ 2. Find comment field:              │
+    │    comment_box = find_element(      │
+    │    By.ID, "comment"                 │
+    │    )                                │
+    │                                     │
+    │ 3. Type a comment:                  │
+    │    comment_box.send_keys(           │
+    │    "✅ PR #456 merged"              │
+    │    )                                │
+    │                                     │
+    │ 4. Click Save:                      │
+    │    save_btn = find_element(         │
+    │    By.CLASS_NAME, "save"            │
+    │    )                                │
+    │    save_btn.click()                 │
+    │                                     │
+    │ 5. Add Label "pr-merged":           │
+    │    label_field.send_keys(           │
+    │    "pr-merged\n"                    │
+    │    )                                │
+    │                                     │
+    │ 6. Update Status to "In Review":    │
+    │    status_dropdown.click()          │
+    │    in_review.click()                │
+    └─────────────────┬───────────────────┘
+                      │
+                      ▼
+    ┌────────────────────────────────┐
+    │ MYPROJ-101 Updated in Jira!    │
+    │ • Comment added                │
+    │ • Label added                  │
+    │ • Status changed               │
+    └────────────────────────────────┘
+        </section>
+
+        <section>
+            <h2>🎯 Summary</h2>
+            <p><strong>As a PO, here's how Selenium affects you:</strong></p>
+            <ul>
+                <li><strong>You see:</strong> Waypoint UI for viewing features, dependencies, metrics</li>
+                <li><strong>Behind the scenes:</strong> Selenium is syncing GitHub PR data to Jira</li>
+                <li><strong>Result:</strong> Your Jira tickets automatically update with PR information</li>
+                <li><strong>You benefit:</strong> No more manual ticket updates when PRs are merged!</li>
+            </ul>
+        </section>
+
+    </div>
+</body>
+</html>
