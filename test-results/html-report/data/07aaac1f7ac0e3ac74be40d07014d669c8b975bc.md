@@ -1,0 +1,93 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: 🚀
+      - heading "Waypoint" [level=1] [ref=e6]
+    - navigation [ref=e7]:
+      - link "📊 Dashboard" [ref=e8] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e9]: 📊
+        - generic [ref=e10]: Dashboard
+      - link "👔 PO" [ref=e11] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e12]: 👔
+        - generic [ref=e13]: PO
+      - link "💻 Dev" [active] [ref=e14] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e15]: 💻
+        - generic [ref=e16]: Dev
+      - link "📈 SM" [ref=e17] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e18]: 📈
+        - generic [ref=e19]: SM
+      - link "⚙️ Automation" [ref=e20] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e21]: ⚙️
+        - generic [ref=e22]: Automation
+      - link "🔗 Integrations" [ref=e23] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e24]: 🔗
+        - generic [ref=e25]: Integrations
+      - link "⚡ Settings" [ref=e26] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e27]: ⚡
+        - generic [ref=e28]: Settings
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - button "Report a bug or request a feature" [ref=e31] [cursor=pointer]:
+          - img [ref=e32]
+        - button "Toggle dark mode" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+          - img [ref=e37]
+      - generic [ref=e39] [cursor=pointer]:
+        - generic [ref=e40]: 👤
+        - generic [ref=e41]:
+          - generic [ref=e42]: Account
+          - generic [ref=e43]: Manage
+  - main [ref=e44]:
+    - generic [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - heading "GitHub → Jira Automation" [level=3] [ref=e49]
+          - paragraph [ref=e50]: Reduce admin burden with automated updates
+        - generic [ref=e51]:
+          - generic [ref=e52] [cursor=pointer]:
+            - generic [ref=e53]: "0"
+            - generic [ref=e54]: PRs Synced
+            - generic [ref=e55]: Today
+          - generic [ref=e56] [cursor=pointer]:
+            - generic [ref=e57]: "0"
+            - generic [ref=e58]: Tickets Updated
+            - generic [ref=e59]: Auto-updated
+          - generic [ref=e60] [cursor=pointer]:
+            - generic [ref=e61]: Never
+            - generic [ref=e62]: Last Sync
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - heading "Active Automation Rules" [level=3] [ref=e65]
+          - paragraph [ref=e66]: Rules are managed in the Automation tab
+        - generic [ref=e67]:
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - heading "PR Merged → Move to Done" [level=4] [ref=e70]
+              - paragraph [ref=e71]: Auto-move tickets when PR merged
+            - generic [ref=e72]: Active
+          - generic [ref=e73]:
+            - generic [ref=e74]:
+              - heading "PR Opened → Add Comment" [level=4] [ref=e75]
+              - paragraph [ref=e76]: Link PR to Jira ticket
+            - generic [ref=e77]: Active
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - heading "PR Closed → Add Label" [level=4] [ref=e80]
+              - paragraph [ref=e81]: Tag closed PRs
+            - generic [ref=e82]: Active
+      - generic [ref=e83]:
+        - heading "Manual Actions" [level=3] [ref=e85]
+        - generic [ref=e86]:
+          - button "🔄 Sync All PRs" [ref=e87] [cursor=pointer]
+          - button "📋 View Sync Log" [ref=e88] [cursor=pointer]
+```
