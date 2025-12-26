@@ -376,26 +376,42 @@ async function loadIntegrationStatus() {
                 githubBadge.textContent = 'Not Configured';
                 githubBadge.className = 'badge badge-warning';
                 if (githubInfo) {
-                    githubInfo.textContent = 'Add your GitHub token in settings';
+                    githubInfo.textContent = 'Add your GitHub token below';
                 }
             }
         }
         
-        // Update Jira status
+        // Update Jira status - REAL Selenium browser state
         const jiraBadge = document.getElementById('jira-status-badge');
         const jiraInfo = document.getElementById('jira-url-info');
+        const jiraBrowserStatus = document.getElementById('jira-browser-status');
         if (jiraBadge) {
-            if (status.jira.configured) {
-                jiraBadge.textContent = 'Configured';
+            const jiraStatus = status.jira.status || 'Not Configured';
+            
+            if (status.jira.logged_in) {
+                jiraBadge.textContent = 'Connected';
                 jiraBadge.className = 'badge badge-success';
-                if (jiraInfo) {
-                    jiraInfo.textContent = `URL: ${status.jira.base_url}`;
-                }
+            } else if (status.jira.browser_open) {
+                jiraBadge.textContent = 'Browser Open';
+                jiraBadge.className = 'badge badge-warning';
+            } else if (status.jira.configured) {
+                jiraBadge.textContent = 'URL Set';
+                jiraBadge.className = 'badge badge-secondary';
             } else {
                 jiraBadge.textContent = 'Not Configured';
                 jiraBadge.className = 'badge badge-warning';
-                if (jiraInfo) {
-                    jiraInfo.textContent = 'Add your Jira URL in settings';
+            }
+            
+            if (jiraInfo) {
+                jiraInfo.textContent = status.jira.base_url ? `URL: ${status.jira.base_url}` : 'No URL configured';
+            }
+            if (jiraBrowserStatus) {
+                if (status.jira.logged_in) {
+                    jiraBrowserStatus.textContent = '✅ Logged in and ready';
+                } else if (status.jira.browser_open) {
+                    jiraBrowserStatus.textContent = '⚠️ Browser open - please login';
+                } else {
+                    jiraBrowserStatus.textContent = '🔌 Click "Open Jira Browser" to start';
                 }
             }
         }
@@ -414,7 +430,7 @@ async function loadIntegrationStatus() {
                 feedbackBadge.textContent = 'Not Configured';
                 feedbackBadge.className = 'badge badge-warning';
                 if (feedbackInfo) {
-                    feedbackInfo.textContent = 'Configure feedback token via the bug button';
+                    feedbackInfo.textContent = 'Configure via the bug button';
                 }
             }
         }
@@ -710,4 +726,279 @@ function showSyncLog() {
 
 function saveAppSettings() {
     showNotification('Settings saved');
+}
+
+/* ============================================================================
+   Selenium Browser Controls
+   ============================================================================ */
+
+async function openJiraBrowser() {
+    const url = document.getElementById('jira-url-input').value;
+    const resultEl = document.getElementById('jira-action-result') || document.getElementById('sync-status');
+    
+    if (resultEl) resultEl.innerHTML = '<span>Opening Jira browser...</span>';
+    
+    try {
+        const response = await fetch('/api/selenium/open-jira', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jiraUrl: url })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            if (resultEl) resultEl.innerHTML = `<span style="color: #00875a;">✓ ${result.message}</span>`;
+            showNotification('Browser opened - please login to Jira');
+            // Refresh status after a delay
+            setTimeout(loadIntegrationStatus, 2000);
+        } else {
+            if (resultEl) resultEl.innerHTML = `<span style="color: #de350b;">✗ ${result.error}</span>`;
+            showNotification(result.error, 'error');
+        }
+    } catch (error) {
+        if (resultEl) resultEl.innerHTML = `<span style="color: #de350b;">✗ Failed to open browser</span>`;
+        showNotification('Failed to open browser', 'error');
+    }
+}
+
+async function checkJiraLogin() {
+    const resultEl = document.getElementById('jira-action-result');
+    if (resultEl) resultEl.innerHTML = '<span>Checking login status...</span>';
+    
+    try {
+        const response = await fetch('/api/selenium/check-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const result = await response.json();
+        
+        if (result.logged_in) {
+            if (resultEl) resultEl.innerHTML = `<span style="color: #00875a;">✓ Logged in${result.user ? ' as ' + result.user : ''}</span>`;
+            showNotification('Jira login confirmed!');
+        } else if (result.success) {
+            if (resultEl) resultEl.innerHTML = `<span style="color: #FF991F;">⚠ Not logged in - please login in the browser window</span>`;
+        } else {
+            if (resultEl) resultEl.innerHTML = `<span style="color: #de350b;">✗ ${result.error}</span>`;
+        }
+        loadIntegrationStatus();
+    } catch (error) {
+        if (resultEl) resultEl.innerHTML = `<span style="color: #de350b;">✗ Check failed</span>`;
+    }
+}
+
+/* ============================================================================
+   PO Data Functions
+   ============================================================================ */
+
+async function loadPODataFromUrl() {
+    const url = document.getElementById('po-data-url').value;
+    const resultEl = document.getElementById('po-load-result');
+    
+    if (!url) {
+        resultEl.innerHTML = '<span style="color: #de350b;">Please enter a URL</span>';
+        return;
+    }
+    
+    resultEl.innerHTML = '<span>Loading data from URL...</span>';
+    
+    try {
+        const response = await fetch('/api/po/load-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_type: 'url', url: url })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            resultEl.innerHTML = `<span style="color: #00875a;">✓ ${result.message}</span>`;
+            displayPOData(result.data);
+            showNotification('Data loaded successfully');
+        } else {
+            resultEl.innerHTML = `<span style="color: #de350b;">✗ ${result.error}</span>`;
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<span style="color: #de350b;">✗ Failed to load: ${error.message}</span>`;
+    }
+}
+
+async function loadPODataFromJson() {
+    const jsonText = document.getElementById('po-data-json').value;
+    const resultEl = document.getElementById('po-load-result');
+    
+    if (!jsonText) {
+        resultEl.innerHTML = '<span style="color: #de350b;">Please paste JSON data</span>';
+        return;
+    }
+    
+    let data;
+    try {
+        data = JSON.parse(jsonText);
+    } catch (e) {
+        resultEl.innerHTML = '<span style="color: #de350b;">Invalid JSON format</span>';
+        return;
+    }
+    
+    resultEl.innerHTML = '<span>Processing data...</span>';
+    
+    try {
+        const response = await fetch('/api/po/load-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_type: 'data', data: data })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            resultEl.innerHTML = `<span style="color: #00875a;">✓ ${result.message}</span>`;
+            displayPOData(result.data);
+            showNotification('Data loaded successfully');
+        } else {
+            resultEl.innerHTML = `<span style="color: #de350b;">✗ ${result.error}</span>`;
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<span style="color: #de350b;">✗ Failed to load: ${error.message}</span>`;
+    }
+}
+
+function displayPOData(data) {
+    const container = document.getElementById('po-feature-tree');
+    if (!container || !data) return;
+    
+    const features = data.features || [];
+    
+    if (features.length === 0) {
+        container.innerHTML = '<p class="text-secondary">No features found in data</p>';
+        return;
+    }
+    
+    let html = '';
+    features.forEach(feature => {
+        const children = feature.children || [];
+        html += `
+            <div class="integration-item" style="border-left: 4px solid #0052CC;">
+                <div class="integration-info">
+                    <h4>${feature.key || 'Feature'}: ${feature.summary || 'Unnamed'}</h4>
+                    <p class="text-secondary">${children.length} child issues</p>
+                </div>
+                <span class="badge badge-secondary">${feature.status || 'Unknown'}</span>
+            </div>
+        `;
+        
+        children.forEach(child => {
+            html += `
+                <div class="integration-item" style="margin-left: 24px; border-left: 2px solid #ddd;">
+                    <div class="integration-info">
+                        <h4 style="font-size: 13px;">${child.key}: ${child.summary || 'Unnamed'}</h4>
+                        <p class="text-secondary" style="font-size: 11px;">${child.type || 'Issue'}</p>
+                    </div>
+                    <span class="badge ${child.status === 'Done' ? 'badge-success' : 'badge-secondary'}" style="font-size: 10px;">${child.status || 'Unknown'}</span>
+                </div>
+            `;
+        });
+    });
+    
+    container.innerHTML = html;
+    
+    // Update metrics
+    updatePOMetrics(data);
+}
+
+function updatePOMetrics(data) {
+    const features = data.features || [];
+    const allChildren = features.flatMap(f => f.children || []);
+    
+    const wip = allChildren.filter(c => c.status === 'In Progress').length;
+    const blocked = allChildren.filter(c => c.status === 'Blocked').length;
+    const done = allChildren.filter(c => c.status === 'Done').length;
+    
+    const wipEl = document.getElementById('po-wip');
+    const blockedEl = document.getElementById('po-blocked');
+    const throughputEl = document.getElementById('po-throughput');
+    
+    if (wipEl) wipEl.textContent = wip;
+    if (blockedEl) blockedEl.textContent = blocked;
+    if (throughputEl) throughputEl.textContent = done;
+}
+
+function exportPOData() {
+    showNotification('Export coming soon');
+}
+
+/* ============================================================================
+   SM Metrics Functions
+   ============================================================================ */
+
+async function scrapeMetrics() {
+    const jql = document.getElementById('sm-jql-query').value;
+    const boardUrl = document.getElementById('sm-board-url').value;
+    const resultEl = document.getElementById('sm-scrape-result');
+    
+    if (!jql && !boardUrl) {
+        resultEl.innerHTML = '<span style="color: #de350b;">Please enter a JQL query or board URL</span>';
+        return;
+    }
+    
+    resultEl.innerHTML = '<span>Scraping data from Jira...</span>';
+    
+    try {
+        const response = await fetch('/api/sm/scrape-metrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jql: jql, board_url: boardUrl })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            resultEl.innerHTML = `<span style="color: #00875a;">✓ ${result.message}</span>`;
+            displaySMMetrics(result.metrics);
+            showNotification('Metrics scraped successfully');
+        } else {
+            resultEl.innerHTML = `<span style="color: #de350b;">✗ ${result.error}</span>`;
+            showNotification(result.error, 'error');
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<span style="color: #de350b;">✗ Failed to scrape: ${error.message}</span>`;
+    }
+}
+
+function displaySMMetrics(metrics) {
+    // Update metric cards
+    const totalEl = document.getElementById('sm-total-issues');
+    if (totalEl) totalEl.textContent = metrics.total_issues || 0;
+    
+    // Display scraped issues
+    const listContainer = document.getElementById('sm-issues-list');
+    if (listContainer && metrics.issues_scraped) {
+        let html = '';
+        metrics.issues_scraped.forEach(issue => {
+            html += `
+                <div class="integration-item">
+                    <div class="integration-info">
+                        <h4>${issue.key}</h4>
+                        <p class="text-secondary">${issue.url || ''}</p>
+                    </div>
+                </div>
+            `;
+        });
+        
+        if (metrics.total_issues > metrics.issues_scraped.length) {
+            html += `<p class="text-secondary">... and ${metrics.total_issues - metrics.issues_scraped.length} more</p>`;
+        }
+        
+        listContainer.innerHTML = html || '<p class="text-secondary">No issues found</p>';
+    }
+}
+
+function refreshMetrics() {
+    loadIntegrationStatus();
+    showNotification('Status refreshed');
+}
+
+function runHygieneCheck() {
+    showNotification('Hygiene check requires scraped data first');
+}
+
+function exportReport() {
+    showNotification('Export report coming soon');
 }
