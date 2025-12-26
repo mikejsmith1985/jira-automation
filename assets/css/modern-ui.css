@@ -571,6 +571,16 @@ input[type="checkbox"] {
     color: var(--success);
 }
 
+.badge-warning {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.badge-secondary {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+}
+
 /* ============================================================================
    Empty State
    ============================================================================ */

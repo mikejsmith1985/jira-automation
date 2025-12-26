@@ -37,7 +37,17 @@ def get_base_dir():
         return os.path.dirname(os.path.abspath(__file__))
 
 BASE_DIR = get_base_dir()
-APP_VERSION = "1.2.11"
+APP_VERSION = "1.2.12"
+
+def safe_print(msg):
+    """Print safely even when console is not available (PyInstaller --noconsole)"""
+    try:
+        if sys.stdout:
+            sys.stdout.write(f"{msg}\n")
+            sys.stdout.flush()
+    except:
+        pass  # Silently ignore if stdout not available
+
 driver = None
 sync_engine = None
 sync_thread = None
@@ -64,8 +74,7 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         """Handle GET requests"""
-        sys.stdout.write(f"[GET] {self.path}\n")
-        sys.stdout.flush()
+        safe_print(f"[GET] {self.path}")
         
         if self.path == '/' or self.path == '/index.html':
             self._serve_static_file('modern-ui.html', 'text/html; charset=utf-8')
@@ -73,13 +82,16 @@ class SyncHandler(BaseHTTPRequestHandler):
             # Serve static assets
             filepath = self.path[1:]  # Remove leading slash
             content_type = self._get_content_type(filepath)
-            sys.stdout.write(f"[STATIC] Serving {filepath} as {content_type}\n")
-            sys.stdout.flush()
+            safe_print(f"[STATIC] Serving {filepath} as {content_type}")
             self._serve_static_file(filepath, content_type)
         elif self.path == '/api/status':
             self._handle_status()
         elif self.path == '/api/config':
             self._handle_get_config()
+        elif self.path == '/api/integrations/status':
+            self._handle_integrations_status()
+        elif self.path == '/api/automation/rules':
+            self._handle_get_automation_rules()
         elif self.path == '/api/insights':
             self._handle_get_insights()
         elif self.path == '/api/insights/trend':
@@ -101,8 +113,6 @@ class SyncHandler(BaseHTTPRequestHandler):
         try:
             # Convert to absolute path
             abs_filepath = os.path.join(BASE_DIR, filepath)
-            sys.stdout.write(f"[SERVE] Attempting to serve: {abs_filepath}\n")
-            sys.stdout.flush()
             
             # Handle HTML files without cache
             if filepath.endswith('.html'):
@@ -121,13 +131,12 @@ class SyncHandler(BaseHTTPRequestHandler):
                     self.send_header('Cache-Control', 'public, max-age=31536000')
                     self.end_headers()
                     self.wfile.write(f.read())
-        except FileNotFoundError as e:
-            sys.stdout.write(f"[404] File not found: {abs_filepath}\n")
-            sys.stdout.write(f"[404] Error: {e}\n")
-            sys.stdout.flush()
+        except FileNotFoundError:
             self.send_response(404)
             self.end_headers()
-        except Exception as e:
+        except Exception:
+            self.send_response(500)
+            self.end_headers()
             sys.stdout.write(f"[ERROR] Failed to serve {filepath}: {e}\n")
             sys.stdout.flush()
             self.send_response(500)
@@ -225,6 +234,12 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self._handle_generate_report(data)
             elif self.path == '/api/reports/insights':
                 response = self._handle_get_insights()
+            elif self.path == '/api/integrations/save':
+                response = self.handle_save_integrations(data)
+            elif self.path == '/api/integrations/test-github':
+                response = self.handle_test_github_connection(data)
+            elif self.path == '/api/automation/save':
+                response = self.handle_save_automation_rules(data)
             else:
                 response = {'success': False, 'error': 'Unknown endpoint'}
             
@@ -233,7 +248,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         except Exception as e:
-            print(f"ERROR in do_POST: {str(e)}")
+            safe_print(f"ERROR in do_POST: {str(e)}")
             import traceback
             traceback.print_exc()
             try:
@@ -272,6 +287,116 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
     
+    def _handle_integrations_status(self):
+        """Return real integration status based on config"""
+        try:
+            config_path = os.path.join(BASE_DIR, 'config.yaml') if getattr(sys, 'frozen', False) else 'config.yaml'
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+            except FileNotFoundError:
+                config = {}
+            
+            github_config = config.get('github', {})
+            jira_config = config.get('jira', {})
+            feedback_config = config.get('feedback', {})
+            
+            github_token = github_config.get('api_token', '')
+            github_connected = bool(github_token and github_token != '' and github_token != 'YOUR_GITHUB_TOKEN_HERE')
+            
+            jira_url = jira_config.get('base_url', '')
+            jira_configured = bool(jira_url and jira_url != '' and 'your-company' not in jira_url)
+            
+            feedback_token = feedback_config.get('github_token', '')
+            feedback_configured = bool(feedback_token and feedback_token != '' and feedback_token != 'YOUR_GITHUB_TOKEN_HERE')
+            
+            status = {
+                'github': {
+                    'configured': github_connected,
+                    'base_url': github_config.get('base_url', ''),
+                    'organization': github_config.get('organization', ''),
+                    'repositories': github_config.get('repositories', []),
+                    'has_token': github_connected
+                },
+                'jira': {
+                    'configured': jira_configured,
+                    'base_url': jira_url,
+                    'project_keys': jira_config.get('project_keys', []),
+                    'note': 'Jira uses Selenium browser automation (no API token needed)'
+                },
+                'feedback': {
+                    'configured': feedback_configured,
+                    'repo': feedback_config.get('repo', '')
+                }
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(status).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+    
+    def _handle_get_automation_rules(self):
+        """Return automation rules from config"""
+        try:
+            config_path = os.path.join(BASE_DIR, 'config.yaml') if getattr(sys, 'frozen', False) else 'config.yaml'
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+            except FileNotFoundError:
+                config = {}
+            
+            automation = config.get('automation', {})
+            
+            rules = {
+                'pr_opened': {
+                    'enabled': automation.get('pr_opened', {}).get('enabled', False),
+                    'add_comment': automation.get('pr_opened', {}).get('add_comment', False),
+                    'set_status': automation.get('pr_opened', {}).get('set_status', ''),
+                    'add_label': automation.get('pr_opened', {}).get('add_label', ''),
+                    'description': 'When a PR is opened, update the linked Jira ticket'
+                },
+                'pr_updated': {
+                    'enabled': automation.get('pr_updated', {}).get('enabled', False),
+                    'add_comment': automation.get('pr_updated', {}).get('add_comment', False),
+                    'set_status': automation.get('pr_updated', {}).get('set_status', ''),
+                    'add_label': automation.get('pr_updated', {}).get('add_label', ''),
+                    'description': 'When a PR receives new commits'
+                },
+                'pr_merged': {
+                    'enabled': automation.get('pr_merged', {}).get('enabled', False),
+                    'branch_rules': automation.get('pr_merged', {}).get('branch_rules', []),
+                    'description': 'When a PR is merged (branch-specific rules)'
+                },
+                'pr_closed': {
+                    'enabled': automation.get('pr_closed', {}).get('enabled', False),
+                    'add_comment': automation.get('pr_closed', {}).get('add_comment', False),
+                    'set_status': automation.get('pr_closed', {}).get('set_status', ''),
+                    'add_label': automation.get('pr_closed', {}).get('add_label', ''),
+                    'description': 'When a PR is closed without merging'
+                }
+            }
+            
+            active_count = sum(1 for r in rules.values() if r.get('enabled', False))
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'rules': rules,
+                'active_count': active_count,
+                'total_count': len(rules)
+            }).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+
     def handle_init(self, data):
         """Initialize browser"""
         global driver, sync_engine
@@ -346,6 +471,95 @@ class SyncHandler(BaseHTTPRequestHandler):
             with open('config.yaml', 'w', encoding='utf-8') as f:
                 yaml.dump(data, f, default_flow_style=False)
             return {'success': True, 'message': 'Configuration saved'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_save_integrations(self, data):
+        """Save integration settings to config"""
+        try:
+            config_path = 'config.yaml'
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+            
+            if 'github' in data:
+                if 'github' not in config:
+                    config['github'] = {}
+                config['github']['api_token'] = data['github'].get('api_token', config['github'].get('api_token', ''))
+                config['github']['base_url'] = data['github'].get('base_url', config['github'].get('base_url', ''))
+                config['github']['organization'] = data['github'].get('organization', config['github'].get('organization', ''))
+                if 'repositories' in data['github']:
+                    config['github']['repositories'] = data['github']['repositories']
+            
+            if 'jira' in data:
+                if 'jira' not in config:
+                    config['jira'] = {}
+                config['jira']['base_url'] = data['jira'].get('base_url', config['jira'].get('base_url', ''))
+                if 'project_keys' in data['jira']:
+                    config['jira']['project_keys'] = data['jira']['project_keys']
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(config, f, default_flow_style=False)
+            
+            return {'success': True, 'message': 'Integration settings saved'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_test_github_connection(self, data):
+        """Test GitHub API connection with provided token"""
+        try:
+            token = data.get('token', '')
+            if not token:
+                return {'success': False, 'error': 'No token provided'}
+            
+            import requests
+            headers = {
+                'Authorization': f'token {token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            response = requests.get('https://api.github.com/user', headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                user_data = response.json()
+                return {
+                    'success': True,
+                    'user': user_data.get('login', 'Unknown'),
+                    'message': f"Connected as {user_data.get('login', 'Unknown')}"
+                }
+            elif response.status_code == 401:
+                return {'success': False, 'error': 'Invalid token - authentication failed'}
+            else:
+                return {'success': False, 'error': f'GitHub API error: {response.status_code}'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_save_automation_rules(self, data):
+        """Save automation rule settings"""
+        try:
+            config_path = 'config.yaml'
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+            
+            if 'automation' not in config:
+                config['automation'] = {}
+            
+            for rule_name in ['pr_opened', 'pr_updated', 'pr_merged', 'pr_closed']:
+                if rule_name in data:
+                    if rule_name not in config['automation']:
+                        config['automation'][rule_name] = {}
+                    config['automation'][rule_name]['enabled'] = data[rule_name].get('enabled', False)
+                    if 'add_comment' in data[rule_name]:
+                        config['automation'][rule_name]['add_comment'] = data[rule_name]['add_comment']
+                    if 'set_status' in data[rule_name]:
+                        config['automation'][rule_name]['set_status'] = data[rule_name]['set_status']
+                    if 'add_label' in data[rule_name]:
+                        config['automation'][rule_name]['add_label'] = data[rule_name]['add_label']
+                    if 'branch_rules' in data[rule_name]:
+                        config['automation'][rule_name]['branch_rules'] = data[rule_name]['branch_rules']
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(config, f, default_flow_style=False)
+            
+            return {'success': True, 'message': 'Automation rules saved'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
@@ -598,7 +812,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             }
             
         except Exception as e:
-            print(f"ERROR in handle_submit_feedback: {str(e)}")
+            safe_print(f"ERROR in handle_submit_feedback: {str(e)}")
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
@@ -607,16 +821,13 @@ class SyncHandler(BaseHTTPRequestHandler):
         """Save GitHub feedback token to config"""
         global github_feedback
         try:
-            print(f"DEBUG: handle_save_feedback_token called with data keys: {data.keys()}")
             token = data.get('token', '')
             repo = data.get('repo', '')
-            print(f"DEBUG: token length={len(token)}, repo={repo}")
             
             if not token or not repo:
                 return {'success': False, 'error': 'Token and repo required'}
             
             # Load config
-            print("DEBUG: Loading config...")
             with open('config.yaml', 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
             
@@ -628,18 +839,14 @@ class SyncHandler(BaseHTTPRequestHandler):
             config['feedback']['repo'] = repo
             
             # Save config
-            print("DEBUG: Saving config...")
             with open('config.yaml', 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, default_flow_style=False)
             
             # Initialize GitHub feedback client
-            print("DEBUG: Creating GitHubFeedback object...")
             github_feedback = GitHubFeedback(token=token, repo_name=repo)
             
             # Validate token
-            print("DEBUG: Validating token...")
             validation = github_feedback.validate_token()
-            print(f"DEBUG: Validation result: {validation}")
             
             if validation['valid']:
                 return {
@@ -653,9 +860,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 }
             
         except Exception as e:
-            print(f"ERROR in handle_save_feedback_token: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            safe_print(f"ERROR in handle_save_feedback_token: {str(e)}")
             return {'success': False, 'error': str(e)}
     
     # ========== Extension System Handlers ==========
@@ -4205,10 +4410,10 @@ def run_server():
     
     server_address = ('localhost', 5000)
     httpd = HTTPServer(server_address, SyncHandler)
-    print("[START] Waypoint starting...")
-    print("[SERVER] http://localhost:5000")
-    print("[BROWSER] Opening browser...")
-    print("[WAIT] Starting server (this will block)...")
+    safe_print("[START] Waypoint starting...")
+    safe_print("[SERVER] http://localhost:5000")
+    safe_print("[BROWSER] Opening browser...")
+    safe_print("[WAIT] Starting server (this will block)...")
     httpd.serve_forever()
 
 if __name__ == '__main__':
