@@ -1,0 +1,70 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: 🚀
+      - heading "Waypoint" [level=1] [ref=e6]
+    - navigation [ref=e7]:
+      - link "📊 Dashboard" [ref=e8] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e9]: 📊
+        - generic [ref=e10]: Dashboard
+      - link "👔 PO" [ref=e11] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e12]: 👔
+        - generic [ref=e13]: PO
+      - link "💻 Dev" [ref=e14] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e15]: 💻
+        - generic [ref=e16]: Dev
+      - link "📈 SM" [ref=e17] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e18]: 📈
+        - generic [ref=e19]: SM
+      - link "⚙️ Automation" [ref=e20] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e21]: ⚙️
+        - generic [ref=e22]: Automation
+      - link "🔗 Integrations" [ref=e23] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e24]: 🔗
+        - generic [ref=e25]: Integrations
+      - link "⚡ Settings" [ref=e26] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e27]: ⚡
+        - generic [ref=e28]: Settings
+    - generic [ref=e29]:
+      - button "LightDark Mode Mode" [ref=e30] [cursor=pointer]:
+        - img [ref=e31]
+        - img [ref=e34]
+        - generic [ref=e36]: LightDark Mode Mode
+      - generic [ref=e37] [cursor=pointer]:
+        - generic [ref=e38]: 👤
+        - generic [ref=e39]:
+          - generic [ref=e40]: Account
+          - generic [ref=e41]: Manage
+  - main [ref=e42]:
+    - generic [ref=e44]:
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - generic [ref=e47]: "0"
+          - generic [ref=e48]: PRs Synced
+          - generic [ref=e49]: This week
+        - generic [ref=e50]:
+          - generic [ref=e51]: "0"
+          - generic [ref=e52]: Tickets Updated
+          - generic [ref=e53]: This month
+        - generic [ref=e54]:
+          - generic [ref=e55]: "5"
+          - generic [ref=e56]: Active Rules
+          - generic [ref=e57]: Configured
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - heading "Recent Activity" [level=3] [ref=e60]
+          - generic [ref=e61]: Live
+        - generic [ref=e62]:
+          - paragraph [ref=e63]: No recent activity
+          - paragraph [ref=e64]: Your sync will appear here
+```

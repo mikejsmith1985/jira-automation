@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Refinements Test Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 48px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 42px;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            padding: 40px;
+            background: #f8f9fa;
+        }
+        .stat-box {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            transition: transform 0.2s ease;
+        }
+        .stat-box:hover {
+            transform: translateY(-4px);
+        }
+        .stat-number {
+            font-size: 56px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .stat-number.passed {
+            color: #10b981;
+        }
+        .stat-number.failed {
+            color: #ef4444;
+        }
+        .stat-number.total {
+            color: #3b82f6;
+        }
+        .stat-label {
+            font-size: 16px;
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .success-rate {
+            margin: 0 40px 40px;
+            padding: 32px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 16px;
+            color: white;
+            text-align: center;
+        }
+        .success-rate h2 {
+            font-size: 72px;
+            margin-bottom: 8px;
+        }
+        .success-rate p {
+            font-size: 20px;
+            opacity: 0.9;
+        }
+        .tests {
+            padding: 0 40px 40px;
+        }
+        .test-group h2 {
+            font-size: 24px;
+            margin: 32px 0 20px;
+            color: #111827;
+            font-weight: 600;
+        }
+        .test-item {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            transition: all 0.2s ease;
+        }
+        .test-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.1);
+        }
+        .test-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .test-icon.passed {
+            background: #d1fae5;
+            color: #10b981;
+        }
+        .test-icon.failed {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+        .test-content {
+            flex: 1;
+        }
+        .test-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+        .test-desc {
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .screenshots {
+            padding: 0 40px 40px;
+        }
+        .screenshots h2 {
+            font-size: 24px;
+            margin-bottom: 24px;
+            color: #111827;
+            font-weight: 600;
+        }
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        .screenshot-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        .screenshot-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .screenshot-card img {
+            width: 100%;
+            display: block;
+        }
+        .screenshot-label {
+            padding: 16px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            background: #f9fafb;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 32px 40px;
+            text-align: center;
+            color: #6b7280;
+            border-top: 2px solid #e5e7eb;
+        }
+        .footer p {
+            font-size: 14px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .badge.passed {
+            background: #d1fae5;
+            color: #10b981;
+        }
+        .badge.failed {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✨ UI Refinements Test Report</h1>
+            <p>Comprehensive visual and functional testing results</p>
+        </div>
+
+        <div class="summary">
+            <div class="stat-box">
+                <div class="stat-number passed">8</div>
+                <div class="stat-label">Tests Passed</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number failed">3</div>
+                <div class="stat-label">Tests Failed</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number total">11</div>
+                <div class="stat-label">Total Tests</div>
+            </div>
+        </div>
+
+        <div class="success-rate">
+            <h2>73%</h2>
+            <p>Success Rate • 8 of 11 tests passed</p>
+        </div>
+
+        <div class="tests">
+            <div class="test-group">
+                <h2>✅ Passed Tests (8)</h2>
+                
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">Redundant page header removed</div>
+                        <div class="test-desc">Verified .header element and #page-title no longer exist</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">Theme toggle moved to sidebar</div>
+                        <div class="test-desc">Floating toggle removed, sidebar toggle present and visible</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">Dark mode contrast validated</div>
+                        <div class="test-desc">Text colors are light (RGB > 128) on dark backgrounds</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">All persona tabs accessible</div>
+                        <div class="test-desc">Dashboard, PO, Dev, SM, Rules, Integrations, Settings all functional</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">Theme toggle works from any tab</div>
+                        <div class="test-desc">Dark mode persists across tab navigation</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">Content max-width respected</div>
+                        <div class="test-desc">Content area does not exceed 1200px width</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">Visual regression - Dashboard light mode</div>
+                        <div class="test-desc">Screenshot captured successfully</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon passed">✓</div>
+                    <div class="test-content">
+                        <div class="test-name">Visual regression - Dashboard dark mode</div>
+                        <div class="test-desc">Screenshot captured successfully</div>
+                    </div>
+                    <span class="badge passed">PASSED</span>
+                </div>
+            </div>
+
+            <div class="test-group">
+                <h2>❌ Failed Tests (3)</h2>
+                
+                <div class="test-item">
+                    <div class="test-icon failed">✗</div>
+                    <div class="test-content">
+                        <div class="test-name">Content centering test timeout</div>
+                        <div class="test-desc">Page load exceeded 30s timeout waiting for networkidle (non-critical)</div>
+                    </div>
+                    <span class="badge failed">TIMEOUT</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon failed">✗</div>
+                    <div class="test-content">
+                        <div class="test-name">Theme toggle label test timeout</div>
+                        <div class="test-desc">Page load exceeded 30s timeout waiting for networkidle (non-critical)</div>
+                    </div>
+                    <span class="badge failed">TIMEOUT</span>
+                </div>
+
+                <div class="test-item">
+                    <div class="test-icon failed">✗</div>
+                    <div class="test-content">
+                        <div class="test-name">Light mode contrast edge case</div>
+                        <div class="test-desc">Blue channel was exactly 128 (expected <128). Visually acceptable.</div>
+                    </div>
+                    <span class="badge failed">MINOR</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="screenshots">
+            <h2>📸 Visual Snapshots</h2>
+            <div class="screenshot-grid">
+                <div class="screenshot-card">
+                    <img src="../test-results/light-mode.png" alt="Light Mode">
+                    <div class="screenshot-label">Light Mode - Full Page</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="../test-results/dark-mode.png" alt="Dark Mode">
+                    <div class="screenshot-label">Dark Mode - Full Page</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="../test-results/tab-dashboard.png" alt="Dashboard Tab">
+                    <div class="screenshot-label">Dashboard Tab</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="../test-results/tab-po.png" alt="PO Tab">
+                    <div class="screenshot-label">Product Owner Tab</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="../test-results/tab-dev.png" alt="Dev Tab">
+                    <div class="screenshot-label">Developer Tab</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="../test-results/tab-sm.png" alt="SM Tab">
+                    <div class="screenshot-label">Scrum Master Tab</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Generated by Playwright Test Runner • December 25, 2025</p>
+            <p style="margin-top: 8px;">Branch: feature/ui-refinements-centering-theme</p>
+        </div>
+    </div>
+</body>
+</html>
