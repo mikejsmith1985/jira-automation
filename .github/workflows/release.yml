@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build release for'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -15,6 +21,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
       
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -66,7 +74,11 @@ jobs:
       - name: Get tag name
         id: tag_name
         run: |
-          $tag = "${{ github.ref }}" -replace 'refs/tags/', ''
+          if ("${{ github.event.inputs.tag }}" -ne "") {
+            $tag = "${{ github.event.inputs.tag }}"
+          } else {
+            $tag = "${{ github.ref }}" -replace 'refs/tags/', ''
+          }
           echo "TAG_NAME=$tag" >> $env:GITHUB_OUTPUT
         shell: powershell
       
@@ -83,10 +95,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Release ${{ github.event.inputs.tag || github.ref_name }}
           body: |
-            ## 🎉 Jira Automation Assistant ${{ github.ref_name }}
+            ## 🎉 Jira Automation Assistant ${{ github.event.inputs.tag || github.ref_name }}
             
             ### 📦 Download & Installation
             
