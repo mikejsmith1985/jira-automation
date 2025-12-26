@@ -11,6 +11,8 @@ permissions:
 jobs:
   auto-release:
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
     
     steps:
       - name: Checkout code
@@ -69,13 +71,92 @@ jobs:
           git tag -a "${{ steps.version.outputs.new_version }}" -m "Release ${{ steps.version.outputs.new_version }}"
           git push origin "${{ steps.version.outputs.new_version }}"
       
-      - name: Create Release
+      - name: Create Release (draft)
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.new_version }}
           name: Release ${{ steps.version.outputs.new_version }}
           body_path: release/RELEASE_NOTES.md
-          draft: false
+          draft: true
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  build-and-attach:
+    needs: auto-release
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.auto-release.outputs.new_version }}
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+      
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Package application
+        run: |
+          $iconPath = "assets/icon.ico"
+          $cmd = "python -m PyInstaller --onefile --windowed --name=JiraAutomationAssistant"
+          
+          if (Test-Path $iconPath) {
+            $cmd += " --icon=$iconPath"
+          }
+          
+          $cmd += " app.py"
+          
+          Write-Host "Running: $cmd"
+          Invoke-Expression $cmd
+          
+          if (Test-Path "dist/JiraAutomationAssistant.exe") {
+            New-Item -ItemType Directory -Path "release" -Force | Out-Null
+            Copy-Item "dist/JiraAutomationAssistant.exe" "release/" -Force
+            Write-Host "Executable packaged successfully"
+          } else {
+            Write-Host "ERROR: Failed to create executable"
+            exit 1
+          }
+        shell: powershell
+      
+      - name: Create portable ZIP
+        run: |
+          if (Test-Path "dist") {
+            Compress-Archive -Path "dist\*" -DestinationPath "release\Jira-Automation-Assistant-Portable.zip" -Force
+            Write-Host "ZIP created successfully"
+          } else {
+            Write-Host "ERROR: No dist folder found"
+            exit 1
+          }
+        shell: powershell
+      
+      - name: Prepare assets
+        run: |
+          if (Test-Path "release/JiraAutomationAssistant.exe") {
+            Copy-Item "release/JiraAutomationAssistant.exe" "release/GitHubJiraSync.exe" -Force
+            Write-Host "Assets prepared"
+          } else {
+            Write-Host "WARNING: Could not find executable to prepare"
+          }
+        shell: powershell
+      
+      - name: Upload assets to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.auto-release.outputs.new_version }}
+          files: |
+            ./release/JiraAutomationAssistant.exe
+            ./release/Jira-Automation-Assistant-Portable.zip
+            ./release/GitHubJiraSync.exe
+          draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
