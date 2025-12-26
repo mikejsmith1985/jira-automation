@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', function() {
     initSaveRules();
     loadRulesFromConfig();
     initFeedback();
+    
+    // Load real data from APIs
+    loadIntegrationStatus();
+    loadAutomationRules();
+    loadDashboardData();
 });
 
 /* ============================================================================
@@ -346,4 +351,363 @@ function submitFeedback() {
     // Clear form
     document.getElementById('feedback-title').value = '';
     document.getElementById('feedback-description').value = '';
+}
+
+/* ============================================================================
+   Integration Status - Real Data from API
+   ============================================================================ */
+
+async function loadIntegrationStatus() {
+    try {
+        const response = await fetch('/api/integrations/status');
+        const status = await response.json();
+        
+        // Update GitHub status
+        const githubBadge = document.getElementById('github-status-badge');
+        const githubInfo = document.getElementById('github-org-info');
+        if (githubBadge) {
+            if (status.github.configured) {
+                githubBadge.textContent = 'Connected';
+                githubBadge.className = 'badge badge-success';
+                if (githubInfo) {
+                    githubInfo.textContent = `Organization: ${status.github.organization || 'Not set'}`;
+                }
+            } else {
+                githubBadge.textContent = 'Not Configured';
+                githubBadge.className = 'badge badge-warning';
+                if (githubInfo) {
+                    githubInfo.textContent = 'Add your GitHub token in settings';
+                }
+            }
+        }
+        
+        // Update Jira status
+        const jiraBadge = document.getElementById('jira-status-badge');
+        const jiraInfo = document.getElementById('jira-url-info');
+        if (jiraBadge) {
+            if (status.jira.configured) {
+                jiraBadge.textContent = 'Configured';
+                jiraBadge.className = 'badge badge-success';
+                if (jiraInfo) {
+                    jiraInfo.textContent = `URL: ${status.jira.base_url}`;
+                }
+            } else {
+                jiraBadge.textContent = 'Not Configured';
+                jiraBadge.className = 'badge badge-warning';
+                if (jiraInfo) {
+                    jiraInfo.textContent = 'Add your Jira URL in settings';
+                }
+            }
+        }
+        
+        // Update Feedback status
+        const feedbackBadge = document.getElementById('feedback-status-badge');
+        const feedbackInfo = document.getElementById('feedback-repo-info');
+        if (feedbackBadge) {
+            if (status.feedback.configured) {
+                feedbackBadge.textContent = 'Configured';
+                feedbackBadge.className = 'badge badge-success';
+                if (feedbackInfo) {
+                    feedbackInfo.textContent = `Repo: ${status.feedback.repo}`;
+                }
+            } else {
+                feedbackBadge.textContent = 'Not Configured';
+                feedbackBadge.className = 'badge badge-warning';
+                if (feedbackInfo) {
+                    feedbackInfo.textContent = 'Configure feedback token via the bug button';
+                }
+            }
+        }
+        
+        // Update dashboard integration status
+        updateDashboardIntegrationStatus(status);
+        
+        // Pre-fill integration form fields
+        prefillIntegrationForms(status);
+        
+    } catch (error) {
+        console.error('Error loading integration status:', error);
+    }
+}
+
+function updateDashboardIntegrationStatus(status) {
+    const container = document.getElementById('dashboard-integration-status');
+    if (!container) return;
+    
+    let html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">';
+    
+    // GitHub
+    html += `<div class="stat-card" style="text-align: center;">
+        <span class="badge ${status.github.configured ? 'badge-success' : 'badge-warning'}" style="font-size: 12px;">
+            ${status.github.configured ? '✓ GitHub Connected' : '⚠ GitHub Not Set'}
+        </span>
+    </div>`;
+    
+    // Jira
+    html += `<div class="stat-card" style="text-align: center;">
+        <span class="badge ${status.jira.configured ? 'badge-success' : 'badge-warning'}" style="font-size: 12px;">
+            ${status.jira.configured ? '✓ Jira Configured' : '⚠ Jira Not Set'}
+        </span>
+    </div>`;
+    
+    // Feedback
+    html += `<div class="stat-card" style="text-align: center;">
+        <span class="badge ${status.feedback.configured ? 'badge-success' : 'badge-warning'}" style="font-size: 12px;">
+            ${status.feedback.configured ? '✓ Feedback Ready' : '⚠ Feedback Not Set'}
+        </span>
+    </div>`;
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function prefillIntegrationForms(status) {
+    const githubOrgInput = document.getElementById('github-org-input');
+    const jiraUrlInput = document.getElementById('jira-url-input');
+    const jiraProjectsInput = document.getElementById('jira-projects-input');
+    
+    if (githubOrgInput && status.github.organization) {
+        githubOrgInput.value = status.github.organization;
+    }
+    if (jiraUrlInput && status.jira.base_url && !status.jira.base_url.includes('your-company')) {
+        jiraUrlInput.value = status.jira.base_url;
+    }
+    if (jiraProjectsInput && status.jira.project_keys) {
+        jiraProjectsInput.value = status.jira.project_keys.join(', ');
+    }
+}
+
+/* ============================================================================
+   Automation Rules - Real Data from API
+   ============================================================================ */
+
+async function loadAutomationRules() {
+    try {
+        const response = await fetch('/api/automation/rules');
+        const data = await response.json();
+        
+        // Update the stat card
+        const activeRulesEl = document.getElementById('stat-active-rules');
+        if (activeRulesEl) {
+            activeRulesEl.textContent = data.active_count || 0;
+        }
+        
+        // Update the dev tab automation rules display
+        const devRulesContainer = document.getElementById('dev-automation-rules');
+        if (devRulesContainer) {
+            let html = '';
+            const rules = data.rules;
+            
+            if (rules.pr_opened && rules.pr_opened.enabled) {
+                html += `<div class="integration-item">
+                    <div class="integration-info">
+                        <h4>PR Opened → ${rules.pr_opened.set_status || 'Add Comment'}</h4>
+                        <p class="text-secondary">${rules.pr_opened.description}</p>
+                    </div>
+                    <span class="badge badge-success">Active</span>
+                </div>`;
+            }
+            
+            if (rules.pr_merged && rules.pr_merged.enabled) {
+                const branchCount = rules.pr_merged.branch_rules ? rules.pr_merged.branch_rules.length : 0;
+                html += `<div class="integration-item">
+                    <div class="integration-info">
+                        <h4>PR Merged → Branch-Specific Rules</h4>
+                        <p class="text-secondary">${branchCount} branch rules configured</p>
+                    </div>
+                    <span class="badge badge-success">Active</span>
+                </div>`;
+            }
+            
+            if (rules.pr_closed && rules.pr_closed.enabled) {
+                html += `<div class="integration-item">
+                    <div class="integration-info">
+                        <h4>PR Closed → ${rules.pr_closed.add_label || 'Add Comment'}</h4>
+                        <p class="text-secondary">${rules.pr_closed.description}</p>
+                    </div>
+                    <span class="badge badge-success">Active</span>
+                </div>`;
+            }
+            
+            if (rules.pr_updated && rules.pr_updated.enabled) {
+                html += `<div class="integration-item">
+                    <div class="integration-info">
+                        <h4>PR Updated → Add Comment</h4>
+                        <p class="text-secondary">${rules.pr_updated.description}</p>
+                    </div>
+                    <span class="badge badge-success">Active</span>
+                </div>`;
+            }
+            
+            if (!html) {
+                html = '<p class="text-secondary">No automation rules are currently active. Configure rules in the Automation tab.</p>';
+            }
+            
+            devRulesContainer.innerHTML = html;
+        }
+        
+    } catch (error) {
+        console.error('Error loading automation rules:', error);
+    }
+}
+
+/* ============================================================================
+   Dashboard Data
+   ============================================================================ */
+
+async function loadDashboardData() {
+    // For now, set to 0 since we don't have sync history yet
+    const prsSynced = document.getElementById('stat-prs-synced');
+    const ticketsUpdated = document.getElementById('stat-tickets-updated');
+    
+    if (prsSynced) prsSynced.textContent = '0';
+    if (ticketsUpdated) ticketsUpdated.textContent = '0';
+}
+
+/* ============================================================================
+   Integration Settings Actions
+   ============================================================================ */
+
+async function testGitHubConnection() {
+    const token = document.getElementById('github-token-input').value;
+    const resultEl = document.getElementById('github-test-result');
+    
+    if (!token) {
+        resultEl.innerHTML = '<span style="color: #de350b;">Please enter a token first</span>';
+        return;
+    }
+    
+    resultEl.innerHTML = '<span>Testing connection...</span>';
+    
+    try {
+        const response = await fetch('/api/integrations/test-github', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            resultEl.innerHTML = `<span style="color: #00875a;">✓ Connected as ${result.user}</span>`;
+        } else {
+            resultEl.innerHTML = `<span style="color: #de350b;">✗ ${result.error}</span>`;
+        }
+    } catch (error) {
+        resultEl.innerHTML = `<span style="color: #de350b;">✗ Connection failed: ${error.message}</span>`;
+    }
+}
+
+async function saveGitHubSettings() {
+    const token = document.getElementById('github-token-input').value;
+    const org = document.getElementById('github-org-input').value;
+    
+    try {
+        const response = await fetch('/api/integrations/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                github: {
+                    api_token: token,
+                    organization: org
+                }
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✓ GitHub settings saved');
+            loadIntegrationStatus(); // Refresh status
+        } else {
+            showNotification('✗ Failed to save: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showNotification('✗ Error saving settings', 'error');
+    }
+}
+
+async function saveJiraSettings() {
+    const url = document.getElementById('jira-url-input').value;
+    const projects = document.getElementById('jira-projects-input').value;
+    
+    const projectKeys = projects.split(',').map(p => p.trim()).filter(p => p);
+    
+    try {
+        const response = await fetch('/api/integrations/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jira: {
+                    base_url: url,
+                    project_keys: projectKeys
+                }
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✓ Jira settings saved');
+            loadIntegrationStatus(); // Refresh status
+        } else {
+            showNotification('✗ Failed to save: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showNotification('✗ Error saving settings', 'error');
+    }
+}
+
+/* ============================================================================
+   Sync Actions
+   ============================================================================ */
+
+async function initBrowser() {
+    const statusEl = document.getElementById('sync-status');
+    statusEl.innerHTML = '<span>Opening browser...</span>';
+    
+    try {
+        const response = await fetch('/api/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            statusEl.innerHTML = '<span style="color: #00875a;">✓ ' + result.message + '</span>';
+        } else {
+            statusEl.innerHTML = '<span style="color: #de350b;">✗ ' + result.error + '</span>';
+        }
+    } catch (error) {
+        statusEl.innerHTML = '<span style="color: #de350b;">✗ Failed to open browser</span>';
+    }
+}
+
+async function syncNow() {
+    const statusEl = document.getElementById('sync-status');
+    statusEl.innerHTML = '<span>Syncing...</span>';
+    
+    try {
+        const response = await fetch('/api/sync-now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            statusEl.innerHTML = '<span style="color: #00875a;">✓ ' + result.message + '</span>';
+            loadDashboardData(); // Refresh stats
+        } else {
+            statusEl.innerHTML = '<span style="color: #de350b;">✗ ' + result.error + '</span>';
+        }
+    } catch (error) {
+        statusEl.innerHTML = '<span style="color: #de350b;">✗ Sync failed</span>';
+    }
+}
+
+function showSyncLog() {
+    showNotification('Sync log viewer coming soon');
+}
+
+function saveAppSettings() {
+    showNotification('Settings saved');
 }

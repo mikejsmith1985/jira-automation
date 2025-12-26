@@ -84,19 +84,28 @@
                 <section id="dashboard" class="tab active">
                     <div class="grid grid-cols-3">
                         <div class="card stat-card">
-                            <div class="stat-number">0</div>
+                            <div class="stat-number" id="stat-prs-synced">-</div>
                             <div class="stat-label">PRs Synced</div>
                             <div class="stat-change">This week</div>
                         </div>
                         <div class="card stat-card">
-                            <div class="stat-number">0</div>
+                            <div class="stat-number" id="stat-tickets-updated">-</div>
                             <div class="stat-label">Tickets Updated</div>
                             <div class="stat-change">This month</div>
                         </div>
                         <div class="card stat-card">
-                            <div class="stat-number">5</div>
+                            <div class="stat-number" id="stat-active-rules">-</div>
                             <div class="stat-label">Active Rules</div>
                             <div class="stat-change">Configured</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Integration Status</h3>
+                        </div>
+                        <div id="dashboard-integration-status" style="padding: 20px;">
+                            <p class="text-secondary">Loading...</p>
                         </div>
                     </div>
 
@@ -344,30 +353,10 @@
                     <div class="card">
                         <div class="card-header">
                             <h3>Active Automation Rules</h3>
-                            <p class="text-secondary">Rules are managed in the Automation tab</p>
+                            <p class="text-secondary">Configure rules in the Automation tab</p>
                         </div>
-                        <div style="padding: 20px;">
-                            <div class="integration-item">
-                                <div class="integration-info">
-                                    <h4>PR Merged → Move to Done</h4>
-                                    <p class="text-secondary">Auto-move tickets when PR merged</p>
-                                </div>
-                                <span class="badge badge-success">Active</span>
-                            </div>
-                            <div class="integration-item">
-                                <div class="integration-info">
-                                    <h4>PR Opened → Add Comment</h4>
-                                    <p class="text-secondary">Link PR to Jira ticket</p>
-                                </div>
-                                <span class="badge badge-success">Active</span>
-                            </div>
-                            <div class="integration-item">
-                                <div class="integration-info">
-                                    <h4>PR Closed → Add Label</h4>
-                                    <p class="text-secondary">Tag closed PRs</p>
-                                </div>
-                                <span class="badge badge-success">Active</span>
-                            </div>
+                        <div id="dev-automation-rules" style="padding: 20px;">
+                            <p class="text-secondary">Loading rules...</p>
                         </div>
                     </div>
 
@@ -376,9 +365,11 @@
                             <h3>Manual Actions</h3>
                         </div>
                         <div style="padding: 20px; display: flex; gap: 10px;">
-                            <button class="btn btn-primary">🔄 Sync All PRs</button>
-                            <button class="btn btn-secondary">📋 View Sync Log</button>
+                            <button class="btn btn-primary" onclick="initBrowser()">🌐 Open Browser</button>
+                            <button class="btn btn-primary" onclick="syncNow()">🔄 Sync Now</button>
+                            <button class="btn btn-secondary" onclick="showSyncLog()">📋 View Log</button>
                         </div>
+                        <p id="sync-status" style="padding: 0 20px 20px; margin: 0;"></p>
                     </div>
                 </section>
 
@@ -463,23 +454,77 @@
                 <section id="integrations" class="tab">
                     <div class="card">
                         <div class="card-header">
-                            <h3>Connected Services</h3>
+                            <h3>Integration Status</h3>
+                            <p class="text-secondary">Configure connections to GitHub and Jira</p>
                         </div>
                         
-                        <div class="integration-item">
-                            <div class="integration-info">
-                                <h4>GitHub</h4>
-                                <p class="text-secondary">Pull request sync and webhooks</p>
+                        <div id="integrations-status-container">
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>GitHub</h4>
+                                    <p class="text-secondary">Pull request sync via GitHub API</p>
+                                    <p id="github-org-info" class="text-secondary" style="font-size: 11px;"></p>
+                                </div>
+                                <span id="github-status-badge" class="badge badge-secondary">Loading...</span>
                             </div>
-                            <span class="badge badge-success">Connected</span>
-                        </div>
 
-                        <div class="integration-item">
-                            <div class="integration-info">
-                                <h4>Jira</h4>
-                                <p class="text-secondary">Issue tracking and status updates</p>
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>Jira</h4>
+                                    <p class="text-secondary">Ticket updates via Selenium browser automation</p>
+                                    <p id="jira-url-info" class="text-secondary" style="font-size: 11px;"></p>
+                                </div>
+                                <span id="jira-status-badge" class="badge badge-secondary">Loading...</span>
                             </div>
-                            <span class="badge badge-success">Connected</span>
+                            
+                            <div class="integration-item">
+                                <div class="integration-info">
+                                    <h4>Feedback System</h4>
+                                    <p class="text-secondary">Bug reports via GitHub Issues</p>
+                                    <p id="feedback-repo-info" class="text-secondary" style="font-size: 11px;"></p>
+                                </div>
+                                <span id="feedback-status-badge" class="badge badge-secondary">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Configure GitHub</h3>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>GitHub API Token</label>
+                                <input type="password" id="github-token-input" class="input-field" placeholder="ghp_xxxxxxxxxxxx">
+                                <small class="text-secondary">Personal access token with repo permissions</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Organization</label>
+                                <input type="text" id="github-org-input" class="input-field" placeholder="your-org">
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-secondary" onclick="testGitHubConnection()">Test Connection</button>
+                                <button class="btn btn-primary" onclick="saveGitHubSettings()">Save GitHub Settings</button>
+                            </div>
+                            <p id="github-test-result" style="margin-top: 10px;"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Configure Jira</h3>
+                            <p class="text-secondary">Jira uses browser automation - no API token needed</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>Jira Base URL</label>
+                                <input type="text" id="jira-url-input" class="input-field" placeholder="https://your-company.atlassian.net">
+                            </div>
+                            <div class="form-group">
+                                <label>Project Keys (comma-separated)</label>
+                                <input type="text" id="jira-projects-input" class="input-field" placeholder="PROJ, ABC, XYZ">
+                            </div>
+                            <button class="btn btn-primary" onclick="saveJiraSettings()">Save Jira Settings</button>
                         </div>
                     </div>
                 </section>
@@ -488,21 +533,27 @@
                 <section id="settings" class="tab">
                     <div class="card">
                         <div class="card-header">
-                            <h3>Settings</h3>
+                            <h3>Application Settings</h3>
                         </div>
 
-                        <div class="form-group">
-                            <label>Jira URL</label>
-                            <input type="text" placeholder="https://your-company.atlassian.net">
+                        <div class="form-group" style="padding: 20px;">
+                            <label>Sync Schedule</label>
+                            <select id="sync-frequency" class="input-field">
+                                <option value="manual">Manual Only</option>
+                                <option value="hourly">Hourly</option>
+                                <option value="daily">Daily</option>
+                            </select>
                         </div>
 
-                        <div class="form-group">
-                            <label>GitHub Token</label>
-                            <input type="password" placeholder="ghp_xxxxxxxxxxxx">
+                        <div class="form-group" style="padding: 0 20px 20px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="business-hours-only">
+                                <span>Run only during business hours (9am-6pm)</span>
+                            </label>
                         </div>
 
                         <div class="card-footer">
-                            <button class="btn btn-primary">Save Settings</button>
+                            <button class="btn btn-primary" onclick="saveAppSettings()">Save Settings</button>
                         </div>
                     </div>
                 </section>

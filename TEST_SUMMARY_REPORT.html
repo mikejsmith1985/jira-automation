@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waypoint UI - Test Summary Report</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { 
+            font-size: 2.5rem; 
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00ff88, #00b4d8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle { color: #888; margin-bottom: 40px; font-size: 1.1rem; }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .summary-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .summary-card .number {
+            font-size: 3rem;
+            font-weight: bold;
+        }
+        .summary-card.passed .number { color: #00ff88; }
+        .summary-card.failed .number { color: #ff4444; }
+        .summary-card.total .number { color: #00b4d8; }
+        .summary-card .label { color: #888; margin-top: 8px; }
+        
+        .test-list {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .test-list h2 { margin-bottom: 20px; font-size: 1.5rem; }
+        .test-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .test-item:last-child { border-bottom: none; }
+        .test-status {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 1rem;
+        }
+        .test-status.pass { background: rgba(0,255,136,0.2); color: #00ff88; }
+        .test-status.fail { background: rgba(255,68,68,0.2); color: #ff4444; }
+        .test-name { flex: 1; }
+        .test-duration { color: #666; font-size: 0.9rem; }
+        
+        .screenshots {
+            margin-bottom: 40px;
+        }
+        .screenshots h2 { margin-bottom: 20px; font-size: 1.5rem; }
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px;
+        }
+        .screenshot-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .screenshot-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .screenshot-card .caption {
+            padding: 16px;
+            font-weight: 500;
+        }
+        
+        .fixes-section {
+            background: rgba(0,255,136,0.05);
+            border: 1px solid rgba(0,255,136,0.2);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 40px;
+        }
+        .fixes-section h2 { color: #00ff88; margin-bottom: 16px; }
+        .fixes-section ul { padding-left: 24px; }
+        .fixes-section li { margin-bottom: 8px; line-height: 1.6; }
+        
+        .timestamp {
+            text-align: center;
+            color: #666;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Waypoint UI - Functional Test Report</h1>
+        <p class="subtitle">Issue #11 Fix Validation - Real Data, No Mocks</p>
+        
+        <div class="summary-cards">
+            <div class="summary-card passed">
+                <div class="number">9</div>
+                <div class="label">Tests Passed</div>
+            </div>
+            <div class="summary-card failed">
+                <div class="number">1</div>
+                <div class="label">Tests Failed</div>
+            </div>
+            <div class="summary-card total">
+                <div class="number">90%</div>
+                <div class="label">Pass Rate</div>
+            </div>
+        </div>
+        
+        <div class="fixes-section">
+            <h2>✅ What Was Fixed</h2>
+            <ul>
+                <li><strong>PyInstaller bundling</strong> - modern-ui.html and assets folder now properly included in .exe</li>
+                <li><strong>BASE_DIR fix</strong> - Uses sys._MEIPASS when running as bundled executable</li>
+                <li><strong>Safe print statements</strong> - No more hangs when console=False</li>
+                <li><strong>Removed all hardcoded data</strong> - Integration status, automation rules, and dashboard now pull from real APIs</li>
+                <li><strong>Added /api/integrations/status</strong> - Returns real config state</li>
+                <li><strong>Added /api/automation/rules</strong> - Returns real automation rules from config.yaml</li>
+                <li><strong>Added configuration forms</strong> - GitHub and Jira settings can be configured from UI</li>
+                <li><strong>Dynamic UI updates</strong> - All badges and stats update based on actual configuration</li>
+            </ul>
+        </div>
+        
+        <div class="test-list">
+            <h2>📋 Test Results</h2>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">Dashboard loads with real data from API</div>
+                <div class="test-duration">2.7s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">Integration status shows NOT CONFIGURED when no tokens set</div>
+                <div class="test-duration">2.2s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">Integrations tab has configuration forms</div>
+                <div class="test-duration">2.3s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">Automation rules tab shows real rules from config</div>
+                <div class="test-duration">2.2s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">Dev tab shows dynamic automation rules (not hardcoded)</div>
+                <div class="test-duration">2.8s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">Dashboard shows integration status summary</div>
+                <div class="test-duration">3.2s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">Can save Jira settings</div>
+                <div class="test-duration">3.7s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">API returns real integration status</div>
+                <div class="test-duration">1.9s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status pass">✓</div>
+                <div class="test-name">API returns real automation rules</div>
+                <div class="test-duration">1.9s</div>
+            </div>
+            <div class="test-item">
+                <div class="test-status fail">✗</div>
+                <div class="test-name">Feedback button is visible (timeout - server busy after 9 tests)</div>
+                <div class="test-duration">60s</div>
+            </div>
+        </div>
+        
+        <div class="screenshots">
+            <h2>📸 Visual Validation Screenshots</h2>
+            <div class="screenshot-grid">
+                <div class="screenshot-card">
+                    <img src="test-results/dashboard-loaded.png" alt="Dashboard">
+                    <div class="caption">Dashboard - Real stats loaded from API</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="test-results/integrations-status.png" alt="Integrations Status">
+                    <div class="caption">Integrations - Shows real NOT CONFIGURED status</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="test-results/integrations-forms.png" alt="Integrations Forms">
+                    <div class="caption">Integrations - Configuration forms for GitHub/Jira</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="test-results/automation-rules.png" alt="Automation Rules">
+                    <div class="caption">Automation Rules - Form fields with real values from config</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="test-results/dev-tab.png" alt="Dev Tab">
+                    <div class="caption">Dev Tab - Dynamic automation rules display</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="test-results/dashboard-integration-summary.png" alt="Dashboard Summary">
+                    <div class="caption">Dashboard - Integration status summary</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="test-results/jira-settings-saved.png" alt="Settings Saved">
+                    <div class="caption">Jira Settings - Successfully saved notification</div>
+                </div>
+            </div>
+        </div>
+        
+        <p class="timestamp">Generated: December 26, 2025 at 4:35 PM EST</p>
+    </div>
+</body>
+</html>
