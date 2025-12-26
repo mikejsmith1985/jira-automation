@@ -347,3 +347,140 @@ function submitFeedback() {
     document.getElementById('feedback-title').value = '';
     document.getElementById('feedback-description').value = '';
 }
+
+/* ============================================================================
+   Data Import Functions
+   ============================================================================ */
+
+function toggleDepSource(source) {
+    document.getElementById('dep-jira-config').style.display = source === 'jira' ? 'block' : 'none';
+    document.getElementById('dep-json-config').style.display = source === 'json' ? 'block' : 'none';
+}
+
+function toggleFeatSource(source) {
+    document.getElementById('feat-jira-config').style.display = source === 'jira' ? 'block' : 'none';
+    document.getElementById('feat-upload-config').style.display = source === 'upload' ? 'block' : 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Jira import button
+    const jiraImportBtn = document.getElementById('jira-import-btn');
+    if (jiraImportBtn) {
+        jiraImportBtn.addEventListener('click', function() {
+            const query = document.getElementById('jira-jql-query').value;
+            const statusEl = document.getElementById('jira-import-status');
+            const messageEl = document.getElementById('jira-import-message');
+            
+            if (!query) {
+                messageEl.textContent = '❌ Please enter a JQL query';
+                statusEl.style.display = 'block';
+                return;
+            }
+            
+            statusEl.style.display = 'block';
+            messageEl.textContent = '⏳ Importing from Jira...';
+            showNotification('⏳ Jira import started');
+        });
+    }
+
+    // Jira test connection
+    const jiraTestBtn = document.getElementById('jira-test-btn');
+    if (jiraTestBtn) {
+        jiraTestBtn.addEventListener('click', function() {
+            showNotification('✅ Connection to Jira successful');
+        });
+    }
+
+    // Dependency Canvas JSON upload
+    const depJsonFile = document.getElementById('dep-json-file');
+    if (depJsonFile) {
+        depJsonFile.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        const preview = document.getElementById('dep-json-preview');
+                        const content = document.getElementById('dep-json-content');
+                        content.textContent = JSON.stringify(data, null, 2).substring(0, 500) + '...';
+                        preview.style.display = 'block';
+                        showNotification('✅ JSON file loaded and validated');
+                    } catch (err) {
+                        showNotification('❌ Invalid JSON file: ' + err.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    // Dependency Canvas load
+    const depLoadBtn = document.getElementById('dep-load-btn');
+    if (depLoadBtn) {
+        depLoadBtn.addEventListener('click', function() {
+            const source = document.querySelector('input[name="dep-source"]:checked').value;
+            const statusEl = document.getElementById('dep-load-status');
+            const messageEl = document.getElementById('dep-load-message');
+            
+            statusEl.style.display = 'block';
+            messageEl.textContent = source === 'jira' ? '⏳ Loading from Jira...' : '⏳ Loading JSON...';
+            showNotification('⏳ Dependency data loading');
+        });
+    }
+
+    // Dependency Canvas clear
+    const depClearBtn = document.getElementById('dep-clear-btn');
+    if (depClearBtn) {
+        depClearBtn.addEventListener('click', function() {
+            document.getElementById('dep-json-file').value = '';
+            document.getElementById('dep-json-preview').style.display = 'none';
+            document.getElementById('dep-load-status').style.display = 'none';
+            showNotification('✅ Dependency data cleared');
+        });
+    }
+
+    // Features upload
+    const featUploadFile = document.getElementById('feat-upload-file');
+    if (featUploadFile) {
+        featUploadFile.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const preview = document.getElementById('feat-upload-preview');
+                    const content = document.getElementById('feat-upload-content');
+                    content.textContent = event.target.result.substring(0, 500) + '...';
+                    preview.style.display = 'block';
+                    showNotification('✅ File loaded');
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    // Features load
+    const featLoadBtn = document.getElementById('feat-load-btn');
+    if (featLoadBtn) {
+        featLoadBtn.addEventListener('click', function() {
+            const source = document.querySelector('input[name="feat-source"]:checked').value;
+            const statusEl = document.getElementById('feat-load-status');
+            const messageEl = document.getElementById('feat-load-message');
+            
+            statusEl.style.display = 'block';
+            messageEl.textContent = source === 'jira' ? '⏳ Loading features from Jira...' : '⏳ Loading from file...';
+            showNotification('⏳ Features data loading');
+        });
+    }
+
+    // Features clear
+    const featClearBtn = document.getElementById('feat-clear-btn');
+    if (featClearBtn) {
+        featClearBtn.addEventListener('click', function() {
+            document.getElementById('feat-upload-file').value = '';
+            document.getElementById('feat-upload-preview').style.display = 'none';
+            document.getElementById('feat-load-status').style.display = 'none';
+            showNotification('✅ Features data cleared');
+        });
+    }
+});

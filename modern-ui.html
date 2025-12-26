@@ -218,6 +218,199 @@
                             <button class="btn btn-secondary" id="reset-rules">Reset</button>
                         </div>
                     </div>
+
+                    <!-- Data Imports Section -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>📥 Data Imports</h3>
+                            <p class="text-secondary">Configure data sources for visualization and automation</p>
+                        </div>
+                    </div>
+
+                    <!-- Jira Data Import -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Jira Data Scraper</h3>
+                            <p class="text-secondary">Import features, epics, and metrics from Jira</p>
+                        </div>
+                        
+                        <div class="rule-card">
+                            <div class="rule-title">
+                                <span class="rule-icon">🔗</span>
+                                <h4>Jira Configuration</h4>
+                            </div>
+                            
+                            <div class="rule-body">
+                                <div class="form-group">
+                                    <label>JQL Query</label>
+                                    <input type="text" id="jira-jql-query" placeholder="project = MYPROJ AND type in (Epic, Story)" value="project = MYPROJ">
+                                    <p class="form-hint">Use JQL to filter issues for import</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Include Fields</label>
+                                    <div class="checkbox-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="jira-field-epics" checked>
+                                            <span>Epics & Features</span>
+                                        </label>
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="jira-field-stories" checked>
+                                            <span>Stories & Tasks</span>
+                                        </label>
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="jira-field-dependencies" checked>
+                                            <span>Dependencies & Links</span>
+                                        </label>
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="jira-field-metrics" checked>
+                                            <span>Metrics & History</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Auto-refresh Interval (minutes)</label>
+                                    <input type="number" id="jira-refresh-interval" value="60" min="5" max="1440">
+                                    <p class="form-hint">Set to 0 to disable auto-refresh</p>
+                                </div>
+
+                                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                    <button class="btn btn-primary" id="jira-import-btn">Import Now</button>
+                                    <button class="btn btn-secondary" id="jira-test-btn">Test Connection</button>
+                                </div>
+                                <div id="jira-import-status" style="margin-top: 10px; display: none;">
+                                    <p id="jira-import-message"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dependency Canvas Data -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Dependency Canvas Data</h3>
+                            <p class="text-secondary">Load issue dependencies and blockers visualization</p>
+                        </div>
+                        
+                        <div class="rule-card">
+                            <div class="rule-title">
+                                <span class="rule-icon">📊</span>
+                                <h4>Dependency Structure</h4>
+                            </div>
+                            
+                            <div class="rule-body">
+                                <div class="form-group">
+                                    <label>Data Source</label>
+                                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                        <label class="checkbox-label" style="flex: 1;">
+                                            <input type="radio" name="dep-source" value="jira" checked onchange="toggleDepSource('jira')">
+                                            <span>From Jira</span>
+                                        </label>
+                                        <label class="checkbox-label" style="flex: 1;">
+                                            <input type="radio" name="dep-source" value="json" onchange="toggleDepSource('json')">
+                                            <span>Upload JSON</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="dep-jira-config" style="display: block;">
+                                    <div class="form-group">
+                                        <label>Project Key(s)</label>
+                                        <input type="text" id="dep-jira-keys" placeholder="PROJ1, PROJ2" value="MYPROJ">
+                                        <p class="form-hint">Comma-separated project keys</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Issue Limit</label>
+                                        <input type="number" id="dep-jira-limit" value="500" min="10" max="5000">
+                                    </div>
+                                </div>
+
+                                <div id="dep-json-config" style="display: none;">
+                                    <div class="form-group">
+                                        <label>Upload JSON File</label>
+                                        <input type="file" id="dep-json-file" accept=".json" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">
+                                        <p class="form-hint">Expected format: {issues: [{key, title, dependencies: [{blocker, description}]}]}</p>
+                                    </div>
+                                    <div id="dep-json-preview" style="margin-top: 10px; padding: 10px; background: var(--bg-secondary); border-radius: 4px; display: none;">
+                                        <pre id="dep-json-content" style="overflow-x: auto; font-size: 12px;"></pre>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                    <button class="btn btn-primary" id="dep-load-btn">Load Data</button>
+                                    <button class="btn btn-secondary" id="dep-clear-btn">Clear</button>
+                                </div>
+                                <div id="dep-load-status" style="margin-top: 10px; display: none;">
+                                    <p id="dep-load-message"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Features & Epics Data -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Features & Epics Data</h3>
+                            <p class="text-secondary">Configure which features to display and track</p>
+                        </div>
+                        
+                        <div class="rule-card">
+                            <div class="rule-title">
+                                <span class="rule-icon">🎯</span>
+                                <h4>Feature Configuration</h4>
+                            </div>
+                            
+                            <div class="rule-body">
+                                <div class="form-group">
+                                    <label>Data Source</label>
+                                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                        <label class="checkbox-label" style="flex: 1;">
+                                            <input type="radio" name="feat-source" value="jira" checked onchange="toggleFeatSource('jira')">
+                                            <span>From Jira</span>
+                                        </label>
+                                        <label class="checkbox-label" style="flex: 1;">
+                                            <input type="radio" name="feat-source" value="upload" onchange="toggleFeatSource('upload')">
+                                            <span>Upload YAML/JSON</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="feat-jira-config" style="display: block;">
+                                    <div class="form-group">
+                                        <label>Epic JQL Query</label>
+                                        <input type="text" id="feat-epic-query" placeholder="type = Epic" value="type = Epic">
+                                        <p class="form-hint">Query to find epics/features</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Child Issue JQL Query</label>
+                                        <input type="text" id="feat-child-query" placeholder="type in (Story, Task)" value="type in (Story, Task)">
+                                        <p class="form-hint">Query to find child issues</p>
+                                    </div>
+                                </div>
+
+                                <div id="feat-upload-config" style="display: none;">
+                                    <div class="form-group">
+                                        <label>Upload File</label>
+                                        <input type="file" id="feat-upload-file" accept=".yaml,.yml,.json" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">
+                                        <p class="form-hint">YAML or JSON format with features and child issues</p>
+                                    </div>
+                                    <div id="feat-upload-preview" style="margin-top: 10px; padding: 10px; background: var(--bg-secondary); border-radius: 4px; display: none;">
+                                        <pre id="feat-upload-content" style="overflow-x: auto; font-size: 12px;"></pre>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                    <button class="btn btn-primary" id="feat-load-btn">Load Features</button>
+                                    <button class="btn btn-secondary" id="feat-clear-btn">Clear</button>
+                                </div>
+                                <div id="feat-load-status" style="margin-top: 10px; display: none;">
+                                    <p id="feat-load-message"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </section>
 
                 <!-- PO Tab -->
@@ -300,7 +493,7 @@
                         </div>
                         <div class="empty-state">
                             <p>No features loaded</p>
-                            <p class="text-secondary">Import Jira data to view features and epics</p>
+                            <p class="text-secondary">Configure features in <strong>Automation → Features & Epics Data</strong></p>
                         </div>
                     </div>
 
@@ -311,7 +504,7 @@
                         </div>
                         <div class="empty-state">
                             <p>Dependency visualization available</p>
-                            <p class="text-secondary">Provide JSON data structure to load dependencies</p>
+                            <p class="text-secondary">Configure data in <strong>Automation → Dependency Canvas Data</strong></p>
                         </div>
                     </div>
                 </section>
