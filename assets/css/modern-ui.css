@@ -312,29 +312,45 @@ body {
     background: var(--bg-primary);
     border: 1px solid var(--border);
     border-radius: 12px;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     margin-bottom: 20px;
 }
 
 .card:hover {
     border-color: var(--accent);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1),
+                0 10px 25px -5px rgba(0, 0, 0, 0.1),
+                0 8px 10px -6px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .card:hover {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25),
+                0 0 30px -5px rgba(37, 99, 235, 0.3),
+                0 10px 25px -5px rgba(0, 0, 0, 0.4);
 }
 
 .card-header {
-    padding: 24px;
+    padding: 28px;
     border-bottom: 1px solid var(--border);
+    transition: all 0.3s ease;
+}
+
+.card:hover .card-header {
+    border-bottom-color: transparent;
 }
 
 .card-header h3 {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
 }
 
 .card-header p {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-secondary);
+    line-height: 1.6;
 }
 
 .card-footer {
@@ -350,27 +366,86 @@ body {
    ============================================================================ */
 
 .stat-card {
-    padding: 24px;
+    padding: 28px;
     text-align: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, 
+        rgba(37, 99, 235, 0.05) 0%, 
+        rgba(59, 130, 246, 0.02) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.stat-card:hover::before {
+    opacity: 1;
+}
+
+.stat-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15),
+                0 20px 40px -10px rgba(37, 99, 235, 0.2),
+                0 0 60px -15px rgba(37, 99, 235, 0.3);
+}
+
+[data-theme="dark"] .stat-card:hover {
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3),
+                0 0 50px -5px rgba(37, 99, 235, 0.5),
+                0 20px 40px -10px rgba(0, 0, 0, 0.6);
 }
 
 .stat-number {
-    font-size: 36px;
+    font-size: 42px;
     font-weight: 700;
     color: var(--accent);
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    z-index: 1;
+}
+
+.stat-card:hover .stat-number {
+    transform: scale(1.1);
+    text-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
+}
+
+[data-theme="dark"] .stat-card:hover .stat-number {
+    text-shadow: 0 0 25px rgba(37, 99, 235, 0.6);
 }
 
 .stat-label {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+    transition: color 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.stat-card:hover .stat-label {
+    color: var(--accent);
 }
 
 .stat-change {
-    font-size: 12px;
-    color: var(--text-tertiary);
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: color 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.stat-card:hover .stat-change {
+    color: var(--text-primary);
 }
 
 /* ============================================================================
@@ -576,20 +651,27 @@ input[type="checkbox"] {
    ============================================================================ */
 
 .empty-state {
-    padding: 48px 24px;
+    padding: 60px 32px;
     text-align: center;
+    transition: all 0.3s ease;
+}
+
+.card:hover .empty-state {
+    opacity: 0.9;
 }
 
 .empty-state p:first-child {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
 }
 
 .empty-state p:last-child {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-secondary);
+    line-height: 1.6;
 }
 
 /* ============================================================================
@@ -1128,34 +1210,6 @@ small {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--spacing-lg);
     margin-top: var(--spacing-lg);
-}
-
-.stat-card {
-    background: linear-gradient(135deg, var(--color-primary-light), var(--bg-secondary));
-    padding: var(--spacing-lg);
-    border-radius: 12px;
-    text-align: center;
-    border: 1px solid var(--border-color);
-    transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-md);
-}
-
-.stat-value {
-    font-size: 42px;
-    font-weight: 700;
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-sm);
-}
-
-.stat-label {
-    font-size: 14px;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
 /* ============================================================================
