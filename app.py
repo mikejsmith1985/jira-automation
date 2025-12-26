@@ -28,7 +28,7 @@ from storage import get_data_store, get_config_manager
 
 # Global state
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "1.2.5"  # Should match latest release tag
+APP_VERSION = "1.2.9"  # Should match latest release tag
 driver = None
 sync_engine = None
 sync_thread = None

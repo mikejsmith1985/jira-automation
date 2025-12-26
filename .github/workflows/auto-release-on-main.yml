@@ -37,7 +37,18 @@ jobs:
           PATCH=$((PATCH + 1))
           NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_without_v=$MAJOR.$MINOR.$PATCH" >> $GITHUB_OUTPUT
           echo "New version will be: $NEW_VERSION"
+      
+      - name: Update app version
+        run: |
+          # Update the APP_VERSION constant in app.py
+          sed -i "s/APP_VERSION = .*/APP_VERSION = \"${{ steps.version.outputs.version_without_v }}\"/" app.py
+          echo "Updated APP_VERSION to ${{ steps.version.outputs.version_without_v }}"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add app.py
+          git commit -m "chore: Update APP_VERSION to ${{ steps.version.outputs.new_version }}" || echo "No changes to commit"
       
       - name: Create release notes
         run: |
