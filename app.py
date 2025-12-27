@@ -10,6 +10,7 @@ import threading
 import time
 import json
 import yaml
+import base64
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -47,7 +48,7 @@ def get_data_dir():
 
 BASE_DIR = get_base_dir()
 DATA_DIR = get_data_dir()
-APP_VERSION = "1.2.23"
+APP_VERSION = "1.2.24"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -183,6 +184,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             elif self.path == '/api/feedback/network-error':
                 self._handle_network_error()
                 return
+            elif self.path == '/api/feedback/submit':
+                # Handle multipart form data for file uploads
+                self._handle_feedback_submit()
+                return
             
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -208,8 +213,6 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self.handle_resolve_insight(data)
             elif self.path == '/api/insights/run':
                 response = self.handle_run_insights(data)
-            elif self.path == '/api/feedback/submit':
-                response = self.handle_submit_feedback(data)
             elif self.path == '/api/feedback/save-token':
                 response = self.handle_save_feedback_token(data)
             # Extension system endpoints
@@ -699,10 +702,22 @@ class SyncHandler(BaseHTTPRequestHandler):
             # Initialize Chrome WebDriver if not already done
             if driver is None:
                 chrome_options = Options()
+                
+                # Use persistent user data directory for session persistence
+                user_data_dir = os.path.join(DATA_DIR, 'selenium_profile')
+                os.makedirs(user_data_dir, exist_ok=True)
+                chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
+                
+                # Browser options
                 chrome_options.add_argument('--start-maximized')
                 chrome_options.add_argument('--disable-blink-features=AutomationControlled')
                 chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
                 chrome_options.add_experimental_option('useAutomationExtension', False)
+                
+                # Preserve session data
+                chrome_options.add_argument('--disable-infobars')
+                chrome_options.add_argument('--disable-dev-shm-usage')
+                chrome_options.add_argument('--no-sandbox')
                 
                 driver = webdriver.Chrome(options=chrome_options)
             
@@ -715,7 +730,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             
             return {
                 'success': True, 
-                'message': f'Browser opened. Please log in to Jira at {jira_url}',
+                'message': f'Browser opened. Please log in to Jira at {jira_url}. Your login will be remembered.',
                 'url': jira_url
             }
         except Exception as e:
@@ -1088,6 +1103,123 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
+    
+    def _handle_feedback_submit(self):
+        """Handle multipart form data feedback submission with file uploads"""
+        global github_feedback_client, log_capture
+        try:
+            import cgi
+            import io
+            
+            # Parse multipart form data
+            content_type = self.headers['Content-Type']
+            content_length = int(self.headers['Content-Length'])
+            
+            # Create environment for cgi.FieldStorage
+            environ = {
+                'REQUEST_METHOD': 'POST',
+                'CONTENT_TYPE': content_type,
+                'CONTENT_LENGTH': str(content_length)
+            }
+            
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ=environ,
+                keep_blank_values=True
+            )
+            
+            # Extract form fields
+            title = form.getvalue('title', 'User Feedback')
+            description = form.getvalue('description', '')
+            include_logs = form.getvalue('include_logs', 'true') == 'true'
+            
+            # Build issue body
+            body = f"{description}\n\n"
+            
+            if include_logs:
+                body += "## Logs\n```\n"
+                body += log_capture.export_all_logs()
+                body += "\n```\n\n"
+            
+            # Add system info
+            import platform
+            body += "## System Information\n"
+            body += f"- OS: {platform.system()} {platform.release()}\n"
+            body += f"- Python: {platform.python_version()}\n"
+            body += f"- App Version: {APP_VERSION}\n"
+            body += f"- Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            
+            # Handle file attachments
+            attachments = []
+            
+            if 'screenshot' in form:
+                screenshot = form['screenshot']
+                if screenshot.file:
+                    screenshot_data = screenshot.file.read()
+                    attachments.append({
+                        'name': 'screenshot.png',
+                        'content': base64.b64encode(screenshot_data).decode('utf-8'),
+                        'mime_type': 'image/png'
+                    })
+            
+            if 'video' in form:
+                video = form['video']
+                if video.file:
+                    video_data = video.file.read()
+                    attachments.append({
+                        'name': 'recording.webm',
+                        'content': base64.b64encode(video_data).decode('utf-8'),
+                        'mime_type': 'video/webm'
+                    })
+            
+            # Submit to GitHub
+            if github_feedback_client:
+                result = github_feedback_client.create_issue(
+                    title=title,
+                    body=body,
+                    labels=['bug', 'user-feedback'],
+                    attachments=attachments if attachments else None
+                )
+                
+                if result['success']:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'issue_number': result['issue_number'],
+                        'issue_url': result['issue_url']
+                    }).encode('utf-8'))
+                else:
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': result.get('error', 'Failed to create issue')
+                    }).encode('utf-8'))
+            else:
+                # No GitHub token configured
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': False,
+                    'error': 'GitHub token not configured. Please configure in Settings.'
+                }).encode('utf-8'))
+                
+        except Exception as e:
+            print(f"[ERROR] Feedback submission failed: {e}")
+            import traceback
+            traceback.print_exc()
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'success': False,
+                'error': str(e)
+            }).encode('utf-8'))
     
     def handle_submit_feedback(self, data):
         """Submit feedback - save to SQLite only (GitHub handled by frontend)"""
