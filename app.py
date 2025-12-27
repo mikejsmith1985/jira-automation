@@ -37,7 +37,7 @@ def get_base_dir():
         return os.path.dirname(os.path.abspath(__file__))
 
 BASE_DIR = get_base_dir()
-APP_VERSION = "1.2.13"
+APP_VERSION = "1.2.14"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""

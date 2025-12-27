@@ -314,6 +314,7 @@ body {
     border-radius: 12px;
     transition: all 0.2s ease;
     margin-bottom: 20px;
+    overflow: hidden;
 }
 
 .card:hover {
@@ -608,25 +609,43 @@ input[type="checkbox"] {
 
 .integration-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     padding: 20px 24px;
     border-top: 1px solid var(--border);
+    gap: 16px;
+    overflow: hidden;
 }
 
 .integration-item:first-of-type {
     border-top: none;
 }
 
+.integration-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
 .integration-info h4 {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 4px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.integration-info p {
+    margin: 4px 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
 }
 
 .text-secondary {
     color: var(--text-secondary);
     font-size: 13px;
+    line-height: 1.5;
 }
 
 /* ============================================================================
@@ -964,6 +983,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+    margin-bottom: 16px;
 }
 
 .form-group.checkbox {
@@ -980,9 +1000,12 @@ label {
     font-weight: 500;
     color: var(--text-primary);
     font-size: 14px;
+    margin-bottom: 4px;
 }
 
 .input-field {
+    width: 100%;
+    max-width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -991,6 +1014,7 @@ label {
     font-size: 14px;
     transition: all 0.2s ease;
     font-family: inherit;
+    box-sizing: border-box;
 }
 
 .input-field:focus {
