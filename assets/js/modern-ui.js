@@ -1,4 +1,6 @@
-/* Modern UI JavaScript */\n\ndocument.addEventListener('DOMContentLoaded', function() {
+/* Modern UI JavaScript */
+
+document.addEventListener('DOMContentLoaded', function() {
     console.log('[Waypoint] Initializing...');
     
     try {
