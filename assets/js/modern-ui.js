@@ -338,6 +338,12 @@ document.addEventListener('DOMContentLoaded', function() {
    Feedback Modal
    ============================================================================ */
 
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingTimer = null;
+let screenshotData = null;
+let videoData = null;
+
 function initFeedback() {
     const feedbackBtn = document.getElementById('feedbackBtn');
     if (feedbackBtn) {
@@ -349,6 +355,10 @@ function openFeedbackModal() {
     const modal = document.getElementById('feedback-modal');
     if (modal) {
         modal.style.display = 'flex';
+        // Reset attachments
+        screenshotData = null;
+        videoData = null;
+        document.getElementById('feedback-attachments').innerHTML = '';
     }
 }
 
@@ -356,28 +366,211 @@ function closeFeedbackModal() {
     const modal = document.getElementById('feedback-modal');
     if (modal) {
         modal.style.display = 'none';
+        // Stop recording if active
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
     }
 }
 
-function captureScreenshot() {
-    showNotification('Screenshot capture coming soon');
+async function captureScreenshot() {
+    try {
+        console.log('[Waypoint] Capturing screenshot...');
+        
+        // Use native browser API if available
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { mediaSource: 'screen' }
+            });
+            
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+            
+            // Wait for video to be ready
+            await new Promise(resolve => {
+                video.onloadedmetadata = resolve;
+            });
+            
+            // Capture frame
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            // Stop stream
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Convert to blob
+            canvas.toBlob(blob => {
+                screenshotData = blob;
+                displayAttachment('screenshot', 'Screenshot captured', blob.size);
+                showNotification('✓ Screenshot captured');
+            }, 'image/png');
+        } else {
+            showNotification('Screenshot API not available', 'error');
+        }
+    } catch (error) {
+        console.error('[Waypoint] Screenshot error:', error);
+        if (error.name === 'NotAllowedError') {
+            showNotification('Screenshot cancelled', 'error');
+        } else {
+            showNotification('Failed to capture screenshot', 'error');
+        }
+    }
 }
 
-function toggleVideoRecording() {
-    showNotification('Video recording coming soon');
+async function toggleVideoRecording() {
+    const btn = document.getElementById('record-video-btn');
+    const indicator = document.getElementById('recording-indicator');
+    
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        // Stop recording
+        mediaRecorder.stop();
+        btn.textContent = '🎥 Record Video (30s)';
+        indicator.style.display = 'none';
+        if (recordingTimer) {
+            clearInterval(recordingTimer);
+            recordingTimer = null;
+        }
+        return;
+    }
+    
+    try {
+        console.log('[Waypoint] Starting video recording...');
+        
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { mediaSource: 'screen' },
+            audio: false
+        });
+        
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'video/webm;codecs=vp8'
+        });
+        
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
+        };
+        
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            videoData = blob;
+            displayAttachment('video', 'Video recorded', blob.size);
+            stream.getTracks().forEach(track => track.stop());
+            showNotification('✓ Video recorded');
+        };
+        
+        mediaRecorder.start();
+        btn.textContent = '⏹ Stop Recording';
+        indicator.style.display = 'flex';
+        
+        // Timer
+        let seconds = 0;
+        const timerEl = document.getElementById('recording-timer');
+        recordingTimer = setInterval(() => {
+            seconds++;
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            
+            // Auto-stop at 30 seconds
+            if (seconds >= 30) {
+                toggleVideoRecording();
+            }
+        }, 1000);
+        
+    } catch (error) {
+        console.error('[Waypoint] Video recording error:', error);
+        if (error.name === 'NotAllowedError') {
+            showNotification('Recording cancelled', 'error');
+        } else {
+            showNotification('Failed to start recording', 'error');
+        }
+    }
 }
 
-function submitFeedback() {
+function displayAttachment(type, label, size) {
+    const container = document.getElementById('feedback-attachments');
+    const sizeText = (size / 1024).toFixed(1) + ' KB';
+    
+    const attachment = document.createElement('div');
+    attachment.style.cssText = 'padding: 8px 12px; background: var(--bg-secondary); border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;';
+    attachment.innerHTML = `
+        <span>${type === 'screenshot' ? '📸' : '🎥'} ${label} (${sizeText})</span>
+        <button onclick="removeAttachment('${type}')" style="background: none; border: none; color: #de350b; cursor: pointer; font-size: 18px;">&times;</button>
+    `;
+    
+    container.appendChild(attachment);
+}
+
+function removeAttachment(type) {
+    if (type === 'screenshot') {
+        screenshotData = null;
+    } else if (type === 'video') {
+        videoData = null;
+    }
+    document.getElementById('feedback-attachments').innerHTML = '';
+}
+
+async function submitFeedback() {
     const title = document.getElementById('feedback-title').value;
     const description = document.getElementById('feedback-description').value;
+    const includeLogs = document.getElementById('feedback-include-logs').checked;
     
     if (!title || !description) {
         showNotification('❌ Please fill in title and description', 'error');
         return;
     }
     
-    showNotification('✅ Feedback submitted!');
-    closeFeedbackModal();
+    const submitBtn = document.getElementById('submit-feedback-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    
+    try {
+        console.log('[Waypoint] Submitting feedback...');
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('description', description);
+        formData.append('include_logs', includeLogs);
+        
+        if (screenshotData) {
+            formData.append('screenshot', screenshotData, 'screenshot.png');
+        }
+        
+        if (videoData) {
+            formData.append('video', videoData, 'recording.webm');
+        }
+        
+        const response = await fetch('/api/feedback/submit', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Feedback submitted!');
+            closeFeedbackModal();
+            // Clear form
+            document.getElementById('feedback-title').value = '';
+            document.getElementById('feedback-description').value = '';
+        } else {
+            showNotification('❌ ' + (result.error || 'Failed to submit'), 'error');
+        }
+    } catch (error) {
+        console.error('[Waypoint] Feedback submission error:', error);
+        showNotification('❌ Failed to submit feedback', 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Feedback';
+    }
+}
     
     // Clear form
     document.getElementById('feedback-title').value = '';
