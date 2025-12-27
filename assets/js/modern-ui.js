@@ -367,19 +367,23 @@ function closeFeedbackModal() {
 }
 
 function minimizeFeedbackModal() {
+    console.log('[Waypoint] Minimizing feedback modal...');
     const modal = document.getElementById('feedback-modal');
     const controller = document.getElementById('feedback-controller');
     if (modal) {
         modal.style.display = 'none';
         modal.classList.add('minimized');
+        console.log('[Waypoint] Modal hidden');
     }
     if (controller) {
         controller.style.display = 'block';
         updateControllerStatus();
+        console.log('[Waypoint] Controller shown');
     }
 }
 
 function restoreFeedbackModal() {
+    console.log('[Waypoint] Restoring feedback modal...');
     const modal = document.getElementById('feedback-modal');
     const controller = document.getElementById('feedback-controller');
     if (modal) {
@@ -403,6 +407,20 @@ function updateControllerStatus() {
         controllerAttachments.textContent = items.join(' + ');
     } else {
         controllerAttachments.textContent = 'No media captured yet';
+    }
+}
+
+function updateLogIndicator() {
+    const checkbox = document.getElementById('feedback-include-logs');
+    const indicator = document.getElementById('log-indicator');
+    if (!indicator) return;
+    
+    if (checkbox.checked) {
+        indicator.textContent = '✓ Logs will be included';
+        indicator.style.color = '#00875a';
+    } else {
+        indicator.textContent = '✗ Logs will not be included';
+        indicator.style.color = '#de350b';
     }
 }
 
@@ -456,6 +474,7 @@ async function captureScreenshot() {
 }
 
 async function toggleVideoRecording() {
+    console.log('[Waypoint] toggleVideoRecording called, state:', mediaRecorder?.state);
     const btn = document.getElementById('record-video-btn');
     const controllerBtn = document.getElementById('controller-record-btn');
     const indicator = document.getElementById('recording-indicator');
@@ -463,8 +482,9 @@ async function toggleVideoRecording() {
     
     if (mediaRecorder && mediaRecorder.state === 'recording') {
         // Stop recording
+        console.log('[Waypoint] Stopping recording...');
         mediaRecorder.stop();
-        if (btn) btn.textContent = '🎥 Record Video (30s)';
+        if (btn) btn.textContent = '🎥 Record Video (60s)';
         if (controllerBtn) controllerBtn.textContent = '🎥 Record';
         if (indicator) indicator.style.display = 'none';
         if (controllerIndicator) controllerIndicator.style.display = 'none';
@@ -475,6 +495,15 @@ async function toggleVideoRecording() {
         return;
     }
     
+    // Minimize modal FIRST before starting recording
+    const modal = document.getElementById('feedback-modal');
+    if (modal && modal.style.display !== 'none') {
+        console.log('[Waypoint] Minimizing modal before recording...');
+        minimizeFeedbackModal();
+        // Wait a moment for modal to hide
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    
     try {
         console.log('[Waypoint] Starting video recording...');
         
@@ -482,6 +511,8 @@ async function toggleVideoRecording() {
             video: { mediaSource: 'screen' },
             audio: false
         });
+        
+        console.log('[Waypoint] Display media stream obtained');
         
         recordedChunks = [];
         mediaRecorder = new MediaRecorder(stream, {
@@ -495,15 +526,27 @@ async function toggleVideoRecording() {
         };
         
         mediaRecorder.onstop = () => {
+            console.log('[Waypoint] Recording stopped');
             const blob = new Blob(recordedChunks, { type: 'video/webm' });
             videoData = blob;
             displayAttachment('video', 'Video recorded', blob.size);
             updateControllerStatus();
-            stream.getTracks().forEach(track => track.stop());
+            // Properly close all tracks to dismiss share dialog
+            stream.getTracks().forEach(track => {
+                track.stop();
+                console.log('[Waypoint] Track stopped:', track.kind);
+            });
             showNotification('✓ Video recorded');
+            
+            // Reset button states
+            if (btn) btn.textContent = '🎥 Record Video (60s)';
+            if (controllerBtn) controllerBtn.textContent = '🎥 Record';
+            if (indicator) indicator.style.display = 'none';
+            if (controllerIndicator) controllerIndicator.style.display = 'none';
         };
         
         mediaRecorder.start();
+        console.log('[Waypoint] MediaRecorder started');
         if (btn) btn.textContent = '⏹ Stop Recording';
         if (controllerBtn) controllerBtn.textContent = '⏹ Stop';
         if (indicator) indicator.style.display = 'flex';
@@ -521,8 +564,9 @@ async function toggleVideoRecording() {
             if (timerEl) timerEl.textContent = timeStr;
             if (controllerTimerEl) controllerTimerEl.textContent = timeStr;
             
-            // Auto-stop at 30 seconds
-            if (seconds >= 30) {
+            // Auto-stop at 60 seconds
+            if (seconds >= 60) {
+                console.log('[Waypoint] 60 second limit reached, stopping...');
                 toggleVideoRecording();
             }
         }, 1000);
@@ -1312,3 +1356,4 @@ window.openFeedbackModal = openFeedbackModal;
 window.closeFeedbackModal = closeFeedbackModal;
 window.minimizeFeedbackModal = minimizeFeedbackModal;
 window.restoreFeedbackModal = restoreFeedbackModal;
+window.updateLogIndicator = updateLogIndicator;

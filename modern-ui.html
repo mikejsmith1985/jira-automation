@@ -640,8 +640,9 @@
                 
                 <div class="input-group">
                     <label style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="feedback-include-logs" checked>
+                        <input type="checkbox" id="feedback-include-logs" checked onchange="updateLogIndicator()">
                         <span>Include logs (last 5 minutes)</span>
+                        <span id="log-indicator" style="color: #00875a; font-size: 12px; margin-left: 8px;">✓ Logs will be included</span>
                     </label>
                 </div>
                 
@@ -650,7 +651,7 @@
                         📸 Capture Screenshot
                     </button>
                     <button class="btn btn-secondary" onclick="toggleVideoRecording()" id="record-video-btn">
-                        🎥 Record Video (30s)
+                        🎥 Record Video (60s)
                     </button>
                     <div id="recording-indicator" style="display: none; color: #DE350B; font-weight: 600; align-items: center; gap: 5px;">
                         <span class="recording-pulse">●</span>
