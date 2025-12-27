@@ -1502,3 +1502,39 @@ small {
         transform: scale(1.2);
     }
 }
+
+/* ============================================================================
+   Feedback Modal Minimize
+   ============================================================================ */
+
+.modal-minimize {
+    font-size: 32px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    line-height: 1;
+    font-weight: 300;
+}
+
+.modal-minimize:hover {
+    color: var(--accent);
+}
+
+.modal.minimized {
+    display: none !important;
+}
+
+#feedback-controller {
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}

@@ -622,10 +622,10 @@
 
     <!-- Feedback Modal -->
     <div id="feedback-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" id="feedback-modal-window">
             <div class="modal-header">
                 <h2>🐛 Report Bug / Feedback</h2>
-                <span class="modal-close" onclick="closeFeedbackModal()">&times;</span>
+                <span class="modal-minimize" onclick="minimizeFeedbackModal()" title="Minimize">−</span>
             </div>
             <div class="modal-body">
                 <div class="input-group">
@@ -671,6 +671,34 @@
                 
                 <div id="feedback-status" style="margin-top: 15px; display: none;"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Floating Feedback Controller (when minimized) -->
+    <div id="feedback-controller" style="display: none; position: fixed; bottom: 80px; right: 20px; background: var(--bg-primary); border: 2px solid var(--accent); border-radius: 12px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 2001; min-width: 280px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 14px; font-weight: 600;">🐛 Feedback Recording</h3>
+            <button onclick="restoreFeedbackModal()" style="background: none; border: none; color: var(--accent); cursor: pointer; font-size: 20px; padding: 0;" title="Restore">&square;</button>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+            <div id="controller-attachments" style="font-size: 12px; color: var(--text-secondary);">
+                No media captured yet
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-small" onclick="captureScreenshot()" style="flex: 1;">
+                📸 Screenshot
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="toggleVideoRecording()" id="controller-record-btn" style="flex: 1;">
+                🎥 Record
+            </button>
+        </div>
+        
+        <div id="controller-recording-indicator" style="display: none; margin-top: 8px; color: #DE350B; font-weight: 600; text-align: center;">
+            <span class="recording-pulse">●</span>
+            <span id="controller-recording-timer">00:00</span>
         </div>
     </div>
 

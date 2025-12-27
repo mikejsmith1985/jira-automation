@@ -330,23 +330,79 @@ function initFeedback() {
 
 function openFeedbackModal() {
     const modal = document.getElementById('feedback-modal');
+    const controller = document.getElementById('feedback-controller');
     if (modal) {
         modal.style.display = 'flex';
-        // Reset attachments
-        screenshotData = null;
-        videoData = null;
-        document.getElementById('feedback-attachments').innerHTML = '';
+        modal.classList.remove('minimized');
+        if (controller) {
+            controller.style.display = 'none';
+        }
+        // Reset attachments only if opening fresh
+        if (!screenshotData && !videoData) {
+            document.getElementById('feedback-attachments').innerHTML = '';
+        }
     }
 }
 
 function closeFeedbackModal() {
     const modal = document.getElementById('feedback-modal');
+    const controller = document.getElementById('feedback-controller');
     if (modal) {
         modal.style.display = 'none';
-        // Stop recording if active
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-        }
+        modal.classList.remove('minimized');
+    }
+    if (controller) {
+        controller.style.display = 'none';
+    }
+    // Stop recording if active
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+    }
+    // Clear data
+    screenshotData = null;
+    videoData = null;
+    document.getElementById('feedback-title').value = '';
+    document.getElementById('feedback-description').value = '';
+    document.getElementById('feedback-attachments').innerHTML = '';
+}
+
+function minimizeFeedbackModal() {
+    const modal = document.getElementById('feedback-modal');
+    const controller = document.getElementById('feedback-controller');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('minimized');
+    }
+    if (controller) {
+        controller.style.display = 'block';
+        updateControllerStatus();
+    }
+}
+
+function restoreFeedbackModal() {
+    const modal = document.getElementById('feedback-modal');
+    const controller = document.getElementById('feedback-controller');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('minimized');
+    }
+    if (controller) {
+        controller.style.display = 'none';
+    }
+}
+
+function updateControllerStatus() {
+    const controllerAttachments = document.getElementById('controller-attachments');
+    if (!controllerAttachments) return;
+    
+    const items = [];
+    if (screenshotData) items.push('📸 Screenshot');
+    if (videoData) items.push('🎥 Video');
+    
+    if (items.length > 0) {
+        controllerAttachments.textContent = items.join(' + ');
+    } else {
+        controllerAttachments.textContent = 'No media captured yet';
     }
 }
 
@@ -383,6 +439,7 @@ async function captureScreenshot() {
             canvas.toBlob(blob => {
                 screenshotData = blob;
                 displayAttachment('screenshot', 'Screenshot captured', blob.size);
+                updateControllerStatus();
                 showNotification('✓ Screenshot captured');
             }, 'image/png');
         } else {
@@ -400,13 +457,17 @@ async function captureScreenshot() {
 
 async function toggleVideoRecording() {
     const btn = document.getElementById('record-video-btn');
+    const controllerBtn = document.getElementById('controller-record-btn');
     const indicator = document.getElementById('recording-indicator');
+    const controllerIndicator = document.getElementById('controller-recording-indicator');
     
     if (mediaRecorder && mediaRecorder.state === 'recording') {
         // Stop recording
         mediaRecorder.stop();
-        btn.textContent = '🎥 Record Video (30s)';
-        indicator.style.display = 'none';
+        if (btn) btn.textContent = '🎥 Record Video (30s)';
+        if (controllerBtn) controllerBtn.textContent = '🎥 Record';
+        if (indicator) indicator.style.display = 'none';
+        if (controllerIndicator) controllerIndicator.style.display = 'none';
         if (recordingTimer) {
             clearInterval(recordingTimer);
             recordingTimer = null;
@@ -437,22 +498,28 @@ async function toggleVideoRecording() {
             const blob = new Blob(recordedChunks, { type: 'video/webm' });
             videoData = blob;
             displayAttachment('video', 'Video recorded', blob.size);
+            updateControllerStatus();
             stream.getTracks().forEach(track => track.stop());
             showNotification('✓ Video recorded');
         };
         
         mediaRecorder.start();
-        btn.textContent = '⏹ Stop Recording';
-        indicator.style.display = 'flex';
+        if (btn) btn.textContent = '⏹ Stop Recording';
+        if (controllerBtn) controllerBtn.textContent = '⏹ Stop';
+        if (indicator) indicator.style.display = 'flex';
+        if (controllerIndicator) controllerIndicator.style.display = 'flex';
         
         // Timer
         let seconds = 0;
         const timerEl = document.getElementById('recording-timer');
+        const controllerTimerEl = document.getElementById('controller-recording-timer');
         recordingTimer = setInterval(() => {
             seconds++;
             const mins = Math.floor(seconds / 60);
             const secs = seconds % 60;
-            timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            if (timerEl) timerEl.textContent = timeStr;
+            if (controllerTimerEl) controllerTimerEl.textContent = timeStr;
             
             // Auto-stop at 30 seconds
             if (seconds >= 30) {
@@ -1243,3 +1310,5 @@ window.toggleTeamMode = toggleTeamMode;
 window.saveAppSettings = saveAppSettings;
 window.openFeedbackModal = openFeedbackModal;
 window.closeFeedbackModal = closeFeedbackModal;
+window.minimizeFeedbackModal = minimizeFeedbackModal;
+window.restoreFeedbackModal = restoreFeedbackModal;
