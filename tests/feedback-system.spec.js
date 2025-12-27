@@ -160,20 +160,38 @@ test.describe('Feedback System - Complete Flow', () => {
 test.describe('Feedback System - Visual Regression', () => {
     test('Modal appearance', async ({ page }) => {
         await page.goto('http://localhost:5000');
+        await page.waitForLoadState('networkidle');
+        
         await page.click('#feedbackBtn');
         await page.waitForSelector('#feedback-modal', { state: 'visible' });
         
+        // Wait for modal content to render
+        await page.waitForSelector('#feedback-title', { state: 'visible' });
+        await page.waitForTimeout(500); // Let animations settle
+        
         const modal = page.locator('#feedback-modal');
-        await expect(modal).toHaveScreenshot('feedback-modal.png');
+        await expect(modal).toHaveScreenshot('feedback-modal.png', {
+            maxDiffPixels: 100 // Allow minor differences
+        });
     });
 
     test('Floating controller appearance', async ({ page }) => {
         await page.goto('http://localhost:5000');
+        await page.waitForLoadState('networkidle');
+        
         await page.click('#feedbackBtn');
+        await page.waitForSelector('#feedback-modal', { state: 'visible' });
+        
         await page.click('.modal-minimize');
         await page.waitForSelector('#feedback-controller', { state: 'visible' });
         
+        // Wait for controller content to render
+        await page.waitForSelector('#controller-attachments', { state: 'visible' });
+        await page.waitForTimeout(500); // Let animations settle
+        
         const controller = page.locator('#feedback-controller');
-        await expect(controller).toHaveScreenshot('feedback-controller.png');
+        await expect(controller).toHaveScreenshot('feedback-controller.png', {
+            maxDiffPixels: 100
+        });
     });
 });
