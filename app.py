@@ -48,7 +48,7 @@ def get_data_dir():
 
 BASE_DIR = get_base_dir()
 DATA_DIR = get_data_dir()
-APP_VERSION = "1.2.23"
+APP_VERSION = "1.2.24"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
