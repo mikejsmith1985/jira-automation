@@ -1,29 +1,4 @@
-/* Modern UI JavaScript */
-
-// Make functions globally accessible
-window.openJiraBrowser = openJiraBrowser;
-window.checkJiraLogin = checkJiraLogin;
-window.saveJiraSettings = saveJiraSettings;
-window.saveGitHubSettings = saveGitHubSettings;
-window.testGitHubConnection = testGitHubConnection;
-window.loadPODataFromUrl = loadPODataFromUrl;
-window.loadPODataFromJson = loadPODataFromJson;
-window.exportPOData = exportPOData;
-window.scrapeMetrics = scrapeMetrics;
-window.refreshMetrics = refreshMetrics;
-window.runHygieneCheck = runHygieneCheck;
-window.exportReport = exportReport;
-window.syncNow = syncNow;
-window.showSyncLog = showSyncLog;
-window.toggleTeamMode = toggleTeamMode;
-window.saveAppSettings = saveAppSettings;
-window.openFeedbackModal = openFeedbackModal;
-window.closeFeedbackModal = closeFeedbackModal;
-window.captureScreenshot = captureScreenshot;
-window.toggleVideoRecording = toggleVideoRecording;
-window.submitFeedback = submitFeedback;
-
-document.addEventListener('DOMContentLoaded', function() {
+/* Modern UI JavaScript */\n\ndocument.addEventListener('DOMContentLoaded', function() {
     console.log('[Waypoint] Initializing...');
     
     try {
@@ -570,11 +545,6 @@ async function submitFeedback() {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Submit Feedback';
     }
-}
-    
-    // Clear form
-    document.getElementById('feedback-title').value = '';
-    document.getElementById('feedback-description').value = '';
 }
 
 /* ============================================================================
@@ -1246,3 +1216,28 @@ function runHygieneCheck() {
 function exportReport() {
     showNotification('Export report coming soon');
 }
+
+
+// Make all functions globally accessible for onclick handlers
+window.captureScreenshot = captureScreenshot;
+window.toggleVideoRecording = toggleVideoRecording;
+window.submitFeedback = submitFeedback;
+window.removeAttachment = removeAttachment;
+window.openJiraBrowser = openJiraBrowser;
+window.checkJiraLogin = checkJiraLogin;
+window.saveJiraSettings = saveJiraSettings;
+window.saveGitHubSettings = saveGitHubSettings;
+window.testGitHubConnection = testGitHubConnection;
+window.loadPODataFromUrl = loadPODataFromUrl;
+window.loadPODataFromJson = loadPODataFromJson;
+window.exportPOData = exportPOData;
+window.scrapeMetrics = scrapeMetrics;
+window.refreshMetrics = refreshMetrics;
+window.runHygieneCheck = runHygieneCheck;
+window.exportReport = exportReport;
+window.syncNow = syncNow;
+window.showSyncLog = showSyncLog;
+window.toggleTeamMode = toggleTeamMode;
+window.saveAppSettings = saveAppSettings;
+window.openFeedbackModal = openFeedbackModal;
+window.closeFeedbackModal = closeFeedbackModal;
