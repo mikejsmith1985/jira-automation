@@ -1,18 +1,49 @@
 /* Modern UI JavaScript */
 
+// Make functions globally accessible
+window.openJiraBrowser = openJiraBrowser;
+window.checkJiraLogin = checkJiraLogin;
+window.saveJiraSettings = saveJiraSettings;
+window.saveGitHubSettings = saveGitHubSettings;
+window.testGitHubConnection = testGitHubConnection;
+window.loadPODataFromUrl = loadPODataFromUrl;
+window.loadPODataFromJson = loadPODataFromJson;
+window.exportPOData = exportPOData;
+window.scrapeMetrics = scrapeMetrics;
+window.refreshMetrics = refreshMetrics;
+window.runHygieneCheck = runHygieneCheck;
+window.exportReport = exportReport;
+window.syncNow = syncNow;
+window.showSyncLog = showSyncLog;
+window.toggleTeamMode = toggleTeamMode;
+window.saveAppSettings = saveAppSettings;
+window.openFeedbackModal = openFeedbackModal;
+window.closeFeedbackModal = closeFeedbackModal;
+window.captureScreenshot = captureScreenshot;
+window.toggleVideoRecording = toggleVideoRecording;
+window.submitFeedback = submitFeedback;
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize theme
-    initTheme();
-    initTabNavigation();
-    initBranchRules();
-    initSaveRules();
-    loadRulesFromConfig();
-    initFeedback();
+    console.log('[Waypoint] Initializing...');
     
-    // Load real data from APIs
-    loadIntegrationStatus();
-    loadAutomationRules();
-    loadDashboardData();
+    try {
+        // Initialize theme
+        initTheme();
+        initTabNavigation();
+        initBranchRules();
+        initSaveRules();
+        loadRulesFromConfig();
+        initFeedback();
+        
+        // Load real data from APIs
+        loadIntegrationStatus();
+        loadAutomationRules();
+        loadDashboardData();
+        
+        console.log('[Waypoint] Initialization complete');
+    } catch (error) {
+        console.error('[Waypoint] Initialization error:', error);
+    }
 });
 
 /* ============================================================================
@@ -358,15 +389,20 @@ function submitFeedback() {
    ============================================================================ */
 
 async function loadIntegrationStatus() {
+    console.log('[Waypoint] Loading integration status...');
     try {
         const response = await fetch('/api/integrations/status');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
         const status = await response.json();
+        console.log('[Waypoint] Integration status:', status);
         
         // Update GitHub status
         const githubBadge = document.getElementById('github-status-badge');
         const githubInfo = document.getElementById('github-org-info');
         if (githubBadge) {
-            if (status.github.configured) {
+            if (status.github && status.github.configured) {
                 githubBadge.textContent = 'Connected';
                 githubBadge.className = 'badge badge-success';
                 if (githubInfo) {
@@ -386,15 +422,15 @@ async function loadIntegrationStatus() {
         const jiraInfo = document.getElementById('jira-url-info');
         const jiraBrowserStatus = document.getElementById('jira-browser-status');
         if (jiraBadge) {
-            const jiraStatus = status.jira.status || 'Not Configured';
+            const jiraStatus = status.jira && status.jira.status || 'Not Configured';
             
-            if (status.jira.logged_in) {
+            if (status.jira && status.jira.logged_in) {
                 jiraBadge.textContent = 'Connected';
                 jiraBadge.className = 'badge badge-success';
-            } else if (status.jira.browser_open) {
+            } else if (status.jira && status.jira.browser_open) {
                 jiraBadge.textContent = 'Browser Open';
                 jiraBadge.className = 'badge badge-warning';
-            } else if (status.jira.configured) {
+            } else if (status.jira && status.jira.configured) {
                 jiraBadge.textContent = 'URL Set';
                 jiraBadge.className = 'badge badge-secondary';
             } else {
@@ -402,10 +438,10 @@ async function loadIntegrationStatus() {
                 jiraBadge.className = 'badge badge-warning';
             }
             
-            if (jiraInfo) {
+            if (jiraInfo && status.jira) {
                 jiraInfo.textContent = status.jira.base_url ? `URL: ${status.jira.base_url}` : 'No URL configured';
             }
-            if (jiraBrowserStatus) {
+            if (jiraBrowserStatus && status.jira) {
                 if (status.jira.logged_in) {
                     jiraBrowserStatus.textContent = '✅ Logged in and ready';
                 } else if (status.jira.browser_open) {
@@ -441,8 +477,18 @@ async function loadIntegrationStatus() {
         // Pre-fill integration form fields
         prefillIntegrationForms(status);
         
+        console.log('[Waypoint] Integration status loaded successfully');
     } catch (error) {
-        console.error('Error loading integration status:', error);
+        console.error('[Waypoint] Error loading integration status:', error);
+        // Set badges to error state
+        const badges = ['github-status-badge', 'jira-status-badge', 'feedback-status-badge'];
+        badges.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = 'Error';
+                el.className = 'badge badge-warning';
+            }
+        });
     }
 }
 
@@ -733,18 +779,22 @@ function saveAppSettings() {
    ============================================================================ */
 
 async function openJiraBrowser() {
+    console.log('[Waypoint] openJiraBrowser() called');
     const url = document.getElementById('jira-url-input').value;
+    console.log('[Waypoint] Jira URL:', url);
     const resultEl = document.getElementById('jira-action-result') || document.getElementById('sync-status');
     
     if (resultEl) resultEl.innerHTML = '<span>Opening Jira browser...</span>';
     
     try {
+        console.log('[Waypoint] Sending request to /api/selenium/open-jira');
         const response = await fetch('/api/selenium/open-jira', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ jiraUrl: url })
         });
         const result = await response.json();
+        console.log('[Waypoint] Response:', result);
         
         if (result.success) {
             if (resultEl) resultEl.innerHTML = `<span style="color: #00875a;">✓ ${result.message}</span>`;
@@ -756,6 +806,7 @@ async function openJiraBrowser() {
             showNotification(result.error, 'error');
         }
     } catch (error) {
+        console.error('[Waypoint] Error opening browser:', error);
         if (resultEl) resultEl.innerHTML = `<span style="color: #de350b;">✗ Failed to open browser</span>`;
         showNotification('Failed to open browser', 'error');
     }
