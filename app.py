@@ -28,7 +28,7 @@ from storage import get_data_store, get_config_manager
 
 # Global state
 def get_base_dir():
-    """Get base directory, accounting for PyInstaller bundling"""
+    """Get base directory for bundled resources (READ-ONLY when frozen)"""
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
         return sys._MEIPASS
@@ -36,8 +36,18 @@ def get_base_dir():
         # Running as script
         return os.path.dirname(os.path.abspath(__file__))
 
+def get_data_dir():
+    """Get writable data directory for config and user data"""
+    if getattr(sys, 'frozen', False):
+        # Running as executable - use same directory as .exe
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as script - use script directory
+        return os.path.dirname(os.path.abspath(__file__))
+
 BASE_DIR = get_base_dir()
-APP_VERSION = "1.2.15"
+DATA_DIR = get_data_dir()
+APP_VERSION = "1.2.16"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -285,7 +295,8 @@ class SyncHandler(BaseHTTPRequestHandler):
     def _handle_get_config(self):
         """Return current configuration"""
         try:
-            with open('config.yaml', 'r', encoding='utf-8') as f:
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -301,7 +312,7 @@ class SyncHandler(BaseHTTPRequestHandler):
         """Return real integration status based on config AND Selenium state"""
         global driver
         try:
-            config_path = os.path.join(BASE_DIR, 'config.yaml') if getattr(sys, 'frozen', False) else 'config.yaml'
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = yaml.safe_load(f)
@@ -388,7 +399,7 @@ class SyncHandler(BaseHTTPRequestHandler):
     def _handle_get_automation_rules(self):
         """Return automation rules from config"""
         try:
-            config_path = os.path.join(BASE_DIR, 'config.yaml') if getattr(sys, 'frozen', False) else 'config.yaml'
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = yaml.safe_load(f)
@@ -513,7 +524,7 @@ class SyncHandler(BaseHTTPRequestHandler):
     def handle_save_config(self, data):
         """Save configuration changes"""
         try:
-            with open('config.yaml', 'w', encoding='utf-8') as f:
+            with open(os.path.join(DATA_DIR, 'config.yaml'), 'w', encoding='utf-8') as f:
                 yaml.dump(data, f, default_flow_style=False)
             return {'success': True, 'message': 'Configuration saved'}
         except Exception as e:
@@ -522,7 +533,10 @@ class SyncHandler(BaseHTTPRequestHandler):
     def handle_save_integrations(self, data):
         """Save integration settings to config"""
         try:
-            config_path = 'config.yaml'
+            # Use DATA_DIR for writable config
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            safe_print(f"[DEBUG] Saving integrations to: {config_path}")
+            
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f) or {}
             
@@ -542,6 +556,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 if 'project_keys' in data['jira']:
                     config['jira']['project_keys'] = data['jira']['project_keys']
             
+            safe_print(f"[DEBUG] Writing config: {config}")
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, default_flow_style=False)
             
@@ -580,7 +595,7 @@ class SyncHandler(BaseHTTPRequestHandler):
     def handle_save_automation_rules(self, data):
         """Save automation rule settings"""
         try:
-            config_path = 'config.yaml'
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f) or {}
             
@@ -672,7 +687,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             if not jira_url:
                 # Try to get from config
                 try:
-                    with open('config.yaml', 'r') as f:
+                    with open(os.path.join(DATA_DIR, 'config.yaml'), 'r') as f:
                         config = yaml.safe_load(f)
                     jira_url = config.get('jira', {}).get('base_url', '')
                 except:
@@ -1140,7 +1155,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 return {'success': False, 'error': 'Token and repo required'}
             
             # Load config
-            with open('config.yaml', 'r', encoding='utf-8') as f:
+            with open(os.path.join(DATA_DIR, 'config.yaml'), 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
             
             # Update feedback section
@@ -1151,7 +1166,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             config['feedback']['repo'] = repo
             
             # Save config
-            with open('config.yaml', 'w', encoding='utf-8') as f:
+            with open(os.path.join(DATA_DIR, 'config.yaml'), 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, default_flow_style=False)
             
             # Initialize GitHub feedback client
@@ -4707,7 +4722,7 @@ def run_server():
     
     # Initialize GitHub feedback if token exists in config
     try:
-        with open('config.yaml', 'r', encoding='utf-8') as f:
+        with open(os.path.join(DATA_DIR, 'config.yaml'), 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
             
         if 'feedback' in config:
@@ -4729,8 +4744,32 @@ def run_server():
     httpd.serve_forever()
 
 if __name__ == '__main__':
+    # Ensure config.yaml exists in DATA_DIR
+    config_file = os.path.join(DATA_DIR, 'config.yaml')
+    if not os.path.exists(config_file):
+        # Copy from bundled template if it doesn't exist
+        template_file = os.path.join(BASE_DIR, 'config.yaml')
+        if os.path.exists(template_file):
+            import shutil
+            shutil.copy(template_file, config_file)
+            safe_print(f"[INIT] Created config.yaml at {config_file}")
+        else:
+            safe_print(f"[WARN] No config template found, creating minimal config")
+            # Create minimal config
+            minimal_config = {
+                'github': {'api_token': '', 'base_url': 'https://github.com', 'organization': 'your-org', 'repositories': []},
+                'jira': {'base_url': 'https://your-company.atlassian.net', 'project_keys': []},
+                'feedback': {'github_token': '', 'repo': ''},
+                'automation': {}
+            }
+            with open(config_file, 'w', encoding='utf-8') as f:
+                yaml.dump(minimal_config, f, default_flow_style=False)
+    
     # Start browser opener in background
     threading.Thread(target=open_browser, daemon=True).start()
     
     # Run server
     run_server()
+
+
+
