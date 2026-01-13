@@ -60,12 +60,12 @@ jobs:
       
       - name: Build executable
         run: |
-          if (Test-Path "GitHubJiraSync.spec") {
+          if (Test-Path "waypoint.spec") {
+            pyinstaller waypoint.spec
+          } elseif (Test-Path "GitHubJiraSync.spec") {
             pyinstaller GitHubJiraSync.spec
-          } elseif (Test-Path "JiraAutomationAssistant.spec") {
-            pyinstaller JiraAutomationAssistant.spec
           } else {
-            pyinstaller --name="GitHubJiraSync" --onefile --windowed app.py
+            pyinstaller --name="waypoint" --onefile --windowed app.py
           }
         shell: pwsh
       
@@ -78,8 +78,8 @@ jobs:
           $exePath = Get-ChildItem -Path "dist" -Filter "*.exe" -Recurse | Select-Object -First 1
           
           if ($exePath) {
-            Copy-Item $exePath.FullName -Destination "release/GitHubJiraSync-$tag.exe"
-            echo "Built: release/GitHubJiraSync-$tag.exe"
+            Copy-Item $exePath.FullName -Destination "release/waypoint-$tag.exe"
+            echo "Built: release/waypoint-$tag.exe"
           } else {
             Write-Error "No executable found!"
             exit 1

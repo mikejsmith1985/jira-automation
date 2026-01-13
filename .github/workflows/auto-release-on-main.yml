@@ -122,7 +122,7 @@ jobs:
       - name: Package application
         run: |
           $iconPath = "assets/icon.ico"
-          $cmd = "python -m PyInstaller --onefile --windowed --name=JiraAutomationAssistant"
+          $cmd = "python -m PyInstaller --onefile --windowed --name=waypoint"
           $cmd += " --add-data 'modern-ui.html;.'"
           $cmd += " --add-data 'assets;assets'"
           $cmd += " --add-data 'config.yaml;.'"
@@ -136,9 +136,9 @@ jobs:
           Write-Host "Running: $cmd"
           Invoke-Expression $cmd
           
-          if (Test-Path "dist/JiraAutomationAssistant.exe") {
+          if (Test-Path "dist/waypoint.exe") {
             New-Item -ItemType Directory -Path "release" -Force | Out-Null
-            Copy-Item "dist/JiraAutomationAssistant.exe" "release/" -Force
+            Copy-Item "dist/waypoint.exe" "release/" -Force
             Write-Host "Executable packaged successfully"
           } else {
             Write-Host "ERROR: Failed to create executable"
@@ -149,7 +149,7 @@ jobs:
       - name: Create portable ZIP
         run: |
           if (Test-Path "dist") {
-            Compress-Archive -Path "dist\*" -DestinationPath "release\Jira-Automation-Assistant-Portable.zip" -Force
+            Compress-Archive -Path "dist\*" -DestinationPath "release\waypoint-portable.zip" -Force
             Write-Host "ZIP created successfully"
           } else {
             Write-Host "ERROR: No dist folder found"
@@ -159,8 +159,8 @@ jobs:
       
       - name: Prepare assets
         run: |
-          if (Test-Path "release/JiraAutomationAssistant.exe") {
-            Copy-Item "release/JiraAutomationAssistant.exe" "release/GitHubJiraSync.exe" -Force
+          if (Test-Path "release/waypoint.exe") {
+            Copy-Item "release/waypoint.exe" "release/waypoint.exe" -Force
             Write-Host "Assets prepared"
           } else {
             Write-Host "WARNING: Could not find executable to prepare"
@@ -172,9 +172,9 @@ jobs:
         with:
           tag_name: ${{ needs.auto-release.outputs.new_version }}
           files: |
-            ./release/JiraAutomationAssistant.exe
-            ./release/Jira-Automation-Assistant-Portable.zip
-            ./release/GitHubJiraSync.exe
+            ./release/waypoint.exe
+            ./release/waypoint-portable.zip
+            ./release/waypoint.exe
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
