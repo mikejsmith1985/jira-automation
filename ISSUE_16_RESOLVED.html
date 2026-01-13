@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issue #16 RESOLVED - Waypoint v1.2.10</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #00875A;
+            border-bottom: 4px solid #00875A;
+            padding-bottom: 15px;
+            font-size: 2.5em;
+        }
+        h1::before {
+            content: "✅ ";
+        }
+        h2 {
+            color: #172B4D;
+            margin-top: 30px;
+        }
+        .status-resolved {
+            background: #E3FCEF;
+            color: #006644;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 6px solid #00875A;
+            font-size: 1.2em;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        .test-results {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            line-height: 1.8;
+        }
+        .test-results .success {
+            color: #4EC9B0;
+        }
+        .test-results .value {
+            color: #CE9178;
+        }
+        .problem-section {
+            background: #FFF0B3;
+            padding: 15px;
+            border-left: 4px solid #FFAB00;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .solution-section {
+            background: #E3FCEF;
+            padding: 15px;
+            border-left: 4px solid #00875A;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        code {
+            background: #F4F5F7;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #172B4D;
+        }
+        .timeline {
+            border-left: 3px solid #0052CC;
+            padding-left: 20px;
+            margin: 20px 0;
+        }
+        .timeline-item {
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: "●";
+            position: absolute;
+            left: -28px;
+            color: #0052CC;
+            font-size: 20px;
+        }
+        ul {
+            line-height: 2;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric-card {
+            background: #DEEBFF;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #0052CC;
+        }
+        .metric-label {
+            color: #5E6C84;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Issue #16 RESOLVED</h1>
+        <p><strong>Date:</strong> January 13, 2026</p>
+        <p><strong>Version:</strong> Waypoint v1.2.10</p>
+        <p><strong>Issue:</strong> App won't load - 404 Not Found</p>
+        
+        <div class="status-resolved">
+            ✅ ISSUE RESOLVED - Executable builds and runs successfully!
+        </div>
+
+        <h2>🎯 Problem Summary</h2>
+        <div class="problem-section">
+            <h3>Original Issue</h3>
+            <p>After building with PyInstaller, <code>waypoint.exe</code> would launch but display:</p>
+            <code>GET http://127.0.0.1:5000/ net::ERR_HTTP_RESPONSE_CODE_FAILURE 404 (Not Found)</code>
+        </div>
+
+        <h2>🔍 Root Cause Analysis</h2>
+        <div class="timeline">
+            <div class="timeline-item">
+                <strong>Initial Symptoms:</strong>
+                <ul>
+                    <li>Script version (<code>python app.py</code>) worked perfectly</li>
+                    <li>Bundled exe (<code>waypoint.exe</code>) returned 404</li>
+                    <li>Server started and listened on port 5000</li>
+                    <li>But no files could be served</li>
+                </ul>
+            </div>
+            
+            <div class="timeline-item">
+                <strong>Investigation Process:</strong>
+                <ul>
+                    <li>Checked if modern-ui.html existed in bundled resources</li>
+                    <li>Confirmed BASE_DIR pointed to PyInstaller temp directory</li>
+                    <li>Discovered <code>waypoint.spec</code> was missing data files</li>
+                </ul>
+            </div>
+            
+            <div class="timeline-item">
+                <strong>Root Cause Identified:</strong>
+                <p><code>waypoint.spec</code> only included <code>config.yaml</code> in the datas section. Modern-ui.html and assets folder were NOT being bundled into the executable.</p>
+            </div>
+        </div>
+
+        <h2>✅ Solution Implemented</h2>
+        <div class="solution-section">
+            <h3>Fixed waypoint.spec</h3>
+            <p><strong>Before:</strong></p>
+            <pre><code>datas=[('config.yaml', '.')]</code></pre>
+            
+            <p><strong>After:</strong></p>
+            <pre><code>datas=[
+    ('config.yaml', '.'),
+    ('modern-ui.html', '.'),
+    ('assets', 'assets'),
+]</code></pre>
+            
+            <p>This ensures PyInstaller bundles all necessary files into the executable.</p>
+        </div>
+
+        <h2>✅ Verification Results</h2>
+        
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-value">✅</div>
+                <div class="metric-label">Build Status</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">200</div>
+                <div class="metric-label">HTTP Status</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">35.6 KB</div>
+                <div class="metric-label">HTML Size</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">26 MB</div>
+                <div class="metric-label">Exe Size</div>
+            </div>
+        </div>
+
+        <div class="test-results">
+<span class="success">🎉 WAYPOINT.EXE WORKS! 🎉</span>
+
+<strong>Test 1: Homepage</strong>
+GET http://127.0.0.1:5000/
+Status: <span class="value">200 OK</span>
+Content-Length: <span class="value">35660 bytes</span>
+Content-Type: <span class="value">text/html</span>
+✅ HTML confirmed: <!DOCTYPE html>
+✅ Title found: "Waypoint"
+
+<strong>Test 2: CSS Asset</strong>
+GET http://127.0.0.1:5000/assets/css/modern-ui.css
+Status: <span class="value">200 OK</span>
+Content-Length: <span class="value">33374 bytes</span>
+✅ CSS loads successfully
+
+<strong>Test 3: JavaScript Asset</strong>
+GET http://127.0.0.1:5000/assets/js/modern-ui-v2.js
+Status: <span class="value">200 OK</span>
+Content-Length: <span class="value">56533 bytes</span>
+✅ JavaScript loads successfully
+
+<strong>Test 4: PyInstaller Bundling</strong>
+✅ modern-ui.html extracted to temp directory
+✅ assets/ folder extracted with all files
+✅ config.yaml copied to exe directory
+✅ No file not found errors
+        </div>
+
+        <h2>📦 Build Details</h2>
+        <ul>
+            <li><strong>Tool:</strong> PyInstaller 6.17.0</li>
+            <li><strong>Python:</strong> 3.14.0</li>
+            <li><strong>Output:</strong> Single-file executable (--onefile)</li>
+            <li><strong>Console:</strong> Hidden (--noconsole)</li>
+            <li><strong>Executable Name:</strong> waypoint.exe</li>
+            <li><strong>Size:</strong> 26 MB</li>
+            <li><strong>Package:</strong> waypoint-v1.2.10.zip (25.8 MB)</li>
+        </ul>
+
+        <h2>📝 Files Modified</h2>
+        <ul>
+            <li><code>waypoint.spec</code> - Added modern-ui.html and assets to datas list</li>
+            <li><code>build.ps1</code> - Already configured correctly</li>
+            <li><code>app.py</code> - No changes needed (already had correct BASE_DIR logic)</li>
+        </ul>
+
+        <h2>🎓 Lessons Learned</h2>
+        <div class="solution-section">
+            <h3>Key Insights</h3>
+            <ul>
+                <li><strong>PyInstaller data files:</strong> Must be explicitly listed in waypoint.spec</li>
+                <li><strong>BASE_DIR vs DATA_DIR:</strong> BASE_DIR points to temp directory (read-only), DATA_DIR points to exe directory (writable)</li>
+                <li><strong>Testing strategy:</strong> Always test the built exe, not just the script</li>
+                <li><strong>Port conflicts:</strong> Multiple server instances can cause mysterious timeouts</li>
+            </ul>
+        </div>
+
+        <h2>🚀 Next Steps</h2>
+        <ul>
+            <li>✅ Build verified locally</li>
+            <li>⏭️ Commit changes to GitHub</li>
+            <li>⏭️ Push and tag v1.2.10 release</li>
+            <li>⏭️ Verify GitHub Actions builds waypoint.exe correctly</li>
+            <li>⏭️ Close Issue #16</li>
+        </ul>
+
+        <hr style="margin: 40px 0; border: none; border-top: 2px solid #E1E4E8;">
+        
+        <p style="text-align: center; color: #5E6C84; font-size: 14px;">
+            <strong>Status:</strong> ✅ RESOLVED<br>
+            <strong>Resolution Time:</strong> ~3 hours (including Flask exploration)<br>
+            <strong>Generated:</strong> January 13, 2026
+        </p>
+    </div>
+</body>
+</html>

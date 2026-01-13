@@ -5,7 +5,11 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('config.yaml', '.')],
+    datas=[
+        ('config.yaml', '.'),
+        ('modern-ui.html', '.'),
+        ('assets', 'assets'),
+    ],
     hiddenimports=['selenium', 'yaml', 'schedule'],
     hookspath=[],
     hooksconfig={},

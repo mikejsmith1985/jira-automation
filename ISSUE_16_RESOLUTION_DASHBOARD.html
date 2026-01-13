@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issue #16 Resolution Progress - Waypoint</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0052CC;
+            border-bottom: 3px solid #0052CC;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #172B4D;
+            margin-top: 30px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .status-resolved { background: #E3FCEF; color: #006644; }
+        .status-partial { background: #FFF0B3; color: #7A5C00; }
+        .status-investigating { background: #DEEBFF; color: #0052CC; }
+        .card {
+            background: #F4F5F7;
+            border-left: 4px solid #0052CC;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .card.success { border-left-color: #00875A; }
+        .card.warning { border-left-color: #FFAB00; }
+        .card.error { border-left-color: #DE350B; }
+        code {
+            background: #172B4D;
+            color: #E6FCFF;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .test-results {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .check-mark {
+            color: #00875A;
+            font-weight: bold;
+        }
+        .cross-mark {
+            color: #DE350B;
+            font-weight: bold;
+        }
+        ul {
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Issue #16: "App won't load" Resolution Progress</h1>
+        <p><strong>Date:</strong> January 13, 2026</p>
+        <p><strong>Issue:</strong> <code>GET http://127.0.0.1:5000/ net::ERR_HTTP_RESPONSE_CODE_FAILURE 404 (Not Found)</code></p>
+        <p><strong>Status:</strong> <span class="status-badge status-investigating">INVESTIGATING</span></p>
+
+        <h2>✅ Problems Identified & Fixed</h2>
+        
+        <div class="card success">
+            <h3>1. Missing Data Files in PyInstaller Bundle</h3>
+            <p><strong>Root Cause:</strong> The <code>waypoint.spec</code> file was missing critical data files.</p>
+            <p><strong>Fix Applied:</strong></p>
+            <ul>
+                <li>Added <code>modern-ui.html</code> to bundled data files</li>
+                <li>Added <code>assets/</code> folder with all CSS, JS, and images</li>
+                <li>Added application icon (<code>assets/icon.ico</code>)</li>
+            </ul>
+            <p><strong>Result:</strong> <span class="check-mark">✓</span> Build successful, files are now bundled</p>
+        </div>
+
+        <div class="card success">
+            <h3>2. Missing Global Variable</h3>
+            <p><strong>Root Cause:</strong> <code>github_feedback_client</code> was referenced but never declared</p>
+            <p><strong>Fix Applied:</strong> Added global declaration and initialization as alias to <code>github_feedback</code></p>
+            <p><strong>Result:</strong> <span class="check-mark">✓</span> No more undefined variable errors</p>
+        </div>
+
+        <div class="card success">
+            <h3>3. Changed localhost to 127.0.0.1</h3>
+            <p><strong>Root Cause:</strong> Windows DNS resolution issues with <code>localhost</code></p>
+            <p><strong>Fix Applied:</strong> Changed all references from <code>localhost</code> to <code>127.0.0.1</code></p>
+            <p><strong>Result:</strong> <span class="check-mark">✓</span> More reliable connection on Windows</p>
+        </div>
+
+        <h2>❌ Remaining Issue</h2>
+        
+        <div class="card error">
+            <h3>Server Accepts Connections But Doesn't Respond</h3>
+            <p><strong>Symptoms:</strong></p>
+            <ul>
+                <li>waypoint.exe launches successfully</li>
+                <li>Port 5000 shows as LISTENING</li>
+                <li>HTTP requests timeout after 5 seconds</li>
+                <li><code>do_GET</code> method is never called</li>
+            </ul>
+            
+            <p><strong>Test Results:</strong></p>
+            <div class="test-results">
+                <div><span class="check-mark">✓</span> Minimal test server works (port 5001)</div>
+                <div><span class="cross-mark">✗</span> waypoint.exe server hangs (port 5000)</div>
+                <div><span class="check-mark">✓</span> FeedbackDB() initializes correctly</div>
+                <div><span class="check-mark">✓</span> LogCapture() initializes correctly</div>
+                <div><span class="cross-mark">✗</span> HTTPServer.serve_forever() accepts connections but doesn't dispatch</div>
+            </div>
+
+            <p><strong>Investigation Attempts:</strong></p>
+            <ol>
+                <li>Checked for blocking <code>safe_print()</code> calls - removed from hot paths</li>
+                <li>Verified file reading works - <code>modern-ui.html</code> can be read</li>
+                <li>Tested without browser auto-open - still hangs</li>
+                <li>Added debug logging - never reaches <code>do_GET</code></li>
+                <li>Confirmed port is listening with <code>netstat</code></li>
+            </ol>
+
+            <p><strong>Hypothesis:</strong> There may be an issue with how <code>BaseHTTPRequestHandler</code> interacts with the bundled application, possibly related to threading, import order, or Python 3.14 compatibility.</p>
+        </div>
+
+        <h2>📊 Build Verification</h2>
+        
+        <div class="card">
+            <h3>Current Build Status</h3>
+            <p><strong>Version:</strong> v1.2.10</p>
+            <p><strong>Build Tool:</strong> PyInstaller 6.17.0</p>
+            <p><strong>Python:</strong> 3.14.0</p>
+            <p><strong>Executable Size:</strong> 26 MB</p>
+            <p><strong>Spec File:</strong> ✓ Updated with correct data files</p>
+            <p><strong>Build Output:</strong> ✓ No errors</p>
+            
+            <div class="test-results">
+<strong>Bundled Files Verification:</strong>
+- modern-ui.html: ✓ Included
+- assets/: ✓ Included
+- config.yaml: ✓ Included
+            </div>
+        </div>
+
+        <h2>🔍 Next Steps</h2>
+        
+        <div class="card warning">
+            <h3>Recommended Actions</h3>
+            <ul>
+                <li><strong>Alternative HTTP Server:</strong> Replace <code>http.server.HTTPServer</code> with a more robust solution like Flask or FastAPI</li>
+                <li><strong>Logging Enhancement:</strong> Add file-based logging instead of stdout to avoid subprocess pipe issues</li>
+                <li><strong>Python Version Test:</strong> Test with Python 3.11 to rule out 3.14 compatibility issues</li>
+                <li><strong>Threading Analysis:</strong> Investigate if global object initialization (<code>FeedbackDB()</code>, <code>LogCapture()</code>) is causing threading conflicts</li>
+                <li><strong>Simplified Prototype:</strong> Create a minimal working version with just HTTP server + modern-ui.html to isolate the issue</li>
+            </ul>
+        </div>
+
+        <h2>📝 Files Modified</h2>
+        <ul>
+            <li><code>waypoint.spec</code> - Added data files, icon</li>
+            <li><code>app.py</code> - Added <code>github_feedback_client</code> global, changed localhost→127.0.0.1</li>
+            <li><code>build.ps1</code> - Changed output name to waypoint.exe</li>
+            <li><code>.github/workflows/*.yml</code> - Updated all workflows to use waypoint.exe</li>
+        </ul>
+
+        <h2>🔗 Commit History</h2>
+        <ul>
+            <li><code>bf7508a</code> - Fix issue #16: Add modern-ui.html and assets to PyInstaller bundle</li>
+            <li><code>8f63412</code> - Update GitHub Actions to use waypoint.exe name</li>
+            <li><code>382ca9a</code> - Fix localhost issue, rename exe to waypoint, bump version to 1.2.10</li>
+        </ul>
+
+        <hr>
+        <p style="text-align: center; color: #5E6C84; font-size: 14px;">
+            Generated: January 13, 2026 | Status: In Progress
+        </p>
+    </div>
+</body>
+</html>
