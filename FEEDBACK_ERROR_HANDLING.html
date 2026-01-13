@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback Error Handling - Enhanced Diagnostics</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #de350b;
+            border-bottom: 4px solid #de350b;
+            padding-bottom: 15px;
+        }
+        h2 {
+            color: #172B4D;
+            margin-top: 30px;
+        }
+        .fix-card {
+            background: #E3FCEF;
+            border-left: 4px solid #00875A;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .error-example {
+            background: #FFEBE6;
+            border-left: 4px solid #de350b;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .error-example h4 {
+            margin-top: 0;
+            color: #de350b;
+        }
+        code {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .test-steps {
+            background: #DEEBFF;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .checklist {
+            background: white;
+            border: 2px solid #de350b;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .metric {
+            display: inline-block;
+            background: #FFEBE6;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin: 5px;
+            font-weight: 600;
+            color: #de350b;
+        }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐛 Feedback Error Handling - Enhanced Diagnostics</h1>
+        <p><strong>Date:</strong> January 13, 2026</p>
+        <p><strong>Issue:</strong> Feedback submission failing silently</p>
+        <p><strong>Commit:</strong> c1aeb30</p>
+        
+        <div style="display: flex; gap: 10px; margin: 20px 0;">
+            <span class="metric">✅ Jira Scraping Fixed (65 issues)</span>
+            <span class="metric">🔧 Error Handling Enhanced</span>
+        </div>
+
+        <h2>🎉 Success Report</h2>
+        <div class="fix-card">
+            <h3>Jira Scraping - ✅ WORKING</h3>
+            <p><strong>Result:</strong> Successfully scraped 65 issues from work Jira board!</p>
+            <p>The enhanced selector strategies are working correctly. The issue was the different HTML structure, which is now handled.</p>
+        </div>
+
+        <h2>🐛 Remaining Issue</h2>
+        <div class="error-example">
+            <h4>Feedback Submission Failing Silently</h4>
+            <p><strong>Problem:</strong> When clicking "Submit Feedback", errors occur but user doesn't see clear error messages</p>
+            <p><strong>User Experience:</strong> No alert/dialog appears, only small notification that's easy to miss</p>
+        </div>
+
+        <h2>✅ Enhancements Made</h2>
+        
+        <div class="fix-card">
+            <h3>Frontend Error Handling</h3>
+            <ul>
+                <li>✅ Added <code>alert()</code> dialogs for all errors (prominently visible)</li>
+                <li>✅ Show success message with issue number and URL</li>
+                <li>✅ Detailed console logging at each step:
+                    <ul>
+                        <li>FormData creation</li>
+                        <li>Attachment sizes</li>
+                        <li>HTTP request sent</li>
+                        <li>Response status and body</li>
+                    </ul>
+                </li>
+                <li>✅ Check HTTP response.ok before parsing JSON</li>
+                <li>✅ Show HTTP status codes in error messages</li>
+                <li>✅ Clear attachments after successful submission</li>
+            </ul>
+        </div>
+
+        <div class="fix-card">
+            <h3>Backend Error Handling</h3>
+            <ul>
+                <li>✅ Added detailed logging for GitHub API:
+                    <ul>
+                        <li>Repository being used</li>
+                        <li>Number of attachments</li>
+                        <li>API call result</li>
+                    </ul>
+                </li>
+                <li>✅ Enhanced error messages with actionable guidance:
+                    <ul>
+                        <li><strong>Bad credentials</strong> → "Invalid GitHub token. Check Settings tab"</li>
+                        <li><strong>Not Found/404</strong> → "Repository not found. Check format (owner/repo)"</li>
+                        <li><strong>Rate limit</strong> → "API rate limit exceeded. Try again later"</li>
+                        <li><strong>Permission denied</strong> → "Ensure token has 'repo' or 'public_repo' scope"</li>
+                    </ul>
+                </li>
+                <li>✅ More descriptive "token not configured" message</li>
+            </ul>
+        </div>
+
+        <h2>🧪 Testing the Fix</h2>
+        
+        <div class="test-steps">
+            <h3>Test Error Scenarios</h3>
+            <ol>
+                <li><strong>Invalid Token:</strong>
+                    <ul>
+                        <li>Go to Settings → Feedback Configuration</li>
+                        <li>Enter invalid token (e.g., "bad_token_123")</li>
+                        <li>Save settings</li>
+                        <li>Try to submit feedback</li>
+                        <li><strong>Expected:</strong> Alert says "Invalid GitHub token. Please check your token in Settings tab."</li>
+                    </ul>
+                </li>
+                <li><strong>Invalid Repository:</strong>
+                    <ul>
+                        <li>Enter valid token but wrong repo (e.g., "fakerepo/doesnotexist")</li>
+                        <li>Try to submit feedback</li>
+                        <li><strong>Expected:</strong> Alert says "Repository not found. Please check repository name in Settings (format: owner/repo)."</li>
+                    </ul>
+                </li>
+                <li><strong>Token Missing Permissions:</strong>
+                    <ul>
+                        <li>Use token with only "read" scope (no "repo" or "public_repo")</li>
+                        <li>Try to submit feedback</li>
+                        <li><strong>Expected:</strong> Alert says "Permission denied. Ensure your token has 'repo' or 'public_repo' scope."</li>
+                    </ul>
+                </li>
+                <li><strong>Valid Configuration:</strong>
+                    <ul>
+                        <li>Enter valid token with "repo" or "public_repo" scope</li>
+                        <li>Enter correct repository (e.g., "mikejsmith1985/jira-automation")</li>
+                        <li>Submit feedback</li>
+                        <li><strong>Expected:</strong> Alert says "✅ Feedback submitted successfully!" with issue number and URL</li>
+                        <li><strong>Check GitHub:</strong> New issue should appear in repository</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <h2>📊 Console Output Examples</h2>
+        
+        <h3>Success Case:</h3>
+        <pre>
+[Waypoint] Submitting feedback...
+[Waypoint] Attaching screenshot: 45123 bytes
+[Waypoint] Sending feedback to /api/feedback/submit...
+[Waypoint] Response status: 200 OK
+[Waypoint] Feedback result: {
+  "success": true,
+  "issue_number": 42,
+  "issue_url": "https://github.com/user/repo/issues/42"
+}
+        </pre>
+
+        <h3>Error Case (Bad Token):</h3>
+        <pre>
+[Waypoint] Submitting feedback...
+[Waypoint] Sending feedback to /api/feedback/submit...
+[Waypoint] Response status: 500 Internal Server Error
+[Waypoint] HTTP error response: {"success": false, "error": "GitHub API Error: 401 Bad credentials"}
+[Waypoint] Feedback submission failed: GitHub API Error: 401 Bad credentials
+        </pre>
+
+        <h3>Error Case (Token Not Configured):</h3>
+        <pre>
+[Waypoint] Submitting feedback...
+[Waypoint] Sending feedback to /api/feedback/submit...
+[Waypoint] Response status: 400 Bad Request
+[Waypoint] HTTP error response: {"success": false, "error": "GitHub token not configured. Go to Settings tab..."}
+        </pre>
+
+        <h2>🔍 Common Issues & Solutions</h2>
+        
+        <div class="error-example">
+            <h4>"Bad credentials" or "401 Unauthorized"</h4>
+            <p><strong>Cause:</strong> Invalid or expired GitHub token</p>
+            <p><strong>Solution:</strong></p>
+            <ol>
+                <li>Go to <a href="https://github.com/settings/tokens">github.com/settings/tokens</a></li>
+                <li>Create new token with <code>repo</code> or <code>public_repo</code> scope</li>
+                <li>Copy token immediately (only shown once)</li>
+                <li>Go to Waypoint Settings → Feedback Configuration</li>
+                <li>Paste token and save</li>
+            </ol>
+        </div>
+
+        <div class="error-example">
+            <h4>"Repository not found" or "404"</h4>
+            <p><strong>Cause:</strong> Wrong repository format or no access</p>
+            <p><strong>Solution:</strong></p>
+            <ul>
+                <li>Format must be: <code>owner/repository</code></li>
+                <li>Examples: <code>mikejsmith1985/jira-automation</code></li>
+                <li>NOT: <code>https://github.com/owner/repo</code> ❌</li>
+                <li>NOT: <code>github.com/owner/repo</code> ❌</li>
+                <li>Ensure you have write access to the repository</li>
+            </ul>
+        </div>
+
+        <div class="error-example">
+            <h4>"Permission denied" or "403 Forbidden"</h4>
+            <p><strong>Cause:</strong> Token lacks required permissions</p>
+            <p><strong>Solution:</strong></p>
+            <ul>
+                <li>Token must have <code>repo</code> scope (for private repos)</li>
+                <li>OR <code>public_repo</code> scope (for public repos only)</li>
+                <li>Regenerate token with correct scope at github.com/settings/tokens</li>
+            </ul>
+        </div>
+
+        <h2>✅ Testing Checklist</h2>
+        
+        <div class="checklist">
+            <h3>Verify Error Handling Works</h3>
+            <ul>
+                <li>☐ <strong>Alert appears</strong> when submission fails (not just notification)</li>
+                <li>☐ <strong>Error message is descriptive</strong> and actionable</li>
+                <li>☐ <strong>Console logs</strong> show detailed debugging info</li>
+                <li>☐ <strong>Success alert</strong> shows issue number and URL</li>
+                <li>☐ <strong>GitHub issue created</strong> when using valid config</li>
+                <li>☐ <strong>Attachments uploaded</strong> (screenshot/video if added)</li>
+            </ul>
+            
+            <h3>Configuration Validation</h3>
+            <ul>
+                <li>☐ Token saved in Settings tab</li>
+                <li>☐ Repository format is <code>owner/repo</code></li>
+                <li>☐ Token has <code>repo</code> or <code>public_repo</code> scope</li>
+                <li>☐ You have write access to the repository</li>
+            </ul>
+        </div>
+
+        <h2>📝 What to Report</h2>
+        <p>If feedback submission still fails, please provide:</p>
+        <ol>
+            <li><strong>Screenshot of error alert</strong></li>
+            <li><strong>Console output</strong> (open DevTools: F12 → Console tab)</li>
+            <li><strong>Backend logs</strong> from Waypoint terminal/console window</li>
+            <li><strong>Token scope</strong> (which permissions: repo, public_repo, etc.)</li>
+            <li><strong>Repository format</strong> you entered in Settings</li>
+        </ol>
+
+        <hr style="margin: 40px 0;">
+        
+        <p style="text-align: center; color: #5E6C84;">
+            <strong>Status:</strong> Error handling enhanced - now shows clear alerts and detailed console logs<br>
+            <strong>Generated:</strong> January 13, 2026 | <strong>Commit:</strong> c1aeb30
+        </p>
+    </div>
+</body>
+</html>
