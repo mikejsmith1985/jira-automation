@@ -523,6 +523,31 @@
                             <button class="btn btn-primary" onclick="saveAppSettings()">Save Settings</button>
                         </div>
                     </div>
+                    
+                    <div class="card" style="margin-top: 20px;">
+                        <div class="card-header">
+                            <h3>🐛 Feedback Configuration</h3>
+                        </div>
+                        <div style="padding: 20px;">
+                            <p style="margin-bottom: 15px; color: var(--text-secondary);">
+                                Configure GitHub token for bug reporting and feedback submission.
+                            </p>
+                            <div class="form-group">
+                                <label>GitHub Personal Access Token</label>
+                                <input type="password" id="feedback-token-input" class="input-field" placeholder="ghp_xxxxxxxxxxxx">
+                                <small class="text-secondary">Token needs 'public_repo' or 'repo' scope to create issues</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Feedback Repository</label>
+                                <input type="text" id="feedback-repo-input" class="input-field" placeholder="owner/repository">
+                                <small class="text-secondary">Example: mikejsmith1985/jira-automation</small>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <button class="btn btn-primary" onclick="saveFeedbackSettings()">Save Feedback Settings</button>
+                                <span id="feedback-save-status" style="color: var(--text-secondary); font-size: 14px;"></span>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </div>
         </main>

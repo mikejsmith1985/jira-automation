@@ -555,9 +555,28 @@ class SyncHandler(BaseHTTPRequestHandler):
                 if 'project_keys' in data['jira']:
                     config['jira']['project_keys'] = data['jira']['project_keys']
             
+            if 'feedback' in data:
+                if 'feedback' not in config:
+                    config['feedback'] = {}
+                config['feedback']['github_token'] = data['feedback'].get('github_token', config.get('feedback', {}).get('github_token', ''))
+                config['feedback']['repo'] = data['feedback'].get('repo', config.get('feedback', {}).get('repo', ''))
+            
             safe_print(f"[DEBUG] Writing config: {config}")
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, default_flow_style=False)
+            
+            # Re-initialize GitHub feedback client if token was updated
+            global github_feedback, github_feedback_client
+            if 'feedback' in data and data['feedback'].get('github_token'):
+                try:
+                    token = data['feedback']['github_token']
+                    repo = data['feedback'].get('repo', config.get('feedback', {}).get('repo', ''))
+                    if token and repo:
+                        github_feedback = GitHubFeedback(token=token, repo_name=repo)
+                        github_feedback_client = github_feedback
+                        safe_print("[OK] GitHub feedback system re-initialized")
+                except Exception as e:
+                    safe_print(f"[WARN] Failed to re-initialize feedback system: {e}")
             
             return {'success': True, 'message': 'Integration settings saved'}
         except Exception as e:
@@ -804,18 +823,21 @@ class SyncHandler(BaseHTTPRequestHandler):
             from selenium.webdriver.support import expected_conditions as EC
             
             issues = []
+            debug_info = []
             
             if board_url:
                 # Navigate to board and scrape
                 driver.get(board_url)
+                time.sleep(3)  # Increased wait for board to load
                 
                 # Wait for board to load (try multiple common selectors)
                 try:
                     WebDriverWait(driver, 15).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, '.ghx-issue, [role="button"], [data-testid*="card"]'))
+                        EC.presence_of_element_located((By.CSS_SELECTOR, '.ghx-issue, [role="button"], [data-testid*="card"], [data-testid*="list"]'))
                     )
+                    debug_info.append("✓ Board loaded successfully")
                 except:
-                    print("Timeout waiting for board elements")
+                    debug_info.append("⚠ Timeout waiting for board elements")
                 
                 # Scrape issue cards - using broader selectors to catch different Jira versions
                 # 1. Classic Kanban/Scrum boards (.ghx-issue)
@@ -823,7 +845,38 @@ class SyncHandler(BaseHTTPRequestHandler):
                 # 3. Generic accessible elements ([role="button"] with issue keys)
                 
                 # Find all potential card elements
-                potential_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue, [data-testid*="card"], [role="listitem"]')
+                selectors_tried = []
+                
+                # Strategy 1: Classic board cards
+                try:
+                    classic_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue')
+                    selectors_tried.append(f"Classic cards (.ghx-issue): {len(classic_cards)} found")
+                except: pass
+                
+                # Strategy 2: Next-gen cards
+                try:
+                    nextgen_cards = driver.find_elements(By.CSS_SELECTOR, '[data-testid*="card"]')
+                    selectors_tried.append(f"Next-gen cards ([data-testid*='card']): {len(nextgen_cards)} found")
+                except: pass
+                
+                # Strategy 3: List items
+                try:
+                    list_items = driver.find_elements(By.CSS_SELECTOR, '[role="listitem"]')
+                    selectors_tried.append(f"List items ([role='listitem']): {len(list_items)} found")
+                except: pass
+                
+                # Strategy 4: Board swimlane cards
+                try:
+                    swimlane_cards = driver.find_elements(By.CSS_SELECTOR, '[data-test-id*="software-board.card"], [data-testid="list.draggable-list.draggable-item"]')
+                    selectors_tried.append(f"Swimlane cards: {len(swimlane_cards)} found")
+                except: pass
+                
+                debug_info.extend(selectors_tried)
+                
+                # Combine all potential cards
+                potential_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue, [data-testid*="card"], [role="listitem"], [data-test-id*="software-board.card"], [data-testid="list.draggable-list.draggable-item"]')
+                
+                debug_info.append(f"Total potential cards found: {len(potential_cards)}")
                 
                 # Deduplicate by key
                 seen_keys = set()
@@ -860,13 +913,16 @@ class SyncHandler(BaseHTTPRequestHandler):
                         # Silently ignore individual card failures
                         pass
                 
-                # Fallback Strategy 4: Look for any links to issues
+                debug_info.append(f"Issues extracted from cards: {len(issues)}")
+                
+                # Fallback Strategy: Look for any links to issues
                 # This is the most robust method as it doesn't rely on card structure, just links
                 if len(issues) == 0:
-                    print("No issues found with card selectors, trying link strategy...")
+                    debug_info.append("⚠ No issues found with card selectors, trying link strategy...")
                     try:
                         # Find all links containing /browse/
                         links = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/browse/"]')
+                        debug_info.append(f"Found {len(links)} links with /browse/")
                         import re
                         for link in links:
                             href = link.get_attribute('href')
@@ -877,14 +933,19 @@ class SyncHandler(BaseHTTPRequestHandler):
                                 if key not in seen_keys:
                                     seen_keys.add(key)
                                     issues.append({'key': key})
+                        debug_info.append(f"Issues extracted from links: {len(issues)}")
                     except Exception as e:
-                        print(f"Link strategy failed: {e}")
+                        debug_info.append(f"❌ Link strategy failed: {e}")
 
                 # DEBUG: If still 0 issues, save page source for inspection
                 if len(issues) == 0:
-                    print("Still found 0 issues. Saving page source to debug_jira_scrape.html")
-                    with open('debug_jira_scrape.html', 'w', encoding='utf-8') as f:
-                        f.write(driver.page_source)
+                    debug_info.append("❌ Still found 0 issues. Saving page source to debug_jira_scrape.html")
+                    try:
+                        with open(os.path.join(DATA_DIR, 'debug_jira_scrape.html'), 'w', encoding='utf-8') as f:
+                            f.write(driver.page_source)
+                        debug_info.append(f"✓ Debug file saved to {os.path.join(DATA_DIR, 'debug_jira_scrape.html')}")
+                    except Exception as e:
+                        debug_info.append(f"❌ Failed to save debug file: {e}")
             
             elif jql:
                 # Navigate to issue search with JQL
@@ -912,12 +973,16 @@ class SyncHandler(BaseHTTPRequestHandler):
             metrics = {
                 'total_issues': len(issues),
                 'issues_scraped': issues[:20],  # Return first 20
-                'scrape_time': time.strftime('%Y-%m-%d %H:%M:%S')
+                'scrape_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'debug_info': debug_info
             }
             
             # Save metrics for SM view
-            with open('sm_metrics.json', 'w', encoding='utf-8') as f:
-                json.dump({'issues': issues, 'metrics': metrics}, f, indent=2)
+            try:
+                with open(os.path.join(DATA_DIR, 'sm_metrics.json'), 'w', encoding='utf-8') as f:
+                    json.dump({'issues': issues, 'metrics': metrics}, f, indent=2)
+            except:
+                pass
             
             return {
                 'success': True,
@@ -925,7 +990,12 @@ class SyncHandler(BaseHTTPRequestHandler):
                 'metrics': metrics
             }
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            import traceback
+            return {
+                'success': False, 
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }
 
     def _handle_get_insights(self):
         """Return recent insights"""

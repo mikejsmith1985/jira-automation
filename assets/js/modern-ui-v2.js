@@ -887,6 +887,7 @@ function prefillIntegrationForms(status) {
     const githubOrgInput = document.getElementById('github-org-input');
     const jiraUrlInput = document.getElementById('jira-url-input');
     const jiraProjectsInput = document.getElementById('jira-projects-input');
+    const feedbackRepoInput = document.getElementById('feedback-repo-input');
     
     if (githubOrgInput && status.github.organization) {
         githubOrgInput.value = status.github.organization;
@@ -896,6 +897,18 @@ function prefillIntegrationForms(status) {
     }
     if (jiraProjectsInput && status.jira.project_keys) {
         jiraProjectsInput.value = status.jira.project_keys.join(', ');
+    }
+    if (feedbackRepoInput && status.feedback.repo && !status.feedback.repo.includes('owner/repository')) {
+        feedbackRepoInput.value = status.feedback.repo;
+    }
+    
+    // Show indicator if feedback is configured
+    if (status.feedback.configured) {
+        const feedbackStatus = document.getElementById('feedback-save-status');
+        if (feedbackStatus) {
+            feedbackStatus.textContent = '✓ Configured';
+            feedbackStatus.style.color = '#00875A';
+        }
     }
 }
 
@@ -1132,6 +1145,49 @@ function showSyncLog() {
 
 function saveAppSettings() {
     showNotification('Settings saved');
+}
+
+async function saveFeedbackSettings() {
+    const token = document.getElementById('feedback-token-input').value;
+    const repo = document.getElementById('feedback-repo-input').value;
+    const statusEl = document.getElementById('feedback-save-status');
+    
+    if (!token || !repo) {
+        statusEl.textContent = '❌ Both token and repository are required';
+        statusEl.style.color = '#DE350B';
+        return;
+    }
+    
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = 'var(--text-secondary)';
+    
+    try {
+        const response = await fetch('/api/integrations/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                feedback: {
+                    github_token: token,
+                    repo: repo
+                }
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusEl.textContent = '✓ Saved successfully';
+            statusEl.style.color = '#00875A';
+            showNotification('Feedback settings saved! You can now submit bug reports.');
+            setTimeout(() => statusEl.textContent = '', 3000);
+        } else {
+            statusEl.textContent = `❌ ${result.error}`;
+            statusEl.style.color = '#DE350B';
+        }
+    } catch (error) {
+        statusEl.textContent = '❌ Failed to save';
+        statusEl.style.color = '#DE350B';
+    }
 }
 
 /* ============================================================================
