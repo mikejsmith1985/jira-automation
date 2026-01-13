@@ -1463,27 +1463,57 @@ async function scrapeMetrics() {
 }
 
 function displaySMMetrics(metrics) {
-    // Update metric cards
+    // Update metric cards with visible vs hidden breakdown
     const totalEl = document.getElementById('sm-total-issues');
-    if (totalEl) totalEl.textContent = metrics.total_issues || 0;
+    if (totalEl) {
+        const visibleCount = metrics.visible_issues || metrics.total_issues || 0;
+        const hiddenCount = metrics.hidden_issues || 0;
+        
+        if (hiddenCount > 0) {
+            totalEl.innerHTML = `${visibleCount} <span style="color: #de350b; font-size: 0.8em;">(+${hiddenCount} hidden)</span>`;
+        } else {
+            totalEl.textContent = visibleCount;
+        }
+    }
     
-    // Display scraped issues
+    // Display scraped issues with visibility indicator
     const listContainer = document.getElementById('sm-issues-list');
     if (listContainer && metrics.issues_scraped) {
         let html = '';
-        metrics.issues_scraped.forEach(issue => {
-            html += `
-                <div class="integration-item">
-                    <div class="integration-info">
-                        <h4>${issue.key}</h4>
-                        <p class="text-secondary">${issue.url || ''}</p>
-                    </div>
-                </div>
-            `;
-        });
         
-        if (metrics.total_issues > metrics.issues_scraped.length) {
-            html += `<p class="text-secondary">... and ${metrics.total_issues - metrics.issues_scraped.length} more</p>`;
+        // Show visible issues first
+        const visibleIssues = metrics.issues_scraped.filter(i => i.visible !== false);
+        const hiddenIssues = metrics.issues_scraped.filter(i => i.visible === false);
+        
+        // Visible issues
+        if (visibleIssues.length > 0) {
+            html += '<h4 style="margin: 15px 0 10px 0; color: #00875A;">✓ Visible in Jira (' + visibleIssues.length + ')</h4>';
+            visibleIssues.forEach(issue => {
+                html += `
+                    <div class="integration-item" style="border-left: 3px solid #00875A;">
+                        <div class="integration-info">
+                            <h4>${issue.key || issue}</h4>
+                            <p class="text-secondary">${issue.url || ''}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        // Hidden issues (phantom entries)
+        if (hiddenIssues.length > 0) {
+            html += '<h4 style="margin: 20px 0 10px 0; color: #de350b;">⚠ Hidden/Phantom Issues (' + hiddenIssues.length + ')</h4>';
+            html += '<p style="font-size: 0.9em; color: #6B778C; margin-bottom: 10px;">These exist in HTML DOM but are not visible in Jira UI (archived, filtered, collapsed, or stale)</p>';
+            hiddenIssues.forEach(issue => {
+                html += `
+                    <div class="integration-item" style="border-left: 3px solid #de350b; background: #FFEBE6;">
+                        <div class="integration-info">
+                            <h4>${issue.key || issue} <span style="color: #de350b; font-size: 0.8em;">HIDDEN</span></h4>
+                            <p class="text-secondary">${issue.url || ''}</p>
+                        </div>
+                    </div>
+                `;
+            });
         }
         
         listContainer.innerHTML = html || '<p class="text-secondary">No issues found</p>';

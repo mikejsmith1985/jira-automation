@@ -881,9 +881,16 @@ class SyncHandler(BaseHTTPRequestHandler):
                 # Deduplicate by key
                 seen_keys = set()
                 
+                # Track which issues are visible vs hidden for debugging
+                visible_issues = []
+                hidden_issues = []
+                
                 for el in potential_cards:
                     try:
                         key = None
+                        
+                        # Check if element is actually visible (not display:none, visibility:hidden, etc)
+                        is_visible = el.is_displayed()
                         
                         # Strategy 1: Data attribute
                         if not key:
@@ -908,15 +915,25 @@ class SyncHandler(BaseHTTPRequestHandler):
 
                         if key and key not in seen_keys:
                             seen_keys.add(key)
-                            issues.append({'key': key})
+                            issue_data = {'key': key, 'visible': is_visible}
+                            
+                            if is_visible:
+                                visible_issues.append(key)
+                            else:
+                                hidden_issues.append(key)
+                            
+                            issues.append(issue_data)
                             # Log each found issue for debugging
-                            print(f"[SCRAPE] Found issue: {key}")
+                            visibility_tag = "VISIBLE" if is_visible else "HIDDEN"
+                            print(f"[SCRAPE] Found issue: {key} [{visibility_tag}]")
                     except Exception as e:
                         # Log card extraction failures
                         print(f"[SCRAPE] Failed to extract key from card: {e}")
                         pass
                 
-                debug_info.append(f"Issues extracted from cards: {len(issues)}")
+                debug_info.append(f"Issues extracted from cards: {len(issues)} (Visible: {len(visible_issues)}, Hidden: {len(hidden_issues)})")
+                if hidden_issues:
+                    debug_info.append(f"Hidden issues: {', '.join(hidden_issues)}")
                 
                 # Fallback Strategy: Look for any links to issues
                 # This is the most robust method as it doesn't rely on card structure, just links
@@ -974,9 +991,14 @@ class SyncHandler(BaseHTTPRequestHandler):
                         pass
             
             # Calculate basic metrics
+            visible_count = sum(1 for i in issues if i.get('visible', True))
+            hidden_count = len(issues) - visible_count
+            
             metrics = {
                 'total_issues': len(issues),
-                'issues_scraped': issues,  # Return ALL issues, not just first 20
+                'visible_issues': visible_count,
+                'hidden_issues': hidden_count,
+                'issues_scraped': issues,  # Return ALL issues with visibility flag
                 'scrape_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'debug_info': debug_info,
                 'scraping_explanation': {
@@ -991,9 +1013,16 @@ class SyncHandler(BaseHTTPRequestHandler):
                         '7. Child elements: Looks for .ghx-key or issue links inside cards',
                         '8. Fallback: Finds all <a> tags with href containing /browse/ and extracts keys'
                     ],
-                    'deduplication': 'All strategies run and results are deduplicated by issue key using a set',
-                    'visible_vs_returned': 'If you see fewer issues than returned, check if the frontend is filtering/limiting the display',
-                    'structure_impact': 'Toggling issue visibility in Jira affects whether elements are present in DOM for scraping'
+                    'visibility_detection': 'Each issue is checked with is_displayed() to detect if visible in Jira UI',
+                    'phantom_issues': 'Issues marked as hidden exist in DOM but are not visible (archived, filtered, collapsed, stale DOM)',
+                    'why_scrape_finds_more': [
+                        'Jira may keep archived/resolved issues in DOM',
+                        'Client-side filters hide issues without removing from HTML',
+                        'Collapsed swimlanes keep issues in DOM',
+                        'Stale DOM from previous board state',
+                        'Lazy loading artifacts'
+                    ],
+                    'recommendation': 'Use visible_issues count to match Jira UI. Hidden issues are phantom entries.'
                 }
             }
             
@@ -1006,7 +1035,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             
             return {
                 'success': True,
-                'message': f'Scraped {len(issues)} issues from Jira',
+                'message': f'Scraped {len(issues)} issues from Jira ({visible_count} visible, {hidden_count} hidden)',
                 'metrics': metrics
             }
         except Exception as e:

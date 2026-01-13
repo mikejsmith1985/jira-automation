@@ -1,19 +1,43 @@
-# Jira Scraping - How It Works & Troubleshooting
+# Jira Scraping - Phantom Issues Explained (Issue #18)
 
-## Issue #18 Resolution
+## Problem Statement (CORRECTED)
 
-### Problems Reported
-1. **8 issues returned but only 5 visible** - Discrepancy between scraped count and displayed issues
-2. **Feedback submission fails with attachments** - "Body too long" error when attaching images/videos
+**User reported:** 
+- App scraped **8 issues** ✓
+- App displayed **8 issues** in Waypoint UI ✓  
+- Jira board shows only **5 issues** ❌
+
+**The Issue:** 3 "phantom" issues exist in HTML DOM but are NOT visible in Jira's UI.
 
 ---
 
-## 🔍 How Jira Scraping Works
+## 🔍 Root Cause: Phantom Issues in DOM
 
-### Overview
-The scraper uses **8 different strategies** to find issue keys on a Jira board. All strategies run in parallel, and results are deduplicated by issue key.
+### What Are Phantom Issues?
 
-### Strategy Details
+**Phantom issues** are issue keys that exist in the HTML DOM but are not actually visible in the Jira UI. This happens because:
+
+1. **Stale DOM Cache** - Jira loaded 8 issues initially, then you moved 3 off the board, but HTML wasn't updated
+2. **Archived Issues** - Resolved/archived issues may stay in DOM for caching/performance
+3. **Client-Side Filters** - Jira applies filters with JavaScript/CSS (display:none) without removing from DOM
+4. **Collapsed Swimlanes** - Issues in collapsed swimlanes exist in DOM with visibility:hidden
+5. **Lazy Loading Artifacts** - Previous page/scroll state left issues in memory
+
+### Why The Scraper Finds Them
+
+The scraper reads the **raw HTML DOM**, not the visual display. It doesn't know about:
+- CSS styling (display:none, visibility:hidden)
+- JavaScript filters applied by Jira
+- User interaction state (collapsed/expanded)
+
+**Before this fix:** Scraper returned all 8 without indicating which were hidden  
+**After this fix:** Scraper checks `element.is_displayed()` and tags each issue as VISIBLE or HIDDEN
+
+---
+
+## 🛠️ How Scraping Works (8 Strategies)
+
+The scraper uses **8 parallel strategies** to find issue keys, then checks visibility for each:
 
 #### **Strategy 1: Classic Board Cards**
 - **Selector:** `.ghx-issue`
@@ -55,98 +79,146 @@ The scraper uses **8 different strategies** to find issue keys on a Jira board. 
 - **When it works:** Always, most robust strategy
 - **What it finds:** Issue links anywhere on the page
 
-### Deduplication
-All strategies add found keys to a `seen_keys` set. If a key is found by multiple strategies, it's only added once to the final list.
+### Visibility Detection (NEW)
 
+After finding an issue key, the scraper now calls:
 ```python
-seen_keys = set()
-for strategy in strategies:
-    for key in strategy.find_keys():
-        if key not in seen_keys:
-            seen_keys.add(key)
-            issues.append({'key': key})
+is_visible = element.is_displayed()
 ```
+
+This Selenium method returns `False` if the element:
+- Has `display: none`
+- Has `visibility: hidden`
+- Has `opacity: 0`
+- Is off-screen
+- Parent element is hidden
+
+**Result:** Each issue tagged as `{"key": "PROJ-123", "visible": true/false}`
 
 ---
 
-## 🐛 "8 Issues vs 5 Visible" Problem
+## 🐛 "8 Issues Scraped, 5 Visible in Jira" Problem - SOLVED
 
-### Root Causes
+### Solution Implemented
 
-1. **Hidden/Collapsed Issues in Jira**
-   - If issues are collapsed or in hidden swimlanes, they may be in the DOM but not visible
-   - The scraper counts them because they exist in HTML
-   - You don't see them because they're collapsed in the UI
+1. **Visibility Detection** - Each issue checked with `is_displayed()`
+2. **Separate Counts** - Response includes:
+   - `total_issues`: All issues found (8)
+   - `visible_issues`: Actually visible in Jira (5)
+   - `hidden_issues`: Phantom entries (3)
+3. **UI Separation** - Frontend displays visible and hidden issues separately
+4. **Console Logging** - Each issue logged as `[SCRAPE] Found issue: PROJ-123 [VISIBLE]` or `[HIDDEN]`
+5. **Debug Info** - Lists which specific issues are hidden
 
-2. **Filtering Applied**
-   - If you have filters active in Jira (e.g., "My Issues", assignee filter)
-   - Some issues may be present in DOM but visually filtered out
-   - Scraper still finds them in the page source
+### Example Output
 
-3. **Pagination**
-   - If board has pagination and you're on page 1
-   - Scraper finds issues on current page only
-   - Later pages not scraped unless you scroll/navigate
+```json
+{
+  "success": true,
+  "message": "Scraped 8 issues from Jira (5 visible, 3 hidden)",
+  "metrics": {
+    "total_issues": 8,
+    "visible_issues": 5,
+    "hidden_issues": 3,
+    "issues_scraped": [
+      {"key": "PROJ-101", "visible": true},
+      {"key": "PROJ-102", "visible": true},
+      {"key": "PROJ-103", "visible": true},
+      {"key": "PROJ-104", "visible": true},
+      {"key": "PROJ-105", "visible": true},
+      {"key": "PROJ-106", "visible": false},  // PHANTOM
+      {"key": "PROJ-107", "visible": false},  // PHANTOM
+      {"key": "PROJ-108", "visible": false}   // PHANTOM
+    ],
+    "debug_info": [
+      "Issues extracted from cards: 8 (Visible: 5, Hidden: 3)",
+      "Hidden issues: PROJ-106, PROJ-107, PROJ-108"
+    ]
+  }
+}
+```
 
-4. **DOM vs Visual Display**
-   - **Key insight:** The scraper reads the **HTML DOM**, not what's visually rendered
-   - Jira may load all issue data into DOM but hide some with CSS
-   - Example: `<div style="display:none">` still scraped
+### Console Logs
+```
+[SCRAPE] Found issue: PROJ-101 [VISIBLE]
+[SCRAPE] Found issue: PROJ-102 [VISIBLE]
+[SCRAPE] Found issue: PROJ-103 [VISIBLE]
+[SCRAPE] Found issue: PROJ-104 [VISIBLE]
+[SCRAPE] Found issue: PROJ-105 [VISIBLE]
+[SCRAPE] Found issue: PROJ-106 [HIDDEN]
+[SCRAPE] Found issue: PROJ-107 [HIDDEN]
+[SCRAPE] Found issue: PROJ-108 [HIDDEN]
+```
+
+### UI Display
+
+**Waypoint SM Tab will now show:**
+
+```
+✓ Visible in Jira (5)
+  PROJ-101
+  PROJ-102
+  PROJ-103
+  PROJ-104
+  PROJ-105
+
+⚠ Hidden/Phantom Issues (3)
+These exist in HTML DOM but are not visible in Jira UI 
+(archived, filtered, collapsed, or stale)
+  PROJ-106 [HIDDEN]
+  PROJ-107 [HIDDEN]
+  PROJ-108 [HIDDEN]
+```
 
 ### Debugging Steps
 
 1. **Check Console Logs**
-   - New version logs each found issue: `[SCRAPE] Found issue: PROJ-123`
-   - Compare logged issues vs what you see in UI
-   - Look for patterns (e.g., all hidden issues from same swimlane)
+   - Each issue now logged with visibility tag: `[SCRAPE] Found issue: PROJ-123 [VISIBLE]` or `[HIDDEN]`
+   - Identifies exactly which 3 issues are phantoms
 
-2. **Inspect debug_info**
-   - Response includes `debug_info` array with:
-     - How many elements each selector found
-     - Total potential cards
-     - Issues extracted from cards vs links
-   - Example:
-     ```json
-     "debug_info": [
-       "✓ Board loaded successfully",
-       "Classic cards (.ghx-issue): 0 found",
-       "Next-gen cards: 8 found",
-       "Total potential cards found: 8",
-       "Issues extracted from cards: 8"
-     ]
-     ```
+2. **Check Response `debug_info`**
+   - Shows: `"Hidden issues: PROJ-106, PROJ-107, PROJ-108"`
+   - Tells you exactly which keys are phantoms
 
-3. **Check Board Structure**
-   - Open Jira board in browser
-   - Open DevTools (F12) → Elements tab
-   - Search for your issue key (Ctrl+F, type "PROJ-123")
-   - See how many times it appears in DOM
-   - Check if parent elements have `display:none` or `visibility:hidden`
+3. **Inspect Waypoint UI**
+   - SM tab separates visible vs hidden issues
+   - Hidden issues shown in red section with warning
 
-4. **Test with Toggles**
-   - **Your observation:** "when I changed visible toggles on structure I got very different results"
-   - This confirms: **DOM structure affects scraping**
-   - When you collapse/hide issues in Jira:
-     - They may be removed from DOM (returns fewer issues)
-     - OR stay in DOM but hidden (still scraped)
-   - Depends on Jira's implementation
+4. **Cross-Reference with Jira**
+   - Open Jira board
+   - Search for the hidden issue keys (Ctrl+F)
+   - You likely won't find them visually
+   - Check if they're archived, in other sprints, or filtered out
 
-### Solutions
+5. **Refresh Jira Board**
+   - Sometimes DOM is stale from previous state
+   - Press F5 in Jira browser
+   - Re-scrape and see if hidden count changes
 
-#### If You Want to Scrape Only Visible Issues:
-We can add visibility check:
-```python
-if el.is_displayed():  # Only scrape visible elements
-    issues.append({'key': key})
-```
+### How to Use This Information
 
-#### If You Want All Issues (Current Behavior):
-Keep current implementation - scrapes everything in DOM regardless of visibility.
+#### **If You Want Accurate Jira Count:**
+Use `visible_issues` count - this matches what you see in Jira (5 issues).
 
-#### If You Want to Match Jira's Count:
-1. Ensure no filters are active in Jira
-2. Expand all swimlanes before scraping
-3. Ensure all issues are loaded (scroll to bottom if infinite scroll)
+#### **If You Want All Issues in DOM:**
+Use `total_issues` count - includes phantoms (8 issues).
+
+#### **To Identify Phantom Issues:**
+1. Check `debug_info` → `"Hidden issues: PROJ-106, PROJ-107, PROJ-108"`
+2. Search for those keys in Jira board
+3. Determine why they're hidden:
+   - Archived/resolved but not removed from DOM?
+   - In a different sprint but cached?
+   - Filtered out by Jira's UI filters?
+   - Stale data from previous board state?
+
+#### **Your Observation About Toggles:**
+> "When I changed visible toggles on structure I got very different results"
+
+**Explanation:** When you collapse/expand swimlanes or toggle filters in Jira:
+- Some Jira versions **remove elements from DOM** → fewer issues scraped
+- Some Jira versions **hide with CSS** → same issues scraped, but visibility flag changes
+- This is why toggling structure affects scraping results - you're changing what exists in DOM
 
 ---
 
