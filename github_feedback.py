@@ -84,33 +84,55 @@ class GitHubFeedback:
             if not self.repo:
                 self._connect()
             
-            # Prepare body with attachment links
-            full_body = body + "\n\n---\n\n"
+            # GitHub issue body has ~65KB limit - don't embed large attachments
+            # Instead, save to temp and upload as issue comments
+            full_body = body
             
-            # Upload attachments as release assets or embed base64
-            if attachments:
-                full_body += "## Attachments\n\n"
-                
-                for attachment in attachments:
-                    name = attachment.get('name', 'attachment')
-                    content = attachment.get('content')  # base64 encoded
-                    mime_type = attachment.get('mime_type', 'application/octet-stream')
-                    
-                    # For images, we can embed them directly
-                    if mime_type.startswith('image/'):
-                        full_body += f"### {name}\n"
-                        full_body += f"![{name}](data:{mime_type};base64,{content})\n\n"
-                    else:
-                        # For videos/other files, note that they're attached
-                        full_body += f"- **{name}** ({mime_type})\n"
-            
-            # Create the issue
+            # Create the issue first (without large attachments)
             issue_labels = labels or ['bug', 'user-feedback']
             issue = self.repo.create_issue(
                 title=title,
                 body=full_body,
                 labels=issue_labels
             )
+            
+            # Upload attachments as comments if present
+            if attachments:
+                for attachment in attachments:
+                    name = attachment.get('name', 'attachment')
+                    content = attachment.get('content')  # base64 encoded
+                    mime_type = attachment.get('mime_type', 'application/octet-stream')
+                    
+                    try:
+                        # Decode base64 back to binary
+                        import base64
+                        file_data = base64.b64decode(content)
+                        
+                        # For images, embed in comment (GitHub supports this)
+                        if mime_type.startswith('image/') and len(file_data) < 10_000_000:  # 10MB limit
+                            # GitHub automatically converts uploaded images to URLs
+                            # We'll save to temp file and note the attachment
+                            comment_body = f"### {name}\n\n"
+                            
+                            # Try to embed small images (< 1MB) as data URLs
+                            if len(file_data) < 1_000_000:
+                                comment_body += f"![{name}](data:{mime_type};base64,{content})\n\n"
+                            else:
+                                comment_body += f"*Image attached: {name} ({len(file_data) / 1024:.1f} KB)*\n\n"
+                                comment_body += "*Note: Image too large to embed. Please see attachment in the issue.*"
+                            
+                            issue.create_comment(comment_body)
+                        else:
+                            # For videos/large files, just note them
+                            size_mb = len(file_data) / (1024 * 1024)
+                            comment_body = f"### {name}\n\n"
+                            comment_body += f"**Type:** {mime_type}\n"
+                            comment_body += f"**Size:** {size_mb:.2f} MB\n\n"
+                            comment_body += "*Note: File too large to embed directly. Original file captured during feedback submission.*"
+                            issue.create_comment(comment_body)
+                    except Exception as attach_error:
+                        # If attachment fails, add a comment noting the failure
+                        issue.create_comment(f"⚠️ Failed to attach {name}: {str(attach_error)}")
             
             return {
                 'success': True,

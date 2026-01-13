@@ -909,8 +909,11 @@ class SyncHandler(BaseHTTPRequestHandler):
                         if key and key not in seen_keys:
                             seen_keys.add(key)
                             issues.append({'key': key})
+                            # Log each found issue for debugging
+                            print(f"[SCRAPE] Found issue: {key}")
                     except Exception as e:
-                        # Silently ignore individual card failures
+                        # Log card extraction failures
+                        print(f"[SCRAPE] Failed to extract key from card: {e}")
                         pass
                 
                 debug_info.append(f"Issues extracted from cards: {len(issues)}")
@@ -933,6 +936,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                                 if key not in seen_keys:
                                     seen_keys.add(key)
                                     issues.append({'key': key})
+                                    print(f"[SCRAPE] Found issue from link: {key}")
                         debug_info.append(f"Issues extracted from links: {len(issues)}")
                     except Exception as e:
                         debug_info.append(f"❌ Link strategy failed: {e}")
@@ -972,9 +976,25 @@ class SyncHandler(BaseHTTPRequestHandler):
             # Calculate basic metrics
             metrics = {
                 'total_issues': len(issues),
-                'issues_scraped': issues[:20],  # Return first 20
+                'issues_scraped': issues,  # Return ALL issues, not just first 20
                 'scrape_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'debug_info': debug_info
+                'debug_info': debug_info,
+                'scraping_explanation': {
+                    'how_it_works': 'The scraper uses multiple strategies to find issue keys on the board',
+                    'strategies': [
+                        '1. Classic boards: Looks for .ghx-issue CSS class',
+                        '2. Next-gen boards: Looks for [data-testid*="card"] elements',
+                        '3. List items: Looks for [role="listitem"] elements',
+                        '4. Swimlane cards: Looks for [data-test-id*="software-board.card"]',
+                        '5. Data attributes: Checks data-issue-key attribute on elements',
+                        '6. Text pattern: Searches element text for PROJ-123 pattern using regex',
+                        '7. Child elements: Looks for .ghx-key or issue links inside cards',
+                        '8. Fallback: Finds all <a> tags with href containing /browse/ and extracts keys'
+                    ],
+                    'deduplication': 'All strategies run and results are deduplicated by issue key using a set',
+                    'visible_vs_returned': 'If you see fewer issues than returned, check if the frontend is filtering/limiting the display',
+                    'structure_impact': 'Toggling issue visibility in Jira affects whether elements are present in DOM for scraping'
+                }
             }
             
             # Save metrics for SM view
