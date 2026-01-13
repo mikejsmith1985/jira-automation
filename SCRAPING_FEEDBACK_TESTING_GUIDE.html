@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Scraping & Feedback Fixes - Testing Guide</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #0052CC;
+            border-bottom: 4px solid #0052CC;
+            padding-bottom: 15px;
+        }
+        h2 {
+            color: #172B4D;
+            margin-top: 30px;
+        }
+        .issue-card {
+            background: #F4F5F7;
+            border-left: 4px solid #FF991F;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .fix-card {
+            background: #E3FCEF;
+            border-left: 4px solid #00875A;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .test-steps {
+            background: #DEEBFF;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .test-steps ol {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        .test-steps li {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        code {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .checklist {
+            background: white;
+            border: 2px solid #0052CC;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .checklist li {
+            margin: 10px 0;
+        }
+        .metric {
+            display: inline-block;
+            background: #DEEBFF;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin: 5px;
+            font-weight: 600;
+        }
+        .debug-info {
+            background: #FFF0B3;
+            border-left: 4px solid #FFAB00;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Jira Scraping & Feedback Token Fixes</h1>
+        <p><strong>Date:</strong> January 13, 2026</p>
+        <p><strong>Commit:</strong> cc8970e</p>
+        
+        <div style="display: flex; gap: 10px; margin: 20px 0;">
+            <span class="metric">🐛 2 Issues Fixed</span>
+            <span class="metric">📝 6 Files Modified</span>
+            <span class="metric">🧪 Ready for Testing</span>
+        </div>
+
+        <h2>🐛 Issues Reported</h2>
+        
+        <div class="issue-card">
+            <h3>Issue 1: Work Jira Board Scraping Fails</h3>
+            <p><strong>Symptoms:</strong></p>
+            <ul>
+                <li>Personal Jira: ✅ Scrapes 2 issues successfully</li>
+                <li>Work Jira: ❌ Scrapes 0 issues from 65-issue board</li>
+                <li>Selenium opens browser and detects login ✅</li>
+            </ul>
+            <p><strong>Root Cause:</strong> Work Jira uses different HTML structure not covered by existing selectors</p>
+        </div>
+
+        <div class="issue-card">
+            <h3>Issue 2: Cannot Configure Feedback Token</h3>
+            <p><strong>Symptoms:</strong></p>
+            <ul>
+                <li>No UI to enter GitHub Personal Access Token</li>
+                <li>Cannot submit bug reports/feedback</li>
+                <li>Token hardcoded as placeholder in config.yaml</li>
+            </ul>
+            <p><strong>Root Cause:</strong> Feedback modal has no token input, Settings tab missing feedback config</p>
+        </div>
+
+        <h2>✅ Fixes Implemented</h2>
+        
+        <div class="fix-card">
+            <h3>Fix 1: Enhanced Jira Scraping</h3>
+            <p><strong>File:</strong> <code>app.py</code> (handle_scrape_sm_metrics method)</p>
+            <p><strong>Enhancements:</strong></p>
+            <ul>
+                <li>✅ Added 4 new selector strategies:
+                    <ul>
+                        <li>Classic board cards (<code>.ghx-issue</code>)</li>
+                        <li>Next-gen cards (<code>[data-testid*="card"]</code>)</li>
+                        <li>List items (<code>[role="listitem"]</code>)</li>
+                        <li>Swimlane cards (<code>[data-test-id*="software-board.card"]</code>)</li>
+                    </ul>
+                </li>
+                <li>✅ Increased wait time from 1s to 3s for board loading</li>
+                <li>✅ Added debug output showing results for each strategy</li>
+                <li>✅ Debug HTML saved to <code>DATA_DIR/debug_jira_scrape.html</code> when 0 issues found</li>
+                <li>✅ Added detailed error tracebacks</li>
+            </ul>
+        </div>
+
+        <div class="fix-card">
+            <h3>Fix 2: Feedback Token Configuration</h3>
+            <p><strong>Files:</strong> <code>app.py</code>, <code>modern-ui.html</code>, <code>assets/js/modern-ui-v2.js</code></p>
+            <p><strong>Features Added:</strong></p>
+            <ul>
+                <li>✅ New UI section in Settings tab for feedback configuration</li>
+                <li>✅ Input fields for GitHub token and repository</li>
+                <li>✅ <code>saveFeedbackSettings()</code> JavaScript function</li>
+                <li>✅ API endpoint saves to <code>config.yaml</code> feedback section</li>
+                <li>✅ GitHub feedback client re-initialized when token updated</li>
+                <li>✅ Status indicator shows "✓ Configured" when set</li>
+            </ul>
+        </div>
+
+        <h2>🧪 Testing Instructions</h2>
+        
+        <div class="test-steps">
+            <h3>Test 1: Enhanced Jira Scraping</h3>
+            <ol>
+                <li>Open Waypoint application</li>
+                <li>Go to <strong>Integrations</strong> tab</li>
+                <li>Click "Open Jira Browser"</li>
+                <li>Login to your work Jira account</li>
+                <li>Go to <strong>SM (Scrum Master)</strong> tab</li>
+                <li>Enter your board URL in the "Board URL" field</li>
+                <li>Click "Scrape Board Metrics"</li>
+                <li>Check the response:
+                    <ul>
+                        <li>Should show: "Scraped X issues from Jira"</li>
+                        <li>Look for <code>debug_info</code> in the response</li>
+                        <li>Each selector strategy shows how many elements found</li>
+                    </ul>
+                </li>
+                <li><strong>If still 0 issues:</strong>
+                    <ul>
+                        <li>Check <code>debug_jira_scrape.html</code> in waypoint.exe directory</li>
+                        <li>Open it in a text editor</li>
+                        <li>Search for your issue key (e.g., "PROJ-123")</li>
+                        <li>Look at the HTML around it to identify selector patterns</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="test-steps">
+            <h3>Test 2: Feedback Token Configuration</h3>
+            <ol>
+                <li>Go to <strong>Settings</strong> tab</li>
+                <li>Scroll down to "🐛 Feedback Configuration" section</li>
+                <li>Enter your GitHub Personal Access Token:
+                    <ul>
+                        <li>Create one at: <a href="https://github.com/settings/tokens">github.com/settings/tokens</a></li>
+                        <li>Needs <code>public_repo</code> or <code>repo</code> scope</li>
+                    </ul>
+                </li>
+                <li>Enter repository in format: <code>owner/repository</code> (e.g., <code>mikejsmith1985/jira-automation</code>)</li>
+                <li>Click "Save Feedback Settings"</li>
+                <li>Should see: "✓ Saved successfully"</li>
+                <li>Click the 🐛 bug button in sidebar</li>
+                <li>Fill out feedback form</li>
+                <li>Click "Submit Feedback"</li>
+                <li>Check GitHub repository - new issue should be created!</li>
+            </ol>
+        </div>
+
+        <h2>📊 Debug Information</h2>
+        
+        <div class="debug-info">
+            <h3>Understanding the Debug Output</h3>
+            <p>When scraping returns debug_info, you'll see messages like:</p>
+            <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; overflow-x: auto;">
+{
+  "debug_info": [
+    "✓ Board loaded successfully",
+    "Classic cards (.ghx-issue): 0 found",
+    "Next-gen cards ([data-testid*='card']): 65 found",
+    "List items ([role='listitem']): 0 found",
+    "Swimlane cards: 0 found",
+    "Total potential cards found: 65",
+    "Issues extracted from cards: 65",
+    "Found 120 links with /browse/"
+  ]
+}
+            </pre>
+            <p>This tells you:</p>
+            <ul>
+                <li><strong>Which selector worked</strong> (Next-gen cards found 65)</li>
+                <li><strong>Total cards processed</strong></li>
+                <li><strong>How many issues successfully extracted</strong></li>
+            </ul>
+        </div>
+
+        <h2>✅ Testing Checklist</h2>
+        
+        <div class="checklist">
+            <h3>Jira Scraping</h3>
+            <ul>
+                <li>☐ Personal Jira still works (2 issues)</li>
+                <li>☐ Work Jira now scrapes issues (should see > 0)</li>
+                <li>☐ Debug output shows which selectors found elements</li>
+                <li>☐ debug_jira_scrape.html is created if 0 issues</li>
+                <li>☐ No errors/crashes during scraping</li>
+            </ul>
+            
+            <h3>Feedback Configuration</h3>
+            <ul>
+                <li>☐ Feedback section visible in Settings tab</li>
+                <li>☐ Can enter GitHub token and repo</li>
+                <li>☐ "Save Feedback Settings" button works</li>
+                <li>☐ Shows "✓ Saved successfully" message</li>
+                <li>☐ Status indicator shows "✓ Configured"</li>
+                <li>☐ Can submit feedback via bug button</li>
+                <li>☐ GitHub issue gets created successfully</li>
+            </ul>
+        </div>
+
+        <h2>🔍 Troubleshooting</h2>
+        
+        <h3>If Scraping Still Returns 0 Issues:</h3>
+        <ol>
+            <li>Check <code>debug_jira_scrape.html</code> in the same folder as waypoint.exe</li>
+            <li>Open in text editor and search for your project key (e.g., "KAN-", "PROJ-")</li>
+            <li>Look at the HTML structure around the issue key</li>
+            <li>Identify the parent element's class or data attribute</li>
+            <li>Report findings - we can add that selector!</li>
+        </ol>
+
+        <h3>If Feedback Submission Fails:</h3>
+        <ol>
+            <li>Check token has correct permissions (<code>public_repo</code> or <code>repo</code>)</li>
+            <li>Verify repository format is <code>owner/repo</code> (no github.com URL)</li>
+            <li>Check repository exists and you have access</li>
+            <li>Try creating issue manually on GitHub to test token</li>
+        </ol>
+
+        <h2>📝 Files Modified</h2>
+        <ul>
+            <li><code>app.py</code> - Enhanced scraping + feedback config save</li>
+            <li><code>modern-ui.html</code> - Added feedback config UI</li>
+            <li><code>assets/js/modern-ui-v2.js</code> - Added save function</li>
+            <li><code>SCRAPING_FEEDBACK_FIX_PLAN.md</code> - Implementation plan</li>
+            <li><code>ISSUE_16_COMPLETE_RESOLUTION.md</code> - Previous issue docs</li>
+            <li><code>sm_metrics.json</code> - Updated metrics format</li>
+        </ul>
+
+        <hr style="margin: 40px 0;">
+        
+        <p style="text-align: center; color: #5E6C84;">
+            <strong>Next Steps:</strong> Test both fixes and report results<br>
+            <strong>Generated:</strong> January 13, 2026 | <strong>Commit:</strong> cc8970e
+        </p>
+    </div>
+</body>
+</html>
