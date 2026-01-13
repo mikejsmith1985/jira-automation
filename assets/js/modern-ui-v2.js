@@ -1489,11 +1489,25 @@ function displaySMMetrics(metrics) {
         if (visibleIssues.length > 0) {
             html += '<h4 style="margin: 15px 0 10px 0; color: #00875A;">✓ Visible in Jira (' + visibleIssues.length + ')</h4>';
             visibleIssues.forEach(issue => {
+                const key = issue.key || issue;
+                const summary = issue.summary || 'No summary';
+                const status = issue.status || '';
+                const assignee = issue.assignee || 'Unassigned';
+                const type = issue.type || '';
+                const priority = issue.priority || '';
+                
                 html += `
                     <div class="integration-item" style="border-left: 3px solid #00875A;">
                         <div class="integration-info">
-                            <h4>${issue.key || issue}</h4>
-                            <p class="text-secondary">${issue.url || ''}</p>
+                            <h4>${key}</h4>
+                            <p style="margin: 5px 0; font-weight: 500;">${summary}</p>
+                            <div style="display: flex; gap: 15px; margin-top: 5px; font-size: 0.85em; color: #6B778C;">
+                                ${status ? `<span>📊 ${status}</span>` : ''}
+                                ${assignee ? `<span>👤 ${assignee}</span>` : ''}
+                                ${type ? `<span>🏷️ ${type}</span>` : ''}
+                                ${priority ? `<span>⚡ ${priority}</span>` : ''}
+                            </div>
+                            ${issue.url ? `<p class="text-secondary" style="font-size: 0.8em; margin-top: 5px;">${issue.url}</p>` : ''}
                         </div>
                     </div>
                 `;
@@ -1505,11 +1519,15 @@ function displaySMMetrics(metrics) {
             html += '<h4 style="margin: 20px 0 10px 0; color: #de350b;">⚠ Hidden/Phantom Issues (' + hiddenIssues.length + ')</h4>';
             html += '<p style="font-size: 0.9em; color: #6B778C; margin-bottom: 10px;">These exist in HTML DOM but are not visible in Jira UI (archived, filtered, collapsed, or stale)</p>';
             hiddenIssues.forEach(issue => {
+                const key = issue.key || issue;
+                const summary = issue.summary || 'No summary';
+                
                 html += `
                     <div class="integration-item" style="border-left: 3px solid #de350b; background: #FFEBE6;">
                         <div class="integration-info">
-                            <h4>${issue.key || issue} <span style="color: #de350b; font-size: 0.8em;">HIDDEN</span></h4>
-                            <p class="text-secondary">${issue.url || ''}</p>
+                            <h4>${key} <span style="color: #de350b; font-size: 0.8em;">HIDDEN</span></h4>
+                            <p style="margin: 5px 0;">${summary}</p>
+                            ${issue.url ? `<p class="text-secondary" style="font-size: 0.8em;">${issue.url}</p>` : ''}
                         </div>
                     </div>
                 `;

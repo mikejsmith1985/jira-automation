@@ -966,7 +966,60 @@ class SyncHandler(BaseHTTPRequestHandler):
 
                         if key and key not in seen_keys:
                             seen_keys.add(key)
-                            issue_data = {'key': key, 'visible': is_visible}
+                            
+                            # Extract additional fields from card
+                            issue_data = {
+                                'key': key,
+                                'visible': is_visible
+                            }
+                            
+                            # Try to extract summary/title
+                            try:
+                                summary_el = el.find_element(By.CSS_SELECTOR, '.ghx-summary, [data-testid*="summary"], .issue-summary')
+                                issue_data['summary'] = summary_el.text.strip()
+                            except:
+                                try:
+                                    # Fallback: Get all text and remove the key
+                                    card_text = el.text.strip()
+                                    issue_data['summary'] = card_text.replace(key, '').strip()
+                                except:
+                                    issue_data['summary'] = None
+                            
+                            # Try to extract status
+                            try:
+                                status_el = el.find_element(By.CSS_SELECTOR, '.ghx-end, [data-testid*="status"], .status-lozenge, .issue-status')
+                                issue_data['status'] = status_el.text.strip()
+                            except:
+                                issue_data['status'] = None
+                            
+                            # Try to extract assignee
+                            try:
+                                assignee_el = el.find_element(By.CSS_SELECTOR, '.ghx-avatar img, [data-testid*="assignee"] img, .assignee img')
+                                issue_data['assignee'] = assignee_el.get_attribute('alt') or assignee_el.get_attribute('title')
+                            except:
+                                try:
+                                    assignee_el = el.find_element(By.CSS_SELECTOR, '.ghx-avatar, [data-testid*="assignee"], .assignee')
+                                    issue_data['assignee'] = assignee_el.get_attribute('title') or assignee_el.text.strip()
+                                except:
+                                    issue_data['assignee'] = None
+                            
+                            # Try to extract priority
+                            try:
+                                priority_el = el.find_element(By.CSS_SELECTOR, '.ghx-priority img, [data-testid*="priority"] img, .priority img')
+                                issue_data['priority'] = priority_el.get_attribute('alt') or priority_el.get_attribute('title')
+                            except:
+                                issue_data['priority'] = None
+                            
+                            # Try to extract issue type
+                            try:
+                                type_el = el.find_element(By.CSS_SELECTOR, '.ghx-type img, [data-testid*="type"] img, .issue-type img')
+                                issue_data['type'] = type_el.get_attribute('alt') or type_el.get_attribute('title')
+                            except:
+                                issue_data['type'] = None
+                            
+                            # Construct URL
+                            base_url = driver.current_url.split('/secure/')[0].split('/browse/')[0]
+                            issue_data['url'] = f"{base_url}/browse/{key}"
                             
                             if is_visible:
                                 visible_issues.append(key)
@@ -976,7 +1029,8 @@ class SyncHandler(BaseHTTPRequestHandler):
                             issues.append(issue_data)
                             # Log each found issue for debugging
                             visibility_tag = "VISIBLE" if is_visible else "HIDDEN"
-                            print(f"[SCRAPE] Found issue: {key} [{visibility_tag}]")
+                            summary_preview = issue_data.get('summary', '')[:50] if issue_data.get('summary') else 'No summary'
+                            print(f"[SCRAPE] Found issue: {key} [{visibility_tag}] - {summary_preview}")
                     except Exception as e:
                         # Log card extraction failures
                         print(f"[SCRAPE] Failed to extract key from card: {e}")
