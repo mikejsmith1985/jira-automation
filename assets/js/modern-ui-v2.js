@@ -694,6 +694,7 @@ async function submitFeedback() {
     const includeLogs = document.getElementById('feedback-include-logs').checked;
     
     if (!title || !description) {
+        alert('❌ Please fill in title and description');
         showNotification('❌ Please fill in title and description', 'error');
         return;
     }
@@ -712,32 +713,62 @@ async function submitFeedback() {
         formData.append('include_logs', includeLogs);
         
         if (screenshotData) {
+            console.log('[Waypoint] Attaching screenshot:', screenshotData.size, 'bytes');
             formData.append('screenshot', screenshotData, 'screenshot.png');
         }
         
         if (videoData) {
+            console.log('[Waypoint] Attaching video:', videoData.size, 'bytes');
             formData.append('video', videoData, 'recording.webm');
         }
         
+        console.log('[Waypoint] Sending feedback to /api/feedback/submit...');
         const response = await fetch('/api/feedback/submit', {
             method: 'POST',
             body: formData
         });
         
+        console.log('[Waypoint] Response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[Waypoint] HTTP error response:', errorText);
+            let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.error || errorMessage;
+            } catch (e) {
+                // Not JSON, use status text
+            }
+            alert(`❌ Failed to submit feedback:\n\n${errorMessage}\n\nCheck console for details.`);
+            showNotification('❌ ' + errorMessage, 'error');
+            return;
+        }
+        
         const result = await response.json();
+        console.log('[Waypoint] Feedback result:', result);
         
         if (result.success) {
+            alert(`✅ Feedback submitted successfully!\n\nIssue #${result.issue_number}\n${result.issue_url}`);
             showNotification('✅ Feedback submitted!');
             closeFeedbackModal();
             // Clear form
             document.getElementById('feedback-title').value = '';
             document.getElementById('feedback-description').value = '';
+            screenshotData = null;
+            videoData = null;
+            document.getElementById('feedback-attachments').innerHTML = '';
         } else {
-            showNotification('❌ ' + (result.error || 'Failed to submit'), 'error');
+            const errorMsg = result.error || 'Unknown error occurred';
+            console.error('[Waypoint] Feedback submission failed:', errorMsg);
+            alert(`❌ Failed to submit feedback:\n\n${errorMsg}\n\nCheck console for details.`);
+            showNotification('❌ ' + errorMsg, 'error');
         }
     } catch (error) {
-        console.error('[Waypoint] Feedback submission error:', error);
-        showNotification('❌ Failed to submit feedback', 'error');
+        console.error('[Waypoint] Feedback submission exception:', error);
+        const errorMsg = error.message || error.toString();
+        alert(`❌ Failed to submit feedback:\n\n${errorMsg}\n\nCheck console for details.`);
+        showNotification('❌ Network error: ' + errorMsg, 'error');
     } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Submit Feedback';

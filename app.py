@@ -1267,6 +1267,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             
             # Submit to GitHub
             if github_feedback_client:
+                print(f"[INFO] Submitting feedback to GitHub: {title}")
+                print(f"[INFO] Repository: {github_feedback_client.repo_name}")
+                print(f"[INFO] Attachments: {len(attachments)} files")
+                
                 result = github_feedback_client.create_issue(
                     title=title,
                     body=body,
@@ -1274,7 +1278,10 @@ class SyncHandler(BaseHTTPRequestHandler):
                     attachments=attachments if attachments else None
                 )
                 
+                print(f"[INFO] GitHub API result: {result}")
+                
                 if result['success']:
+                    print(f"[SUCCESS] Created issue #{result['issue_number']}: {result['issue_url']}")
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
@@ -1284,33 +1291,48 @@ class SyncHandler(BaseHTTPRequestHandler):
                         'issue_url': result['issue_url']
                     }).encode('utf-8'))
                 else:
+                    error_msg = result.get('error', 'Failed to create issue')
+                    print(f"[ERROR] GitHub issue creation failed: {error_msg}")
                     self.send_response(500)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
                     self.wfile.write(json.dumps({
                         'success': False,
-                        'error': result.get('error', 'Failed to create issue')
+                        'error': f"GitHub API Error: {error_msg}"
                     }).encode('utf-8'))
             else:
                 # No GitHub token configured
+                print("[ERROR] GitHub feedback client not initialized - token not configured")
                 self.send_response(400)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     'success': False,
-                    'error': 'GitHub token not configured. Please configure in Settings.'
+                    'error': 'GitHub token not configured. Go to Settings tab and configure your GitHub Personal Access Token and repository.'
                 }).encode('utf-8'))
                 
         except Exception as e:
-            print(f"[ERROR] Feedback submission failed: {e}")
+            print(f"[ERROR] Feedback submission exception: {e}")
             import traceback
             traceback.print_exc()
+            
+            error_detail = str(e)
+            # Check for common errors
+            if 'Bad credentials' in error_detail:
+                error_detail = 'Invalid GitHub token. Please check your token in Settings tab.'
+            elif 'Not Found' in error_detail or '404' in error_detail:
+                error_detail = 'Repository not found. Please check repository name in Settings (format: owner/repo).'
+            elif 'rate limit' in error_detail.lower():
+                error_detail = 'GitHub API rate limit exceeded. Please try again later.'
+            elif 'permission' in error_detail.lower() or 'forbidden' in error_detail.lower():
+                error_detail = 'Permission denied. Ensure your token has "repo" or "public_repo" scope.'
+            
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 'success': False,
-                'error': str(e)
+                'error': f'Exception: {error_detail}'
             }).encode('utf-8'))
     
     def handle_submit_feedback(self, data):
