@@ -66,11 +66,11 @@
                     </button>
                 </div>
                 
-                <div class="user-card">
-                    <div class="user-avatar">👤</div>
+                <div class="user-card" id="update-checker" onclick="checkForUpdates()" style="cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='transparent'">
+                    <div class="user-avatar" id="update-icon">🔄</div>
                     <div>
-                        <div class="user-name">Account</div>
-                        <div class="user-email">Manage</div>
+                        <div class="user-name" id="update-status">Check Updates</div>
+                        <div class="user-email" id="update-version">v${APP_VERSION || '1.2.10'}</div>
                     </div>
                 </div>
             </div>

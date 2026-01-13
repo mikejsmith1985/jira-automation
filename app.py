@@ -244,6 +244,11 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self._handle_get_features()
             elif self.path == '/api/data/dependencies':
                 response = self._handle_get_dependencies()
+            # Update checker endpoints
+            elif self.path == '/api/updates/check':
+                response = self._handle_check_updates()
+            elif self.path == '/api/updates/apply':
+                response = self._handle_apply_update(data)
             # Jira-specific endpoints
             elif self.path == '/api/jira/query':
                 response = self._handle_jira_query(data)
@@ -638,6 +643,52 @@ class SyncHandler(BaseHTTPRequestHandler):
                 yaml.dump(config, f, default_flow_style=False)
             
             return {'success': True, 'message': 'Automation rules saved'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_check_updates(self):
+        """Check for available updates"""
+        try:
+            from version_checker import VersionChecker
+            
+            checker = VersionChecker(
+                current_version=APP_VERSION,
+                owner='mikejsmith1985',
+                repo='jira-automation'
+            )
+            
+            result = checker.check_for_update(use_cache=False)
+            return {'success': True, 'update_info': result}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_apply_update(self, data):
+        """Download and apply an update"""
+        try:
+            from version_checker import VersionChecker
+            
+            download_url = data.get('download_url')
+            if not download_url:
+                return {'success': False, 'error': 'No download URL provided'}
+            
+            checker = VersionChecker(
+                current_version=APP_VERSION,
+                owner='mikejsmith1985',
+                repo='jira-automation'
+            )
+            
+            result = checker.download_and_apply_update(download_url)
+            
+            if result.get('success'):
+                # Trigger application exit after sending response
+                import threading
+                def shutdown():
+                    import time
+                    time.sleep(2)
+                    os._exit(0)
+                threading.Thread(target=shutdown, daemon=True).start()
+            
+            return result
         except Exception as e:
             return {'success': False, 'error': str(e)}
     

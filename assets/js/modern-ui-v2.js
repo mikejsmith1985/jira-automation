@@ -1558,5 +1558,134 @@ window.saveAppSettings = saveAppSettings;
 window.openFeedbackModal = openFeedbackModal;
 window.closeFeedbackModal = closeFeedbackModal;
 window.minimizeFeedbackModal = minimizeFeedbackModal;
+window.checkForUpdates = checkForUpdates;
+window.applyUpdate = applyUpdate;
+
+/* ============================================================================
+   Auto-Update Functionality
+   ============================================================================ */
+
+async function checkForUpdates() {
+    const statusEl = document.getElementById('update-status');
+    const iconEl = document.getElementById('update-icon');
+    const versionEl = document.getElementById('update-version');
+    
+    if (statusEl) statusEl.textContent = 'Checking...';
+    if (iconEl) iconEl.textContent = '⏳';
+    
+    try {
+        const response = await fetch('/api/updates/check');
+        const result = await response.json();
+        
+        if (!result.success) {
+            if (statusEl) statusEl.textContent = 'Check Failed';
+            if (iconEl) iconEl.textContent = '❌';
+            showNotification('Failed to check for updates: ' + (result.error || 'Unknown error'), 'error');
+            setTimeout(() => {
+                if (statusEl) statusEl.textContent = 'Check Updates';
+                if (iconEl) iconEl.textContent = '🔄';
+            }, 3000);
+            return;
+        }
+        
+        const updateInfo = result.update_info;
+        
+        if (updateInfo.available) {
+            // Update available!
+            if (statusEl) statusEl.textContent = 'Update Available!';
+            if (iconEl) iconEl.textContent = '🆕';
+            if (versionEl) versionEl.textContent = `${updateInfo.current_version} → ${updateInfo.latest_version}`;
+            
+            // Show update dialog
+            showUpdateDialog(updateInfo);
+        } else {
+            // No update available
+            if (statusEl) statusEl.textContent = 'Up to Date ✓';
+            if (iconEl) iconEl.textContent = '✅';
+            showNotification(`You're running the latest version (${updateInfo.current_version})`, 'success');
+            
+            setTimeout(() => {
+                if (statusEl) statusEl.textContent = 'Check Updates';
+                if (iconEl) iconEl.textContent = '🔄';
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('[Waypoint] Update check error:', error);
+        if (statusEl) statusEl.textContent = 'Check Failed';
+        if (iconEl) iconEl.textContent = '❌';
+        showNotification('Error checking for updates', 'error');
+        
+        setTimeout(() => {
+            if (statusEl) statusEl.textContent = 'Check Updates';
+            if (iconEl) iconEl.textContent = '🔄';
+        }, 3000);
+    }
+}
+
+function showUpdateDialog(updateInfo) {
+    const sizeMB = (updateInfo.asset_size / (1024 * 1024)).toFixed(1);
+    const releaseNotes = updateInfo.release_notes.substring(0, 500) + (updateInfo.release_notes.length > 500 ? '...' : '');
+    
+    const confirmed = confirm(
+        `New Version Available!\n\n` +
+        `Current: ${updateInfo.current_version}\n` +
+        `Latest: ${updateInfo.latest_version}\n\n` +
+        `Size: ${sizeMB} MB\n` +
+        `Published: ${new Date(updateInfo.published_at).toLocaleDateString()}\n\n` +
+        `Release Notes:\n${releaseNotes}\n\n` +
+        `Do you want to download and install this update?\n` +
+        `(The app will restart automatically)`
+    );
+    
+    if (confirmed) {
+        applyUpdate(updateInfo.download_url);
+    }
+}
+
+async function applyUpdate(downloadUrl) {
+    const statusEl = document.getElementById('update-status');
+    const iconEl = document.getElementById('update-icon');
+    
+    if (statusEl) statusEl.textContent = 'Updating...';
+    if (iconEl) iconEl.textContent = '⬇️';
+    
+    showNotification('Downloading update...', 'info');
+    
+    try {
+        const response = await fetch('/api/updates/apply', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ download_url: downloadUrl })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            if (statusEl) statusEl.textContent = 'Restarting...';
+            if (iconEl) iconEl.textContent = '🔄';
+            alert('Update downloaded successfully!\n\nThe application will now restart.');
+            // App will close and restart automatically
+        } else {
+            if (statusEl) statusEl.textContent = 'Update Failed';
+            if (iconEl) iconEl.textContent = '❌';
+            alert('Update failed: ' + (result.error || 'Unknown error'));
+            
+            setTimeout(() => {
+                if (statusEl) statusEl.textContent = 'Check Updates';
+                if (iconEl) iconEl.textContent = '🔄';
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('[Waypoint] Update apply error:', error);
+        if (statusEl) statusEl.textContent = 'Update Failed';
+        if (iconEl) iconEl.textContent = '❌';
+        alert('Error applying update: ' + error.message);
+        
+        setTimeout(() => {
+            if (statusEl) statusEl.textContent = 'Check Updates';
+            if (iconEl) iconEl.textContent = '🔄';
+        }, 3000);
+    }
+}
 window.restoreFeedbackModal = restoreFeedbackModal;
 window.updateLogIndicator = updateLogIndicator;
