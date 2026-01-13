@@ -129,6 +129,7 @@ class SyncHandler(BaseHTTPRequestHandler):
         try:
             # Convert to absolute path
             abs_filepath = os.path.join(BASE_DIR, filepath)
+            safe_print(f"[SERVE] Attempting to serve: {abs_filepath}")
             
             # Handle HTML files without cache
             if filepath.endswith('.html'):
@@ -149,15 +150,21 @@ class SyncHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(f.read())
         except FileNotFoundError:
+            safe_print(f"[ERROR] File not found: {abs_filepath}")
+            safe_print(f"[DEBUG] BASE_DIR = {BASE_DIR}")
+            safe_print(f"[DEBUG] DATA_DIR = {DATA_DIR}")
             self.send_response(404)
+            self.send_header('Content-type', 'text/plain')
             self.end_headers()
-        except Exception:
+            self.wfile.write(f"File not found: {filepath}".encode())
+        except Exception as e:
+            safe_print(f"[ERROR] Failed to serve {filepath}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             self.send_response(500)
+            self.send_header('Content-type', 'text/plain')
             self.end_headers()
-            sys.stdout.write(f"[ERROR] Failed to serve {filepath}: {e}\n")
-            sys.stdout.flush()
-            self.send_response(500)
-            self.end_headers()
+            self.wfile.write(f"Server error: {str(e)}".encode())
     
     def _get_content_type(self, filepath):
         """Get content type from file extension"""
