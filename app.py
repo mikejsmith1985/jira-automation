@@ -49,7 +49,7 @@ def get_data_dir():
 
 BASE_DIR = get_base_dir()
 DATA_DIR = get_data_dir()
-APP_VERSION = "1.2.24"
+APP_VERSION = "1.2.10"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -4861,7 +4861,7 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
 def open_browser():
     """Open default browser to the app"""
     time.sleep(1.5)
-    webbrowser.open('http://localhost:5000')
+    webbrowser.open('http://127.0.0.1:5000')
 
 def run_server():
     """Run the HTTP server"""
@@ -4882,10 +4882,10 @@ def run_server():
     except Exception as e:
         print(f"[WARN] GitHub feedback not configured: {str(e)}")
     
-    server_address = ('localhost', 5000)
+    server_address = ('127.0.0.1', 5000)
     httpd = HTTPServer(server_address, SyncHandler)
     safe_print("[START] Waypoint starting...")
-    safe_print("[SERVER] http://localhost:5000")
+    safe_print("[SERVER] http://127.0.0.1:5000")
     safe_print("[BROWSER] Opening browser...")
     safe_print("[WAIT] Starting server (this will block)...")
     httpd.serve_forever()

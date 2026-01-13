@@ -34,7 +34,7 @@ if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
 
 # Build
 python -m PyInstaller --clean `
-    --name "GitHubJiraSync" `
+    --name "waypoint" `
     --onefile `
     --noconsole `
     --add-data "config.yaml;." `
@@ -48,7 +48,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$exePath = "dist\GitHubJiraSync.exe"
+$exePath = "dist\waypoint.exe"
 if (Test-Path $exePath) {
     $size = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
     Write-Host "✓ Build successful! ($size MB)" -ForegroundColor Green
@@ -57,7 +57,7 @@ if (Test-Path $exePath) {
     Write-Host "   $exePath" -ForegroundColor White
     Write-Host ""
     Write-Host "🚀 To run:" -ForegroundColor Cyan
-    Write-Host "   .\dist\GitHubJiraSync.exe" -ForegroundColor White
+    Write-Host "   .\dist\waypoint.exe" -ForegroundColor White
     Write-Host ""
     Write-Host "📄 Creating release package..." -ForegroundColor Yellow
     
@@ -68,12 +68,12 @@ if (Test-Path $exePath) {
     
     # Copy files
     Copy-Item $exePath -Destination $releaseDir
-    Copy-Item "READY_TO_TEST.md" -Destination $releaseDir
+    Copy-Item "READY_TO_TEST.md" -Destination $releaseDir -ErrorAction SilentlyContinue
     Copy-Item "config.yaml" -Destination $releaseDir
     Copy-Item "requirements.txt" -Destination $releaseDir
     
     # Create zip
-    $zipPath = "GitHubJiraSync-v1.0.0.zip"
+    $zipPath = "waypoint-v1.2.10.zip"
     if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
     Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipPath
     
