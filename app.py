@@ -19,6 +19,7 @@ from insights_engine import InsightsEngine
 from feedback_db import FeedbackDB
 from github_feedback import GitHubFeedback, LogCapture
 from version_checker import VersionChecker
+from login_detector import check_login_status
 
 # Extension system imports
 from extensions import get_extension_manager, ExtensionCapability
@@ -91,7 +92,9 @@ class SyncHandler(BaseHTTPRequestHandler):
             self._serve_static_file('modern-ui.html', 'text/html; charset=utf-8')
         elif self.path.startswith('/assets/'):
             # Serve static assets
-            filepath = self.path[1:]  # Remove leading slash
+            # Strip query parameters (e.g. ?v=1.0)
+            clean_path = self.path.split('?')[0]
+            filepath = clean_path[1:]  # Remove leading slash
             content_type = self._get_content_type(filepath)
             safe_print(f"[STATIC] Serving {filepath} as {content_type}")
             self._serve_static_file(filepath, content_type)
@@ -141,7 +144,8 @@ class SyncHandler(BaseHTTPRequestHandler):
                 with open(abs_filepath, 'rb') as f:
                     self.send_response(200)
                     self.send_header('Content-type', content_type)
-                    self.send_header('Cache-Control', 'public, max-age=31536000')
+                    # Use no-cache to prevent stale UI issues during development/updates
+                    self.send_header('Cache-Control', 'no-cache')
                     self.end_headers()
                     self.wfile.write(f.read())
         except FileNotFoundError:
@@ -347,22 +351,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                     
                     # Check if logged in
                     if 'atlassian.net' in jira_current_url or 'jira' in jira_current_url.lower():
-                        from selenium.webdriver.common.by import By
-                        logged_in_indicators = [
-                            '[data-testid="profile-avatar"]',
-                            '[data-testid="app-switcher"]',
-                            '.aui-avatar',
-                            '#user-options',
-                            '[data-username]'
-                        ]
-                        for selector in logged_in_indicators:
-                            try:
-                                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                                if elements:
-                                    jira_logged_in = True
-                                    break
-                            except:
-                                pass
+                        jira_logged_in, _, _ = check_login_status(driver)
                 except:
                     jira_browser_open = False
             
@@ -647,26 +636,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                     
                     # Check if logged in to Jira (look for common logged-in indicators)
                     if 'atlassian.net' in current_url or 'jira' in current_url.lower():
-                        try:
-                            # Look for user avatar or profile menu (indicates logged in)
-                            from selenium.webdriver.common.by import By
-                            logged_in_indicators = [
-                                '[data-testid="profile-avatar"]',
-                                '[data-testid="app-switcher"]',
-                                '.aui-avatar',
-                                '#user-options',
-                                '[data-username]'
-                            ]
-                            for selector in logged_in_indicators:
-                                try:
-                                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                                    if elements:
-                                        status['jira_logged_in'] = True
-                                        break
-                                except:
-                                    pass
-                        except:
-                            pass
+                        status['jira_logged_in'], _, _ = check_login_status(driver)
                 except:
                     # Browser was closed
                     status['browser_open'] = False
@@ -746,35 +716,15 @@ class SyncHandler(BaseHTTPRequestHandler):
         try:
             current_url = driver.current_url
             
-            # Check for login indicators
-            from selenium.webdriver.common.by import By
-            logged_in = False
-            user_info = None
-            
-            logged_in_indicators = [
-                ('[data-testid="profile-avatar"]', 'avatar'),
-                ('[data-testid="app-switcher"]', 'app-switcher'),
-                ('.aui-avatar', 'avatar'),
-                ('#user-options', 'user-menu'),
-                ('[data-username]', 'username')
-            ]
-            
-            for selector, indicator_type in logged_in_indicators:
-                try:
-                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if elements:
-                        logged_in = True
-                        if indicator_type == 'username':
-                            user_info = elements[0].get_attribute('data-username')
-                        break
-                except:
-                    pass
+            # Check for login indicators with debug info
+            logged_in, user_info, debug_info = check_login_status(driver, debug=True)
             
             return {
                 'success': True,
                 'logged_in': logged_in,
                 'current_url': current_url,
-                'user': user_info
+                'user': user_info,
+                'debug': debug_info
             }
         except Exception as e:
             return {'success': False, 'logged_in': False, 'error': str(e)}
@@ -851,18 +801,83 @@ class SyncHandler(BaseHTTPRequestHandler):
             if board_url:
                 # Navigate to board and scrape
                 driver.get(board_url)
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="software-board.board"],.ghx-issue,.js-issue'))
-                )
                 
-                # Scrape issue cards
-                issue_elements = driver.find_elements(By.CSS_SELECTOR, '[data-testid="software-board.board-container.board.card-container"], .ghx-issue, .js-issue')
-                for el in issue_elements:
+                # Wait for board to load (try multiple common selectors)
+                try:
+                    WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, '.ghx-issue, [role="button"], [data-testid*="card"]'))
+                    )
+                except:
+                    print("Timeout waiting for board elements")
+                
+                # Scrape issue cards - using broader selectors to catch different Jira versions
+                # 1. Classic Kanban/Scrum boards (.ghx-issue)
+                # 2. Next-gen/Team-managed boards ([data-testid*="card"])
+                # 3. Generic accessible elements ([role="button"] with issue keys)
+                
+                # Find all potential card elements
+                potential_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue, [data-testid*="card"], [role="listitem"]')
+                
+                # Deduplicate by key
+                seen_keys = set()
+                
+                for el in potential_cards:
                     try:
-                        key = el.get_attribute('data-issue-key') or el.find_element(By.CSS_SELECTOR, '.ghx-key, [data-testid*="key"]').text
-                        issues.append({'key': key})
-                    except:
+                        key = None
+                        
+                        # Strategy 1: Data attribute
+                        if not key:
+                            key = el.get_attribute('data-issue-key')
+                            
+                        # Strategy 2: Text search for pattern
+                        if not key:
+                            text = el.text
+                            import re
+                            # Look for PROJ-123 pattern
+                            match = re.search(r'([A-Z]+-\d+)', text)
+                            if match:
+                                key = match.group(1)
+                                
+                        # Strategy 3: Child element
+                        if not key:
+                            try:
+                                key_el = el.find_element(By.CSS_SELECTOR, '.ghx-key, [data-testid*="issue-key"], a[href*="/browse/"]')
+                                key = key_el.text
+                            except:
+                                pass
+
+                        if key and key not in seen_keys:
+                            seen_keys.add(key)
+                            issues.append({'key': key})
+                    except Exception as e:
+                        # Silently ignore individual card failures
                         pass
+                
+                # Fallback Strategy 4: Look for any links to issues
+                # This is the most robust method as it doesn't rely on card structure, just links
+                if len(issues) == 0:
+                    print("No issues found with card selectors, trying link strategy...")
+                    try:
+                        # Find all links containing /browse/
+                        links = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/browse/"]')
+                        import re
+                        for link in links:
+                            href = link.get_attribute('href')
+                            # Match /browse/PROJECT-123
+                            match = re.search(r'/browse/([A-Z]+-\d+)', href)
+                            if match:
+                                key = match.group(1)
+                                if key not in seen_keys:
+                                    seen_keys.add(key)
+                                    issues.append({'key': key})
+                    except Exception as e:
+                        print(f"Link strategy failed: {e}")
+
+                # DEBUG: If still 0 issues, save page source for inspection
+                if len(issues) == 0:
+                    print("Still found 0 issues. Saving page source to debug_jira_scrape.html")
+                    with open('debug_jira_scrape.html', 'w', encoding='utf-8') as f:
+                        f.write(driver.page_source)
             
             elif jql:
                 # Navigate to issue search with JQL

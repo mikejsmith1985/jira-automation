@@ -129,99 +129,10 @@
                             <p class="text-secondary">Configure GitHub to Jira automation</p>
                         </div>
 
-                        <!-- PR Opened -->
-                        <div class="rule-card">
-                            <div class="rule-title">
-                                <span class="rule-icon">🆕</span>
-                                <h4>When PR is Opened</h4>
-                            </div>
-                            
-                            <div class="rule-body">
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="pr-opened-enabled" checked>
-                                        <span>Enable this rule</span>
-                                    </label>
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Move to Status</label>
-                                    <input type="text" id="pr-opened-status" value="In Review" placeholder="e.g., In Review">
-                                    <p class="form-hint">Leave empty to skip</p>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>Add Label</label>
-                                    <input type="text" id="pr-opened-label" value="has-pr" placeholder="e.g., has-pr">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="pr-opened-comment" checked>
-                                        <span>Add comment to ticket</span>
-                                    </label>
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Comment Template</label>
-                                    <textarea id="pr-opened-comment-text" placeholder="Use {pr_url}, {branch_name}, {author}">🔗 PR opened: {pr_url}</textarea>
-                                </div>
-                            </div>
+                        <div id="rules-container">
+                            <!-- Rules populated dynamically by JavaScript -->
                         </div>
 
-                        <!-- PR Merged -->
-                        <div class="rule-card">
-                            <div class="rule-title">
-                                <span class="rule-icon">✅</span>
-                                <h4>When PR is Merged</h4>
-                                <span class="rule-subtitle">Branch-specific rules</span>
-                            </div>
-                            
-                            <div class="rule-body">
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="pr-merged-enabled" checked>
-                                        <span>Enable this rule</span>
-                                    </label>
-                                </div>
-
-                                <div id="branch-rules" class="branch-rules">
-                                    <!-- Will be populated by JavaScript -->
-                                </div>
-                                <button class="btn btn-secondary" id="add-rule">+ Add branch rule</button>
-                            </div>
-                        </div>
-
-                        <!-- PR Closed -->
-                        <div class="rule-card">
-                            <div class="rule-title">
-                                <span class="rule-icon">❌</span>
-                                <h4>When PR is Closed</h4>
-                            </div>
-                            
-                            <div class="rule-body">
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="pr-closed-enabled" checked>
-                                        <span>Enable this rule</span>
-                                    </label>
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Add Label</label>
-                                    <input type="text" id="pr-closed-label" value="pr-closed" placeholder="e.g., pr-closed">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="pr-closed-comment" checked>
-                                        <span>Add comment to ticket</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Actions -->
                         <div class="card-footer">
                             <button class="btn btn-primary" id="save-rules">Save Rules</button>
                             <button class="btn btn-secondary" id="reset-rules">Reset</button>
@@ -703,6 +614,6 @@
         </div>
     </div>
 
-    <script src="/assets/js/modern-ui.js"></script>
+    <script src="/assets/js/modern-ui-v2.js"></script>
 </body>
 </html>

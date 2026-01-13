@@ -1,0 +1,78 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: 🚀
+      - heading "Waypoint" [level=1] [ref=e6]
+    - navigation [ref=e7]:
+      - link "📊 Dashboard" [ref=e8] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e9]: 📊
+        - generic [ref=e10]: Dashboard
+      - link "👔 PO" [ref=e11] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e12]: 👔
+        - generic [ref=e13]: PO
+      - link "💻 Dev" [ref=e14] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e15]: 💻
+        - generic [ref=e16]: Dev
+      - link "📈 SM" [ref=e17] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e18]: 📈
+        - generic [ref=e19]: SM
+      - link "⚙️ Automation" [ref=e20] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e21]: ⚙️
+        - generic [ref=e22]: Automation
+      - link "🔗 Integrations" [ref=e23] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e24]: 🔗
+        - generic [ref=e25]: Integrations
+      - link "⚡ Settings" [ref=e26] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e27]: ⚡
+        - generic [ref=e28]: Settings
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - button "Report a bug or request a feature" [ref=e31] [cursor=pointer]:
+          - img [ref=e32]
+        - button "Toggle dark mode" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+          - img [ref=e37]
+      - generic [ref=e39] [cursor=pointer]:
+        - generic [ref=e40]: 👤
+        - generic [ref=e41]:
+          - generic [ref=e42]: Account
+          - generic [ref=e43]: Manage
+  - main [ref=e44]:
+    - generic [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - generic [ref=e49]: "0"
+          - generic [ref=e50]: PRs Synced
+          - generic [ref=e51]: This week
+        - generic [ref=e52]:
+          - generic [ref=e53]: "0"
+          - generic [ref=e54]: Tickets Updated
+          - generic [ref=e55]: This month
+        - generic [ref=e56]:
+          - generic [ref=e57]: "4"
+          - generic [ref=e58]: Active Rules
+          - generic [ref=e59]: Configured
+      - generic [ref=e60]:
+        - heading "Integration Status" [level=3] [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e66]: ⚠ GitHub Not Set
+          - generic [ref=e68]: ✓ Jira Configured
+          - generic [ref=e70]: ⚠ Feedback Not Set
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - heading "Recent Activity" [level=3] [ref=e73]
+          - generic [ref=e74]: Live
+        - generic [ref=e75]:
+          - paragraph [ref=e76]: No recent activity
+          - paragraph [ref=e77]: Your sync will appear here
+```

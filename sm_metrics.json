@@ -1,0 +1,22 @@
+{
+  "issues": [
+    {
+      "key": "KAN-1"
+    },
+    {
+      "key": "KAN-2"
+    }
+  ],
+  "metrics": {
+    "total_issues": 2,
+    "issues_scraped": [
+      {
+        "key": "KAN-1"
+      },
+      {
+        "key": "KAN-2"
+      }
+    ],
+    "scrape_time": "2026-01-13 07:30:49"
+  }
+}

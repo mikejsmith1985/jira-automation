@@ -1,73 +1,59 @@
 automation:
-  
-  # When a PR is opened/created
-  pr_opened:
-    enabled: true
-    add_comment: true
-    comment_template: "🔗 Pull Request opened: {pr_url}\nBranch: {branch_name}\nAuthor: {author}"
-    update_pr_field: true
-    add_label: "has-pr"
-    set_status: "In Review"  # Move to "In Review" when PR created
-  
-  # When a PR is updated (new commits pushed)
-  pr_updated:
-    enabled: true
-    add_comment: true
-    comment_template: "🔄 Pull Request updated: {pr_url}\nLatest commit: {commit_message}"
-    update_pr_field: false
-    add_label: ""
-    set_status: ""
-  
-  # When a PR is merged - rules depend on target branch
-  pr_merged:
-    enabled: true
-    # Branch-specific rules
-    branch_rules:
-      - branch: "DEV"
-        add_comment: true
-        comment_template: "✅ Merged to DEV: {pr_url}\n🧪 Ready for Testing"
-        set_status: "Ready for Testing"
-        add_label: "merged-dev"
-      
-      - branch: "INT"
-        add_comment: true
-        comment_template: "✅ Merged to INT: {pr_url}\n🔍 Ready for QA"
-        set_status: "Ready for QA"
-        add_label: "merged-int"
-      
-      - branch: "PVS"
-        add_comment: true
-        comment_template: "✅ Merged to PVS: {pr_url}\n🔍 Ready for QA"
-        set_status: "Ready for QA"
-        add_label: "merged-pvs"
-      
-      - branch: "REL"
-        add_comment: true
-        comment_template: "✅ Merged to REL: {pr_url}\n🚀 Released!"
-        set_status: ""  # Don't change status (Done comes from user)
-        add_label: "released"
-      
-      - branch: "PRD"
-        add_comment: true
-        comment_template: "✅ Merged to PRD: {pr_url}\n🚀 In Production!"
-        set_status: ""  # Don't change status (Done comes from user)
-        add_label: "in-production"
-      
-      # Default rule if branch doesn't match above
-      - branch: "default"
-        add_comment: true
-        comment_template: "✅ Pull Request merged: {pr_url}\nTarget: {target_branch}"
-        set_status: ""
-        add_label: "merged"
-  
-  # When a PR is closed without merging
   pr_closed:
-    enabled: true
     add_comment: true
-    comment_template: "❌ Pull Request closed without merging: {pr_url}"
+    add_label: pr-closed
+    comment_template: "\u274C Pull Request closed without merging: {pr_url}"
+    enabled: false
+    set_status: ''
     update_pr_field: false
-    add_label: "pr-closed"
-    set_status: ""
+  pr_merged:
+    branch_rules:
+    - add_comment: true
+      add_label: merged-dev
+      branch: DEV
+      comment_template: ''
+      set_status: Ready for Testing
+    - add_comment: true
+      add_label: merged-int
+      branch: INT
+      comment_template: ''
+      set_status: Ready for QA
+    - add_comment: true
+      add_label: merged-pvs
+      branch: PVS
+      comment_template: ''
+      set_status: Ready for QA
+    - add_comment: true
+      add_label: released
+      branch: REL
+      comment_template: ''
+      set_status: ''
+    - add_comment: true
+      add_label: in-production
+      branch: PRD
+      comment_template: ''
+      set_status: ''
+    - add_comment: true
+      add_label: merged
+      branch: default
+      comment_template: ''
+      set_status: ''
+    enabled: false
+  pr_opened:
+    add_comment: true
+    add_label: has-pr
+    comment_template: "\U0001F517 Pull Request opened: {pr_url}\nBranch: {branch_name}\n\
+      Author: {author}"
+    enabled: false
+    set_status: In Review
+    update_pr_field: true
+  pr_updated:
+    add_comment: true
+    add_label: ''
+    comment_template: "\U0001F504 Pull Request updated: {pr_url}\nLatest commit: {commit_message}"
+    enabled: false
+    set_status: ''
+    update_pr_field: false
 favorites:
   favorite_1:
     description: Manually update PR links for selected tickets
@@ -107,13 +93,12 @@ github:
   - repo2
 jira:
   api_token: ''
-  base_url: https://your-company.atlassian.net
+  base_url: https://mikejsmith1985.atlassian.net/
   custom_fields:
     fix_version: customfield_10002
     pr_link: customfield_10001
   project_keys:
-  - PROJ
-  - ABC
+  - KAN
 logging:
   backup_count: 5
   file: jira-sync.log
