@@ -865,6 +865,7 @@ class SyncHandler(BaseHTTPRequestHandler):
         try:
             jql = data.get('jql', '')
             board_url = data.get('board_url', '')
+            custom_field_names = data.get('custom_field_names', [])
             
             if not jql and not board_url:
                 return {'success': False, 'error': 'Provide either a JQL query or board URL'}
@@ -1017,6 +1018,43 @@ class SyncHandler(BaseHTTPRequestHandler):
                             except:
                                 issue_data['type'] = None
                             
+                            # Extract Custom Fields by Name
+                            if custom_field_names and isinstance(custom_field_names, list):
+                                for field_name in custom_field_names:
+                                    safe_name = field_name.strip()
+                                    if not safe_name: continue
+                                    
+                                    try:
+                                        # Try to find element by title/tooltip containing the field name
+                                        # Use case-insensitive matching where supported by browser/driver
+                                        selector = f"[title*='{safe_name}' i], [data-tooltip*='{safe_name}' i], [aria-label*='{safe_name}' i]"
+                                        
+                                        # Fallback for browsers not supporting 'i' modifier in CSS
+                                        try:
+                                            field_el = el.find_element(By.CSS_SELECTOR, selector)
+                                        except:
+                                            # Case-sensitive fallback
+                                            selector = f"[title*='{safe_name}'], [data-tooltip*='{safe_name}'], [aria-label*='{safe_name}']"
+                                            field_el = el.find_element(By.CSS_SELECTOR, selector)
+                                            
+                                        # Try to get value from text or attributes
+                                        val = field_el.text.strip()
+                                        
+                                        # If text is empty, check attributes
+                                        if not val:
+                                            raw_val = field_el.get_attribute('title') or field_el.get_attribute('data-tooltip') or field_el.get_attribute('aria-label')
+                                            if raw_val:
+                                                # If attribute is "Field: Value", split it
+                                                if ':' in raw_val and safe_name in raw_val:
+                                                    val = raw_val.split(':', 1)[1].strip()
+                                                else:
+                                                    val = raw_val
+                                                    
+                                        issue_data[safe_name] = val
+                                    except:
+                                        # Field not found on this card
+                                        pass
+
                             # Construct URL
                             base_url = driver.current_url.split('/secure/')[0].split('/browse/')[0]
                             issue_data['url'] = f"{base_url}/browse/{key}"

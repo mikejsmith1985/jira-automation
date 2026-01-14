@@ -338,6 +338,11 @@
                                 <label>Or Board URL</label>
                                 <input type="text" id="sm-board-url" class="input-field" placeholder="https://your-company.atlassian.net/jira/software/projects/PROJ/boards/1">
                             </div>
+                            <div class="form-group">
+                                <label>Fields to Scrape</label>
+                                <input type="text" id="sm-custom-fields" class="input-field" placeholder="Story Points, Epic Link, Due Date">
+                                <small class="text-secondary">Enter field names as they appear in tooltips or hover text (comma-separated)</small>
+                            </div>
                             <div style="display: flex; gap: 10px;">
                                 <button class="btn btn-primary" onclick="scrapeMetrics()">🔍 Scrape Metrics</button>
                                 <button class="btn btn-secondary" onclick="refreshMetrics()">🔄 Refresh</button>

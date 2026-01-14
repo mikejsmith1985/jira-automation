@@ -1432,7 +1432,14 @@ function exportPOData() {
 async function scrapeMetrics() {
     const jql = document.getElementById('sm-jql-query').value;
     const boardUrl = document.getElementById('sm-board-url').value;
+    const customFieldsInput = document.getElementById('sm-custom-fields').value;
     const resultEl = document.getElementById('sm-scrape-result');
+    
+    // Parse comma-separated list
+    let customFieldNames = [];
+    if (customFieldsInput) {
+        customFieldNames = customFieldsInput.split(',').map(f => f.trim()).filter(f => f);
+    }
     
     if (!jql && !boardUrl) {
         resultEl.innerHTML = '<span style="color: #de350b;">Please enter a JQL query or board URL</span>';
@@ -1445,7 +1452,11 @@ async function scrapeMetrics() {
         const response = await fetch('/api/sm/scrape-metrics', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jql: jql, board_url: boardUrl })
+            body: JSON.stringify({ 
+                jql: jql, 
+                board_url: boardUrl,
+                custom_field_names: customFieldNames
+            })
         });
         const result = await response.json();
         
@@ -1506,6 +1517,11 @@ function displaySMMetrics(metrics) {
                                 ${assignee ? `<span>👤 ${assignee}</span>` : ''}
                                 ${type ? `<span>🏷️ ${type}</span>` : ''}
                                 ${priority ? `<span>⚡ ${priority}</span>` : ''}
+                            </div>
+                            <div style="display: flex; gap: 10px; margin-top: 5px; flex-wrap: wrap;">
+                                ${Object.keys(issue).filter(k => !['key', 'summary', 'status', 'assignee', 'type', 'priority', 'url', 'visible'].includes(k) && issue[k]).map(k => 
+                                    `<span class="badge badge-secondary" style="font-size: 0.75em;">${k}: ${issue[k]}</span>`
+                                ).join('')}
                             </div>
                             ${issue.url ? `<p class="text-secondary" style="font-size: 0.8em; margin-top: 5px;">${issue.url}</p>` : ''}
                         </div>
