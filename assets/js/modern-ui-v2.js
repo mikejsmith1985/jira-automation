@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadIntegrationStatus();
         loadAutomationRules();
         loadDashboardData();
+        loadVersion();
         
         console.log('[Waypoint] Initialization complete');
     } catch (error) {
@@ -1593,11 +1594,25 @@ window.openFeedbackModal = openFeedbackModal;
 window.closeFeedbackModal = closeFeedbackModal;
 window.minimizeFeedbackModal = minimizeFeedbackModal;
 window.checkForUpdates = checkForUpdates;
+window.loadVersion = loadVersion;
 window.applyUpdate = applyUpdate;
 
 /* ============================================================================
    Auto-Update Functionality
    ============================================================================ */
+
+async function loadVersion() {
+    try {
+        const response = await fetch('/api/version');
+        const result = await response.json();
+        const versionEl = document.getElementById('update-version');
+        if (versionEl && result.version) {
+            versionEl.textContent = 'v' + result.version;
+        }
+    } catch (error) {
+        console.error('[Waypoint] Failed to load version:', error);
+    }
+}
 
 async function checkForUpdates() {
     const statusEl = document.getElementById('update-status');

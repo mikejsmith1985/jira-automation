@@ -1317,12 +1317,16 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
+            response = {
+                'success': True,
+                'update_info': result
+            }
+            self.wfile.write(json.dumps(response).encode())
         except Exception as e:
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
     
     def _handle_list_releases(self):
         """List recent releases"""
