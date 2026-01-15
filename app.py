@@ -923,10 +923,22 @@ class SyncHandler(BaseHTTPRequestHandler):
                     selectors_tried.append(f"Swimlane cards: {len(swimlane_cards)} found")
                 except: pass
                 
+                # Strategy 5: Table rows (Backlog/List view)
+                try:
+                    table_rows = driver.find_elements(By.CSS_SELECTOR, 'tr[data-testid="issue-table-row"], .issuerow')
+                    selectors_tried.append(f"Table rows: {len(table_rows)} found")
+                except: pass
+                
+                # Strategy 6: Generic Grid Rows (Structure, Advanced Roadmaps)
+                try:
+                    grid_rows = driver.find_elements(By.CSS_SELECTOR, 'div[role="row"], .structure-row, .grid-row')
+                    selectors_tried.append(f"Grid rows: {len(grid_rows)} found")
+                except: pass
+                
                 debug_info.extend(selectors_tried)
                 
                 # Combine all potential cards
-                potential_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue, [data-testid*="card"], [role="listitem"], [data-test-id*="software-board.card"], [data-testid="list.draggable-list.draggable-item"]')
+                potential_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue, [data-testid*="card"], [role="listitem"], [data-test-id*="software-board.card"], [data-testid="list.draggable-list.draggable-item"], tr[data-testid="issue-table-row"], .issuerow, div[role="row"], .structure-row, .grid-row')
                 
                 debug_info.append(f"Total potential cards found: {len(potential_cards)}")
                 
@@ -1025,32 +1037,54 @@ class SyncHandler(BaseHTTPRequestHandler):
                                     if not safe_name: continue
                                     
                                     try:
-                                        # Try to find element by title/tooltip containing the field name
+                                        # Strategy A: Structure/Grid specific - Column matching
+                                        # In grid views, columns often have IDs or classes related to the field
+                                        # But finding the column index is hard without headers.
+                                        # Instead, look for common attributes in the row.
+                                        
+                                        field_el = None
+                                        
+                                        # 1. Try generic robust selectors first (titles/tooltips)
                                         # Use case-insensitive matching where supported by browser/driver
                                         selector = f"[title*='{safe_name}' i], [data-tooltip*='{safe_name}' i], [aria-label*='{safe_name}' i]"
                                         
-                                        # Fallback for browsers not supporting 'i' modifier in CSS
                                         try:
                                             field_el = el.find_element(By.CSS_SELECTOR, selector)
                                         except:
-                                            # Case-sensitive fallback
-                                            selector = f"[title*='{safe_name}'], [data-tooltip*='{safe_name}'], [aria-label*='{safe_name}']"
-                                            field_el = el.find_element(By.CSS_SELECTOR, selector)
+                                            # Fallback for browsers not supporting 'i' modifier
+                                            try:
+                                                selector = f"[title*='{safe_name}'], [data-tooltip*='{safe_name}'], [aria-label*='{safe_name}']"
+                                                field_el = el.find_element(By.CSS_SELECTOR, selector)
+                                            except: pass
                                             
-                                        # Try to get value from text or attributes
-                                        val = field_el.text.strip()
-                                        
-                                        # If text is empty, check attributes
-                                        if not val:
-                                            raw_val = field_el.get_attribute('title') or field_el.get_attribute('data-tooltip') or field_el.get_attribute('aria-label')
-                                            if raw_val:
-                                                # If attribute is "Field: Value", split it
-                                                if ':' in raw_val and safe_name in raw_val:
-                                                    val = raw_val.split(':', 1)[1].strip()
-                                                else:
-                                                    val = raw_val
-                                                    
-                                        issue_data[safe_name] = val
+                                        # 2. Try Structure/Grid specific cell selectors
+                                        if not field_el:
+                                            try:
+                                                # Look for cells with data-id or class containing the field name
+                                                # e.g. .cell-customfield_1000 or data-column-id="story-points"
+                                                grid_selector = f"[data-column-id*='{safe_name.lower().replace(' ', '-')}' i], [class*='{safe_name.lower().replace(' ', '-')}' i]"
+                                                field_el = el.find_element(By.CSS_SELECTOR, grid_selector)
+                                            except: pass
+
+                                        # If found, extract value
+                                        if field_el:
+                                            # Try to get value from text or attributes
+                                            val = field_el.text.strip()
+                                            
+                                            # If text is empty, check attributes
+                                            if not val:
+                                                raw_val = field_el.get_attribute('title') or field_el.get_attribute('data-tooltip') or field_el.get_attribute('aria-label') or field_el.get_attribute('value')
+                                                if raw_val:
+                                                    # If attribute is "Field: Value", split it
+                                                    if ':' in raw_val and safe_name in raw_val:
+                                                        try:
+                                                            val = raw_val.split(':', 1)[1].strip()
+                                                        except: val = raw_val
+                                                    else:
+                                                        val = raw_val
+                                            
+                                            if val:
+                                                issue_data[safe_name] = val
                                     except:
                                         # Field not found on this card
                                         pass
@@ -1093,10 +1127,42 @@ class SyncHandler(BaseHTTPRequestHandler):
                             match = re.search(r'/browse/([A-Z]+-\d+)', href)
                             if match:
                                 key = match.group(1)
-                                if key not in seen_keys:
-                                    seen_keys.add(key)
-                                    issues.append({'key': key})
-                                    print(f"[SCRAPE] Found issue from link: {key}")
+                                
+                                # Check if we already have this key
+                                existing_issue = next((i for i in issues if i['key'] == key), None)
+                                
+                                if existing_issue:
+                                    # We already have this issue, but maybe this link has a better summary?
+                                    # (e.g. first link was "PROJ-123", this link is "Fix bug in login")
+                                    if not existing_issue.get('summary') or existing_issue['summary'] == key:
+                                        try:
+                                            text = link.text.strip()
+                                            if text and text != key:
+                                                existing_issue['summary'] = text
+                                                print(f"[SCRAPE] Updated summary for {key}: {text}")
+                                        except: pass
+                                else:
+                                    if key not in seen_keys:
+                                        seen_keys.add(key)
+                                        issue_data = {'key': key, 'visible': True}
+                                        
+                                        # Try to get summary from text or title
+                                        try:
+                                            text = link.text.strip()
+                                            title = link.get_attribute('title')
+                                            
+                                            if text and text != key:
+                                                issue_data['summary'] = text
+                                            elif title:
+                                                issue_data['summary'] = title
+                                            else:
+                                                # Use key as fallback summary
+                                                issue_data['summary'] = key
+                                        except:
+                                            issue_data['summary'] = key
+                                            
+                                        issues.append(issue_data)
+                                        print(f"[SCRAPE] Found issue from link: {key}")
                         debug_info.append(f"Issues extracted from links: {len(issues)}")
                     except Exception as e:
                         debug_info.append(f"❌ Link strategy failed: {e}")
@@ -1126,10 +1192,38 @@ class SyncHandler(BaseHTTPRequestHandler):
                 for row in issue_rows:
                     try:
                         key_el = row.find_element(By.CSS_SELECTOR, '[data-testid="issue-key"], .issuekey a, td.issuekey a')
-                        issues.append({
+                        
+                        issue_data = {
                             'key': key_el.text,
-                            'url': key_el.get_attribute('href')
-                        })
+                            'url': key_el.get_attribute('href'),
+                            'visible': row.is_displayed()
+                        }
+                        
+                        # Summary
+                        try:
+                            summary_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="summary"], .summary, td.summary')
+                            issue_data['summary'] = summary_el.text.strip()
+                        except: issue_data['summary'] = None
+                        
+                        # Priority
+                        try:
+                            priority_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="priority"] img, .priority img, td.priority img')
+                            issue_data['priority'] = priority_el.get_attribute('alt') or priority_el.get_attribute('title')
+                        except: issue_data['priority'] = None
+                        
+                        # Status
+                        try:
+                            status_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="status"], .status, td.status')
+                            issue_data['status'] = status_el.text.strip()
+                        except: issue_data['status'] = None
+                        
+                        # Type
+                        try:
+                            type_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="issuetype"] img, .issuetype img, td.issuetype img')
+                            issue_data['type'] = type_el.get_attribute('alt') or type_el.get_attribute('title')
+                        except: issue_data['type'] = None
+                        
+                        issues.append(issue_data)
                     except:
                         pass
             
