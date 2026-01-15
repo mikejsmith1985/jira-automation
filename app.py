@@ -29,6 +29,8 @@ from extensions.github import GitHubExtension
 from extensions.reporting import EnhancedInsightsEngine, ReportGenerator
 from storage import get_data_store, get_config_manager
 
+import logging
+
 # Global state
 def get_base_dir():
     """Get base directory for bundled resources (READ-ONLY when frozen)"""
@@ -50,16 +52,29 @@ def get_data_dir():
 
 BASE_DIR = get_base_dir()
 DATA_DIR = get_data_dir()
+LOG_FILE = os.path.join(DATA_DIR, 'jira-sync.log')
+
+# Configure logging immediately
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
 APP_VERSION = "1.2.16"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
+    logging.info(msg) # Log to file as well
     try:
         if sys.stdout:
-            sys.stdout.write(f"{msg}\n")
-            sys.stdout.flush()
+            # sys.stdout.write(f"{msg}\n") # Handled by StreamHandler now
+            pass
     except:
-        pass  # Silently ignore if stdout not available
+        pass
 
 driver = None
 sync_engine = None
@@ -68,7 +83,7 @@ is_syncing = False
 insights_engine = None
 feedback_db = FeedbackDB()  # SQLite-based feedback storage
 github_feedback = None  # Optional GitHub sync
-log_capture = LogCapture()
+log_capture = LogCapture(LOG_FILE)
 version_checker = None  # Version update checker
 
 # Extension system globals

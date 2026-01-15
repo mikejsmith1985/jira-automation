@@ -5,6 +5,10 @@ Handles parsing of Jira CSV exports and mapping to internal data structure.
 import csv
 import io
 import logging
+import sys
+
+# Increase CSV field size limit to handle large descriptions/images
+csv.field_size_limit(sys.maxsize)
 
 class JiraCSVImporter:
     def __init__(self):

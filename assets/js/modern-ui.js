@@ -42,35 +42,6 @@ function switchImportTab(mode) {
     if (activeContent) activeContent.style.display = 'block';
 }
 
-async function uploadCSV() {
-    const input = document.getElementById('csv-file-input');
-    if (!input.files || !input.files[0]) {
-        showNotification('Please select a CSV file first', 'error');
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('file', input.files[0]);
-    
-    try {
-        const response = await fetch('/api/import/csv', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`CSV uploaded successfully. Found ${result.count} rows.`);
-            openMappingModal(result.headers);
-        } else {
-            showNotification(`Upload failed: ${result.error}`, 'error');
-        }
-    } catch (error) {
-        showNotification(`Upload failed: ${error}`, 'error');
-    }
-}
-
 // Store headers temporarily
 let currentCSVHeaders = [];
 
