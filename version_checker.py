@@ -15,10 +15,11 @@ from datetime import datetime, timedelta
 class VersionChecker:
     """Check for new versions on GitHub and apply updates"""
     
-    def __init__(self, current_version='1.0.0', owner='mikejsmith1985', repo='jira-automation'):
+    def __init__(self, current_version='1.0.0', owner='mikejsmith1985', repo='jira-automation', token=None):
         self.current_version = current_version
         self.owner = owner
         self.repo = repo
+        self.token = token
         self.cache = None
         self.cache_time = None
         self.cache_duration = timedelta(hours=1)
@@ -63,6 +64,9 @@ class VersionChecker:
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'Jira-Automation-Updater'
             }
+            
+            if self.token:
+                headers['Authorization'] = f'token {self.token}'
             
             response = requests.get(url, headers=headers, timeout=10)
             
@@ -158,6 +162,9 @@ class VersionChecker:
                 'User-Agent': 'Jira-Automation-Updater'
             }
             
+            if self.token:
+                headers['Authorization'] = f'token {self.token}'
+            
             response = requests.get(url, headers=headers, timeout=10)
             
             if response.status_code != 200:
@@ -225,7 +232,17 @@ class VersionChecker:
                 progress_callback(0, 0, 'Downloading update...')
             
             # Download the file with progress tracking
-            response = requests.get(download_url, stream=True, timeout=60)
+            headers = {}
+            if self.token:
+                # If using API URL (contains api.github.com), we need Accept header
+                if 'api.github.com' in download_url:
+                    headers['Authorization'] = f'token {self.token}'
+                    headers['Accept'] = 'application/octet-stream'
+                # If using browser download URL but with token (might happen), use standard auth
+                else:
+                    headers['Authorization'] = f'token {self.token}'
+
+            response = requests.get(download_url, stream=True, timeout=60, headers=headers)
             response.raise_for_status()
             
             total_size = int(response.headers.get('content-length', 0))

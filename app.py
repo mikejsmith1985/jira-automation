@@ -664,6 +664,7 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def _handle_apply_update(self, data):
         """Download and apply an update"""
+        global config_manager
         try:
             from version_checker import VersionChecker
             
@@ -671,10 +672,20 @@ class SyncHandler(BaseHTTPRequestHandler):
             if not download_url:
                 return {'success': False, 'error': 'No download URL provided'}
             
+            # Get token from config
+            github_token = None
+            if config_manager:
+                config = config_manager.get_config()
+                # Try feedback token first, then generic github token
+                github_token = config.get('feedback', {}).get('github_token')
+                if not github_token:
+                    github_token = config.get('github', {}).get('api_token')
+
             checker = VersionChecker(
                 current_version=APP_VERSION,
                 owner='mikejsmith1985',
-                repo='jira-automation'
+                repo='jira-automation',
+                token=github_token
             )
             
             result = checker.download_and_apply_update(download_url)
@@ -1395,13 +1406,23 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def _handle_check_updates(self):
         """Check for available updates"""
-        global version_checker
+        global version_checker, config_manager
         try:
             if version_checker is None:
+                # Get token from config
+                github_token = None
+                if config_manager:
+                    config = config_manager.get_config()
+                    # Try feedback token first, then generic github token
+                    github_token = config.get('feedback', {}).get('github_token')
+                    if not github_token:
+                        github_token = config.get('github', {}).get('api_token')
+                
                 version_checker = VersionChecker(
                     current_version=APP_VERSION,
                     owner='mikejsmith1985',
-                    repo='jira-automation'
+                    repo='jira-automation',
+                    token=github_token
                 )
             
             # Force fresh check (ignore cache)
@@ -1424,13 +1445,23 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def _handle_list_releases(self):
         """List recent releases"""
-        global version_checker
+        global version_checker, config_manager
         try:
             if version_checker is None:
+                # Get token from config
+                github_token = None
+                if config_manager:
+                    config = config_manager.get_config()
+                    # Try feedback token first, then generic github token
+                    github_token = config.get('feedback', {}).get('github_token')
+                    if not github_token:
+                        github_token = config.get('github', {}).get('api_token')
+
                 version_checker = VersionChecker(
                     current_version=APP_VERSION,
                     owner='mikejsmith1985',
-                    repo='jira-automation'
+                    repo='jira-automation',
+                    token=github_token
                 )
             
             limit = int(self.headers.get('X-Limit', '10'))
