@@ -35,6 +35,14 @@ class ExtensionManager:
                 with open(self.config_path, 'r') as f:
                     config = yaml.safe_load(f) or {}
                     self.extension_configs = config.get('extensions', {})
+                    
+                    # Backwards compatibility for flat config structure
+                    if not self.extension_configs:
+                        # Check for known extensions in root config
+                        if 'jira' in config:
+                            self.extension_configs['jira'] = config['jira']
+                        if 'github' in config:
+                            self.extension_configs['github'] = config['github']
         except Exception as e:
             print(f"Error loading extension config: {e}")
             self.extension_configs = {}

@@ -4,6 +4,7 @@ Extracts data from Jira via Selenium WebDriver
 """
 import time
 import re
+import urllib.parse
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from selenium.webdriver.common.by import By
@@ -71,7 +72,8 @@ class JiraScraper:
         issues = []
         
         try:
-            jql_encoded = jql.replace(' ', '%20').replace('=', '%3D').replace('"', '%22')
+            # Use proper URL encoding for JQL
+            jql_encoded = urllib.parse.quote(jql)
             search_url = f"{self.base_url}/issues/?jql={jql_encoded}"
             self.driver.get(search_url)
             time.sleep(2)

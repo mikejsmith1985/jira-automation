@@ -31,7 +31,7 @@ class GitHubExtension(DualExtension):
     
     @property
     def version(self) -> str:
-        return "1.0.0"
+        return "1.2.16"
     
     @property
     def description(self) -> str:
