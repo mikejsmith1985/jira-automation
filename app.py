@@ -205,6 +205,9 @@ class SyncHandler(BaseHTTPRequestHandler):
             elif self.path == '/api/import/mappings':
                 self._handle_get_mappings()
                 return
+            elif self.path == '/api/import/process':
+                self._handle_process_csv()
+                return
             elif self.path == '/api/feedback/submit':
                 # Handle multipart form data for file uploads
                 self._handle_feedback_submit()
@@ -1602,6 +1605,48 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
 
+    def _handle_process_csv(self):
+        """Process CSV with provided mapping"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            mapping = data.get('mapping')
+            rows = data.get('rows') # If passing rows back from client
+            
+            # NOTE: In a real app we would read the file from server temp storage.
+            # For this MVP, since we returned rows to client in _handle_csv_upload,
+            # we can accept them back here, or re-upload.
+            # BUT passing rows back and forth is inefficient.
+            # BETTER: _handle_csv_upload saves to temp file, returns file_id.
+            
+            # Let's pivot: Client has the headers. Client likely doesn't have full rows if file was huge.
+            # But importer.parse_csv returned 'rows'. 
+            # If the client sends 'rows' back, we process them.
+            
+            if not rows or not mapping:
+                raise ValueError("Missing rows or mapping")
+                
+            importer = JiraCSVImporter()
+            result = importer.map_data(rows, mapping)
+            
+            # Save processed data for persistence
+            po_data_path = os.path.join(DATA_DIR, 'po_data.json')
+            with open(po_data_path, 'w') as f:
+                json.dump(result, f, indent=2)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+
     def _handle_network_error(self):
         """Receive and store network error from browser"""
         global log_capture
@@ -1988,6 +2033,16 @@ class SyncHandler(BaseHTTPRequestHandler):
         """Get current feature structure"""
         global data_store
         try:
+            # Check for po_data.json first (CSV Import pivot)
+            po_data_path = os.path.join(get_data_dir(), 'po_data.json')
+            if os.path.exists(po_data_path):
+                with open(po_data_path, 'r') as f:
+                    data = json.load(f)
+                    # Support both old and new format
+                    if 'issues' in data:
+                        return {'success': True, 'features': data['issues']}
+                    return {'success': True, 'features': data}
+
             if not data_store:
                 data_store = get_data_store()
             

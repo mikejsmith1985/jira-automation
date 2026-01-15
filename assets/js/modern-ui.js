@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadIntegrationStatus();
         loadAutomationRules();
         loadDashboardData();
+        loadPOData();
         
         console.log('[Waypoint] Initialization complete');
     } catch (error) {
@@ -179,19 +180,53 @@ async function applyMapping() {
         }
     }
     
-    // Now trigger the actual import logic (processing the file again with mapping)
-    // For this MVP, we re-upload the file effectively, but in a real app we'd keep the content in memory or on server
-    // Since we didn't keep state on server, we need to handle this.
-    // OPTION: We'll just show success for now and log the mapping to console,
-    // as the next step is actually visualizing this data.
-    
-    console.log('Applied mapping:', mapping);
-    showNotification(`Mapping applied! (Data processing implemented in next phase)`);
     closeMappingModal();
+    
+    // Trigger CSV processing
+    // NOTE: In this architecture, we need to pass the rows back or re-upload.
+    // For this implementation, we will assume 'uploadCSV' stored 'currentCSVRows'
+    // in memory (client-side) to avoid re-upload.
+    
+    if (window.currentCSVRows) {
+        processCSV(window.currentCSVRows, mapping);
+    } else {
+        // Fallback: re-upload required if data lost
+        showNotification('Session data lost. Please upload CSV again.', 'error');
+    }
 }
 
-/* ============================================================================
-   Theme Management
+async function uploadCSV(inputId = 'csv-file-input') {
+    const input = document.getElementById(inputId);
+    if (!input.files || !input.files[0]) {
+        showNotification('Please select a CSV file first', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    
+    try {
+        const response = await fetch('/api/import/csv', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`CSV uploaded successfully. Found ${result.count} rows.`);
+            
+            // Store rows temporarily for mapping
+            window.currentCSVRows = result.rows;
+            
+            openMappingModal(result.headers);
+        } else {
+            showNotification(`Upload failed: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Upload failed: ${error}`, 'error');
+    }
+}
    ============================================================================ */
 
 function initTheme() {
@@ -1370,6 +1405,136 @@ async function checkJiraLogin() {
 /* ============================================================================
    PO Data Functions
    ============================================================================ */
+   
+// Process CSV Data
+function normalizePOData(issues) {
+    if (!issues || !Array.isArray(issues)) return [];
+    
+    // Try to identify hierarchy
+    // 1. Look for explicit Epics
+    const epics = issues.filter(i => i.type && i.type.toLowerCase() === 'epic');
+    
+    let features = [];
+    
+    if (epics.length > 0) {
+        // Structure by Epics
+        features = epics.map(epic => {
+            const children = issues.filter(child => 
+                (child.epic_link === epic.key) || 
+                (child.parent_link === epic.key)
+            );
+            
+            return {
+                key: epic.key,
+                summary: epic.summary || 'No Summary',
+                status: epic.status || 'Unknown',
+                children: children
+            };
+        });
+        
+        // Handle orphans (items not in an epic and not epics themselves)
+        const linkedKeys = new Set(features.flatMap(f => f.children.map(c => c.key)));
+        const epicKeys = new Set(epics.map(e => e.key));
+        
+        const orphans = issues.filter(i => !linkedKeys.has(i.key) && !epicKeys.has(i.key));
+        
+        if (orphans.length > 0) {
+            features.push({
+                key: 'MISC',
+                summary: 'Other Issues',
+                status: 'Active',
+                children: orphans
+            });
+        }
+    } else {
+        // No Epics found? Treat as flat list under a container so metrics work
+        features = [{
+            key: 'IMPORT',
+            summary: `Imported Data (${new Date().toLocaleDateString()})`,
+            status: 'Active',
+            children: issues
+        }];
+    }
+    return features;
+}
+
+async function processCSV(rows, mapping) {
+    if (!rows || !mapping) return;
+    
+    try {
+        showNotification('Processing CSV data...');
+        
+        const response = await fetch('/api/import/process', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ rows: rows, mapping: mapping })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Imported ${result.count} issues successfully.`);
+            
+            const features = normalizePOData(result.issues);
+            
+            const poData = {
+                features: features,
+                meta: {
+                    source: 'csv_import',
+                    count: result.count
+                }
+            };
+            
+            displayPOData(poData);
+            
+            // Also update SM metrics since we have new data
+            displaySMMetrics({
+                total_issues: result.count,
+                issues_scraped: result.issues,
+                source: 'csv_import'
+            });
+            
+        } else {
+            showNotification(`Import failed: ${result.error}`, 'error');
+        }
+    } catch (e) {
+        showNotification(`Import error: ${e}`, 'error');
+    }
+}
+
+async function loadPOData() {
+    try {
+        const response = await fetch('/api/data/features');
+        const result = await response.json();
+        
+        if (result.success && result.features && result.features.length > 0) {
+            console.log('[Waypoint] Loading PO data from storage', result.features.length);
+            
+            // If data is already structured (has children), use it as is (legacy support)
+            // But if it's flat list of issues (CSV import), normalize it
+            let features = [];
+            
+            // Check if first item has children property
+            if (result.features[0].children) {
+                 features = result.features;
+            } else {
+                 features = normalizePOData(result.features);
+            }
+            
+            const poData = {
+                features: features,
+                meta: {
+                    source: 'storage',
+                    count: result.features.length
+                }
+            };
+            
+            displayPOData(poData);
+        }
+    } catch (e) {
+        console.error('[Waypoint] Failed to load PO data:', e);
+    }
+}
 
 async function loadPODataFromUrl() {
     const url = document.getElementById('po-data-url').value;
@@ -1596,6 +1761,7 @@ window.saveGitHubSettings = saveGitHubSettings;
 window.testGitHubConnection = testGitHubConnection;
 window.loadPODataFromUrl = loadPODataFromUrl;
 window.loadPODataFromJson = loadPODataFromJson;
+window.loadPOData = loadPOData;
 window.exportPOData = exportPOData;
 window.scrapeMetrics = scrapeMetrics;
 window.refreshMetrics = refreshMetrics;

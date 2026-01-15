@@ -161,7 +161,7 @@
                                     <input type="file" id="csv-file-input" accept=".csv" class="input-field" style="padding: 10px;">
                                     <small class="text-secondary">Export your issues from Jira (Search -> Export -> CSV) and upload here.</small>
                                 </div>
-                                <button class="btn btn-primary" onclick="uploadCSV()">Upload & Map Fields</button>
+                                <button class="btn btn-primary" onclick="uploadCSV('csv-file-input')">Upload & Map Fields</button>
                             </div>
 
                             <!-- JSON Import Tab (Existing) -->
@@ -365,6 +365,22 @@
 
                 <!-- SM Tab -->
                 <section id="sm" class="tab">
+                    <!-- Import Data Section (Mirrored from PO) -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>📥 Import Data</h3>
+                            <p class="text-secondary">Import data from CSV/Excel for analysis</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>Upload CSV File (from Jira Export)</label>
+                                <input type="file" id="sm-csv-file-input" accept=".csv" class="input-field" style="padding: 10px;">
+                                <small class="text-secondary">Export your issues from Jira (Search -> Export -> CSV) and upload here.</small>
+                            </div>
+                            <button class="btn btn-primary" onclick="uploadCSV('sm-csv-file-input')">Upload & Map Fields</button>
+                        </div>
+                    </div>
+
                     <div class="card">
                         <div class="card-header">
                             <h3>📊 Scrape Metrics from Jira</h3>

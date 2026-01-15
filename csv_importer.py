@@ -51,10 +51,28 @@ class JiraCSVImporter:
             issue = {}
             for internal_field, csv_header in mapping.items():
                 if csv_header and csv_header in row:
-                    issue[internal_field] = row[csv_header]
+                    val = row[csv_header]
+                    
+                    # Basic cleanup
+                    if val:
+                        val = val.strip()
+                        
+                    # Type conversion for specific fields
+                    if internal_field == 'story_points' and val:
+                        try:
+                            val = float(val)
+                        except: pass
+                        
+                    issue[internal_field] = val
             
             # Ensure minimal required fields
-            if 'key' in issue:
+            if 'key' in issue and issue['key']:
                 mapped_issues.append(issue)
-                
-        return mapped_issues
+        
+        # Structure into Feature/Epic hierarchy if applicable
+        # (For now, returning flat list, can build tree in JS or here later)
+        return {
+            'success': True,
+            'issues': mapped_issues,
+            'count': len(mapped_issues)
+        }
