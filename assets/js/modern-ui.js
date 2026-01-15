@@ -24,6 +24,173 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* ============================================================================
+   CSV Import & Mapping
+   ============================================================================ */
+
+function switchImportTab(mode) {
+    const tabs = document.querySelectorAll('.btn-tab');
+    const contents = document.querySelectorAll('.import-tab-content');
+    
+    tabs.forEach(t => t.classList.remove('active'));
+    contents.forEach(c => c.style.display = 'none');
+    
+    const activeBtn = document.querySelector(`.btn-tab[onclick="switchImportTab('${mode}')"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    const activeContent = document.getElementById(`import-${mode}`);
+    if (activeContent) activeContent.style.display = 'block';
+}
+
+async function uploadCSV() {
+    const input = document.getElementById('csv-file-input');
+    if (!input.files || !input.files[0]) {
+        showNotification('Please select a CSV file first', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    
+    try {
+        const response = await fetch('/api/import/csv', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`CSV uploaded successfully. Found ${result.count} rows.`);
+            openMappingModal(result.headers);
+        } else {
+            showNotification(`Upload failed: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Upload failed: ${error}`, 'error');
+    }
+}
+
+// Store headers temporarily
+let currentCSVHeaders = [];
+
+function openMappingModal(headers) {
+    currentCSVHeaders = headers;
+    const modal = document.getElementById('mapping-modal');
+    const container = document.getElementById('mapping-container');
+    container.innerHTML = '';
+    
+    // Define standard internal fields we want to map to
+    const internalFields = [
+        { id: 'key', label: 'Issue Key (Required)', required: true },
+        { id: 'summary', label: 'Summary' },
+        { id: 'status', label: 'Status' },
+        { id: 'type', label: 'Issue Type' },
+        { id: 'priority', label: 'Priority' },
+        { id: 'assignee', label: 'Assignee' },
+        { id: 'story_points', label: 'Story Points' },
+        { id: 'description', label: 'Description' },
+        { id: 'epic_link', label: 'Epic Link' },
+        { id: 'parent_link', label: 'Parent Link' },
+        { id: 'labels', label: 'Labels' }
+    ];
+    
+    // Try to auto-guess mappings
+    const guessMapping = (fieldLabel) => {
+        const label = fieldLabel.toLowerCase();
+        return headers.find(h => {
+            const header = h.toLowerCase();
+            if (header === label) return true;
+            if (header === 'issue key' && label === 'issue key (required)') return true;
+            if (header === 'key' && label === 'issue key (required)') return true;
+            if (header.includes(label)) return true;
+            return false;
+        }) || '';
+    };
+
+    internalFields.forEach(field => {
+        const div = document.createElement('div');
+        div.className = 'form-group';
+        
+        const options = headers.map(h => `<option value="${h}" ${guessMapping(field.label) === h ? 'selected' : ''}>${h}</option>`).join('');
+        
+        div.innerHTML = `
+            <label>${field.label}</label>
+            <select class="input-field mapping-select" data-field="${field.id}">
+                <option value="">-- Select Column --</option>
+                ${options}
+            </select>
+        `;
+        container.appendChild(div);
+    });
+    
+    modal.style.display = 'block';
+    
+    // Load existing mappings if available
+    loadSavedMappings();
+}
+
+function closeMappingModal() {
+    document.getElementById('mapping-modal').style.display = 'none';
+}
+
+async function loadSavedMappings() {
+    try {
+        const response = await fetch('/api/import/mappings');
+        const result = await response.json();
+        
+        if (result.success && result.mappings) {
+            const nameInput = document.getElementById('mapping-name');
+            // Logic to populate a dropdown of saved mappings could go here
+            // For now, just logging
+            console.log('Loaded mappings:', result.mappings);
+        }
+    } catch (e) {
+        console.error('Failed to load mappings', e);
+    }
+}
+
+async function applyMapping() {
+    const mapping = {};
+    const selects = document.querySelectorAll('.mapping-select');
+    
+    selects.forEach(select => {
+        if (select.value) {
+            mapping[select.dataset.field] = select.value;
+        }
+    });
+    
+    if (!mapping.key) {
+        showNotification('Issue Key mapping is required!', 'error');
+        return;
+    }
+    
+    const mappingName = document.getElementById('mapping-name').value;
+    
+    // Save mapping if name provided
+    if (mappingName) {
+        try {
+            await fetch('/api/import/save-mapping', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name: mappingName, mapping: mapping })
+            });
+        } catch (e) {
+            console.error('Failed to save mapping', e);
+        }
+    }
+    
+    // Now trigger the actual import logic (processing the file again with mapping)
+    // For this MVP, we re-upload the file effectively, but in a real app we'd keep the content in memory or on server
+    // Since we didn't keep state on server, we need to handle this.
+    // OPTION: We'll just show success for now and log the mapping to console,
+    // as the next step is actually visualizing this data.
+    
+    console.log('Applied mapping:', mapping);
+    showNotification(`Mapping applied! (Data processing implemented in next phase)`);
+    closeMappingModal();
+}
+
+/* ============================================================================
    Theme Management
    ============================================================================ */
 

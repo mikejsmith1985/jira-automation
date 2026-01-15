@@ -142,27 +142,69 @@
 
                 <!-- PO Tab -->
                 <section id="po" class="tab">
+                    <!-- Data Import Section -->
                     <div class="card">
                         <div class="card-header">
-                            <h3>📊 Load Data Structure</h3>
-                            <p class="text-secondary">Provide a URL to your feature/epic data structure or paste JSON directly</p>
+                            <h3>📥 Import Data</h3>
+                            <p class="text-secondary">Import data from CSV/Excel or JSON structure</p>
                         </div>
                         <div style="padding: 20px;">
-                            <div class="form-group">
-                                <label>Data Source URL</label>
-                                <input type="text" id="po-data-url" class="input-field" placeholder="https://example.com/features.json">
-                                <small class="text-secondary">URL should return JSON with features/epics structure</small>
+                            <div class="tabs-nav" style="margin-bottom: 20px; border-bottom: 1px solid var(--border-color);">
+                                <button class="btn btn-tab active" onclick="switchImportTab('csv')">CSV Import</button>
+                                <button class="btn btn-tab" onclick="switchImportTab('json')">JSON Structure</button>
                             </div>
-                            <div class="form-group">
-                                <label>Or Paste JSON Data</label>
-                                <textarea id="po-data-json" class="input-field" rows="4" placeholder='{"features": [{"key": "FEAT-1", "summary": "Feature Name", "children": [...]}]}'></textarea>
+
+                            <!-- CSV Import Tab -->
+                            <div id="import-csv" class="import-tab-content">
+                                <div class="form-group">
+                                    <label>Upload CSV File (from Jira Export)</label>
+                                    <input type="file" id="csv-file-input" accept=".csv" class="input-field" style="padding: 10px;">
+                                    <small class="text-secondary">Export your issues from Jira (Search -> Export -> CSV) and upload here.</small>
+                                </div>
+                                <button class="btn btn-primary" onclick="uploadCSV()">Upload & Map Fields</button>
                             </div>
-                            <div style="display: flex; gap: 10px;">
-                                <button class="btn btn-primary" onclick="loadPODataFromUrl()">📥 Load from URL</button>
-                                <button class="btn btn-secondary" onclick="loadPODataFromJson()">📋 Load from JSON</button>
-                                <button class="btn btn-secondary" onclick="exportPOData()">📤 Export Data</button>
+
+                            <!-- JSON Import Tab (Existing) -->
+                            <div id="import-json" class="import-tab-content" style="display: none;">
+                                <div class="form-group">
+                                    <label>Data Source URL</label>
+                                    <input type="text" id="po-data-url" class="input-field" placeholder="https://example.com/features.json">
+                                </div>
+                                <div class="form-group">
+                                    <label>Or Paste JSON Data</label>
+                                    <textarea id="po-data-json" class="input-field" rows="4" placeholder='{"features": [{"key": "FEAT-1", "summary": "Feature Name", "children": [...]}]}'></textarea>
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <button class="btn btn-primary" onclick="loadPODataFromUrl()">📥 Load from URL</button>
+                                    <button class="btn btn-secondary" onclick="loadPODataFromJson()">📋 Load from JSON</button>
+                                </div>
                             </div>
+                            
                             <p id="po-load-result" style="margin-top: 10px;"></p>
+                        </div>
+                    </div>
+
+                    <!-- Field Mapping Modal (Hidden by default) -->
+                    <div id="mapping-modal" class="modal">
+                        <div class="modal-content" style="max-width: 600px;">
+                            <div class="modal-header">
+                                <h2>Map CSV Fields</h2>
+                                <span class="close-modal" onclick="closeMappingModal()">&times;</span>
+                            </div>
+                            <div class="modal-body">
+                                <p>Map columns from your CSV to Waypoint fields.</p>
+                                <div class="form-group">
+                                    <label>Mapping Name (to save for later)</label>
+                                    <input type="text" id="mapping-name" class="input-field" placeholder="e.g. My Team Board">
+                                </div>
+                                <div id="mapping-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                                    <!-- Mappings injected here -->
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-primary" onclick="applyMapping()">Apply & Save</button>
+                                <button class="btn btn-secondary" onclick="closeMappingModal()">Cancel</button>
+                            </div>
                         </div>
                     </div>
                     

@@ -20,6 +20,7 @@ from feedback_db import FeedbackDB
 from github_feedback import GitHubFeedback, LogCapture
 from version_checker import VersionChecker
 from login_detector import check_login_status
+from csv_importer import JiraCSVImporter
 
 # Extension system imports
 from extensions import get_extension_manager, ExtensionCapability
@@ -194,6 +195,15 @@ class SyncHandler(BaseHTTPRequestHandler):
                 return
             elif self.path == '/api/feedback/network-error':
                 self._handle_network_error()
+                return
+            elif self.path == '/api/import/csv':
+                self._handle_csv_upload()
+                return
+            elif self.path == '/api/import/save-mapping':
+                self._handle_save_mapping()
+                return
+            elif self.path == '/api/import/mappings':
+                self._handle_get_mappings()
                 return
             elif self.path == '/api/feedback/submit':
                 # Handle multipart form data for file uploads
@@ -1497,6 +1507,101 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
     
+    def _handle_csv_upload(self):
+        """Handle CSV file upload for import"""
+        try:
+            import cgi
+            
+            # Parse multipart form data
+            content_type = self.headers['Content-Type']
+            content_length = int(self.headers['Content-Length'])
+            
+            environ = {
+                'REQUEST_METHOD': 'POST',
+                'CONTENT_TYPE': content_type,
+                'CONTENT_LENGTH': str(content_length)
+            }
+            
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ=environ,
+                keep_blank_values=True
+            )
+            
+            if 'file' not in form:
+                raise ValueError("No file uploaded")
+                
+            fileitem = form['file']
+            if not fileitem.file:
+                raise ValueError("Empty file")
+                
+            importer = JiraCSVImporter()
+            result = importer.parse_csv(fileitem.file.read())
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+            
+    def _handle_save_mapping(self):
+        """Save CSV field mapping"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            mapping = data.get('mapping')
+            mapping_name = data.get('name', 'default')
+            
+            # Save to config/storage
+            config_path = os.path.join(DATA_DIR, 'csv_mappings.json')
+            mappings = {}
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    mappings = json.load(f)
+            
+            mappings[mapping_name] = mapping
+            
+            with open(config_path, 'w') as f:
+                json.dump(mappings, f, indent=2)
+                
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True}).encode('utf-8'))
+            
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+
+    def _handle_get_mappings(self):
+        """Get saved CSV mappings"""
+        try:
+            config_path = os.path.join(DATA_DIR, 'csv_mappings.json')
+            mappings = {}
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    mappings = json.load(f)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True, 'mappings': mappings}).encode('utf-8'))
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+
     def _handle_network_error(self):
         """Receive and store network error from browser"""
         global log_capture
