@@ -64,7 +64,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.2.27"
+APP_VERSION = "1.2.28"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
