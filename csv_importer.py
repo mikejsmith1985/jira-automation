@@ -6,9 +6,13 @@ import csv
 import io
 import logging
 import sys
+import platform
 
 # Increase CSV field size limit to handle large descriptions/images
-csv.field_size_limit(sys.maxsize)
+# Use 2^31-1 on Windows (C long is 32-bit even on 64-bit Windows)
+# Use sys.maxsize on other platforms
+_MAX_FIELD_SIZE = 2**31 - 1 if platform.system() == 'Windows' else sys.maxsize
+csv.field_size_limit(_MAX_FIELD_SIZE)
 
 class JiraCSVImporter:
     def __init__(self):

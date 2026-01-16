@@ -110,7 +110,7 @@ if (Test-Path $exePath) {
     Copy-Item "requirements.txt" -Destination $releaseDir
     
     # Create zip
-    $zipName = "waypoint-v1.2.28.zip"
+    $zipName = "waypoint-v1.2.29.zip"
 
     if (Test-Path $zipName) { Remove-Item -Force $zipName }
     
