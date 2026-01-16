@@ -33,27 +33,37 @@ if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
 
 # Build
-$cmd = "python -m PyInstaller --clean --name 'waypoint' --onefile --noconsole"
-$cmd += " --add-data 'config.yaml;.'"
-$cmd += " --add-data 'modern-ui.html;.'"
-$cmd += " --add-data 'assets;assets'"
-$cmd += " --hidden-import=selenium"
-$cmd += " --hidden-import=yaml"
-$cmd += " --hidden-import=schedule"
-$cmd += " --hidden-import=github"
-$cmd += " --hidden-import=packaging"
-$cmd += " --hidden-import=requests"
-$cmd += " --hidden-import=urllib3"
-$cmd += " --hidden-import=extensions"
+$params = @(
+    "-m", "PyInstaller",
+    "--clean",
+    "--name", "waypoint",
+    "--onefile",
+    "--noconsole",
+    "--add-data", "config.yaml;.",
+    "--add-data", "modern-ui.html;.",
+    "--add-data", "assets;assets",
+    "--hidden-import=selenium",
+    "--hidden-import=yaml",
+    "--hidden-import=schedule",
+    "--hidden-import=github",
+    "--hidden-import=packaging",
+    "--hidden-import=requests",
+    "--hidden-import=urllib3"
+)
 
-if (Test-Path "assets\icon.ico") {
-    $cmd += " --icon=assets\icon.ico"
+# Optional extensions hidden import - may fail if extensions folder structure is invalid
+if (Test-Path "extensions\__init__.py") {
+    $params += "--hidden-import=extensions"
 }
 
-$cmd += " app.py"
+if (Test-Path "assets\icon.ico") {
+    $params += "--icon=assets\icon.ico"
+}
 
-Write-Host "Running: $cmd"
-Invoke-Expression $cmd
+$params += "app.py"
+
+Write-Host "Running: python $params"
+& python $params
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "✗ Build failed" -ForegroundColor Red

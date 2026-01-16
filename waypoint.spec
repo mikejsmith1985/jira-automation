@@ -6,7 +6,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('config.yaml', '.'), ('modern-ui.html', '.'), ('assets', 'assets')],
-    hiddenimports=['selenium', 'yaml', 'schedule', 'github', 'packaging', 'requests', 'urllib3'],
+    hiddenimports=['selenium', 'yaml', 'schedule', 'github', 'packaging', 'requests', 'urllib3', 'extensions'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,4 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['assets\\icon.ico'],
 )
