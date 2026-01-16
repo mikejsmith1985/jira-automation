@@ -59,14 +59,7 @@ jobs:
           pip install pyinstaller
       
       - name: Build executable
-        run: |
-          if (Test-Path "waypoint.spec") {
-            pyinstaller waypoint.spec
-          } elseif (Test-Path "GitHubJiraSync.spec") {
-            pyinstaller GitHubJiraSync.spec
-          } else {
-            pyinstaller --name="waypoint" --onefile --windowed app.py
-          }
+        run: .\build.ps1
         shell: pwsh
       
       - name: Prepare release assets

@@ -33,17 +33,27 @@ if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
 
 # Build
-python -m PyInstaller --clean `
-    --name "waypoint" `
-    --onefile `
-    --noconsole `
-    --add-data "config.yaml;." `
-    --add-data "modern-ui.html;." `
-    --add-data "assets;assets" `
-    --hidden-import=selenium `
-    --hidden-import=yaml `
-    --hidden-import=schedule `
-    app.py
+$cmd = "python -m PyInstaller --clean --name 'waypoint' --onefile --noconsole"
+$cmd += " --add-data 'config.yaml;.'"
+$cmd += " --add-data 'modern-ui.html;.'"
+$cmd += " --add-data 'assets;assets'"
+$cmd += " --hidden-import=selenium"
+$cmd += " --hidden-import=yaml"
+$cmd += " --hidden-import=schedule"
+$cmd += " --hidden-import=github"
+$cmd += " --hidden-import=packaging"
+$cmd += " --hidden-import=requests"
+$cmd += " --hidden-import=urllib3"
+$cmd += " --hidden-import=extensions"
+
+if (Test-Path "assets\icon.ico") {
+    $cmd += " --icon=assets\icon.ico"
+}
+
+$cmd += " app.py"
+
+Write-Host "Running: $cmd"
+Invoke-Expression $cmd
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "✗ Build failed" -ForegroundColor Red

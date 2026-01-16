@@ -36,31 +36,7 @@ jobs:
         run: pip install -r requirements.txt
       
       - name: Package application
-        run: |
-          $iconPath = "assets/icon.ico"
-          $cmd = "python -m PyInstaller --onefile --windowed --name=waypoint"
-          $cmd += " --add-data 'modern-ui.html;.'"
-          $cmd += " --add-data 'assets;assets'"
-          $cmd += " --add-data 'config.yaml;.'"
-          
-          if (Test-Path $iconPath) {
-            $cmd += " --icon=$iconPath"
-          }
-          
-          $cmd += " app.py"
-          
-          Write-Host "Running: $cmd"
-          Invoke-Expression $cmd
-          
-          if (Test-Path "dist/waypoint.exe") {
-            New-Item -ItemType Directory -Path "release" -Force | Out-Null
-            Copy-Item "dist/waypoint.exe" "release/" -Force
-            Copy-Item "dist" "release/" -Force -Recurse -ErrorAction SilentlyContinue
-            Write-Host "Executable packaged successfully"
-          } else {
-            Write-Host "ERROR: Failed to create executable"
-            exit 1
-          }
+        run: .\build.ps1
         shell: powershell
       
       - name: Create portable ZIP
