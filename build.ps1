@@ -48,7 +48,22 @@ $params = @(
     "--hidden-import=github",
     "--hidden-import=packaging",
     "--hidden-import=requests",
-    "--hidden-import=urllib3"
+    "--hidden-import=urllib3",
+    "--hidden-import=extensions",
+    "--hidden-import=extensions.jira",
+    "--hidden-import=extensions.github",
+    "--hidden-import=extensions.reporting",
+    "--hidden-import=storage",
+    "--hidden-import=trio",
+    "--hidden-import=trio_websocket",
+    "--hidden-import=nacl",
+    "--hidden-import=jwt",
+    "--hidden-import=cryptography",
+    "--hidden-import=certifi",
+    "--hidden-import=charset_normalizer",
+    "--hidden-import=idna",
+    "--hidden-import=deprecated",
+    "--hidden-import=wrapt"
 )
 
 # Optional extensions hidden import - may fail if extensions folder structure is invalid
@@ -95,7 +110,7 @@ if (Test-Path $exePath) {
     Copy-Item "requirements.txt" -Destination $releaseDir
     
     # Create zip
-    $zipName = "waypoint-v1.2.25.zip"
+    $zipName = "waypoint-v1.2.26.zip"
 
     if (Test-Path $zipName) { Remove-Item -Force $zipName }
     
