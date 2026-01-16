@@ -1738,3 +1738,199 @@ async function applyUpdate(downloadUrl) {
 }
 window.restoreFeedbackModal = restoreFeedbackModal;
 window.updateLogIndicator = updateLogIndicator;
+
+/* ============================================================================
+   CSV Import & Mapping Functions
+   ============================================================================ */
+
+// Store CSV data temporarily
+let currentCSVHeaders = [];
+window.currentCSVRows = null;
+
+async function uploadCSV(inputId = 'csv-file-input') {
+    const input = document.getElementById(inputId);
+    if (!input.files || !input.files[0]) {
+        showNotification('Please select a CSV file first', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    
+    try {
+        const response = await fetch('/api/import/csv', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`CSV uploaded successfully. Found ${result.count} rows.`);
+            
+            // Store rows temporarily for mapping
+            window.currentCSVRows = result.rows;
+            
+            openMappingModal(result.headers);
+        } else {
+            showNotification(`Upload failed: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('[Waypoint] CSV upload error:', error);
+        showNotification(`Upload failed: ${error}`, 'error');
+    }
+}
+
+function openMappingModal(headers) {
+    currentCSVHeaders = headers;
+    const modal = document.getElementById('mapping-modal');
+    const container = document.getElementById('mapping-container');
+    
+    if (!modal || !container) {
+        console.error('[Waypoint] Mapping modal elements not found');
+        showNotification('Mapping modal not found in page', 'error');
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    // Define standard internal fields we want to map to
+    const internalFields = [
+        { id: 'key', label: 'Issue Key (Required)', required: true },
+        { id: 'summary', label: 'Summary' },
+        { id: 'status', label: 'Status' },
+        { id: 'type', label: 'Issue Type' },
+        { id: 'priority', label: 'Priority' },
+        { id: 'assignee', label: 'Assignee' },
+        { id: 'story_points', label: 'Story Points' },
+        { id: 'description', label: 'Description' },
+        { id: 'epic_link', label: 'Epic Link' },
+        { id: 'parent_link', label: 'Parent Link' },
+        { id: 'labels', label: 'Labels' }
+    ];
+    
+    // Try to auto-guess mappings
+    const guessMapping = (fieldLabel) => {
+        const label = fieldLabel.toLowerCase();
+        return headers.find(h => {
+            const header = h.toLowerCase();
+            if (header === label) return true;
+            if (header === 'issue key' && label === 'issue key (required)') return true;
+            if (header === 'key' && label === 'issue key (required)') return true;
+            if (header.includes(label)) return true;
+            return false;
+        }) || '';
+    };
+
+    internalFields.forEach(field => {
+        const div = document.createElement('div');
+        div.className = 'form-group';
+        
+        const options = headers.map(h => `<option value="${h}" ${guessMapping(field.label) === h ? 'selected' : ''}>${h}</option>`).join('');
+        
+        div.innerHTML = `
+            <label>${field.label}</label>
+            <select class="input-field mapping-select" data-field="${field.id}">
+                <option value="">-- Select Column --</option>
+                ${options}
+            </select>
+        `;
+        container.appendChild(div);
+    });
+    
+    modal.style.display = 'block';
+    
+    // Load existing mappings if available
+    loadSavedMappings();
+}
+
+function closeMappingModal() {
+    const modal = document.getElementById('mapping-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function loadSavedMappings() {
+    try {
+        const response = await fetch('/api/import/mappings');
+        const result = await response.json();
+        
+        if (result.success && result.mappings) {
+            console.log('[Waypoint] Loaded mappings:', result.mappings);
+        }
+    } catch (e) {
+        console.error('[Waypoint] Failed to load mappings', e);
+    }
+}
+
+async function applyMapping() {
+    const mapping = {};
+    const selects = document.querySelectorAll('.mapping-select');
+    
+    selects.forEach(select => {
+        if (select.value) {
+            mapping[select.dataset.field] = select.value;
+        }
+    });
+    
+    if (!mapping.key) {
+        showNotification('Issue Key mapping is required!', 'error');
+        return;
+    }
+    
+    const mappingNameEl = document.getElementById('mapping-name');
+    const mappingName = mappingNameEl ? mappingNameEl.value : '';
+    
+    // Save mapping if name provided
+    if (mappingName) {
+        try {
+            await fetch('/api/import/save-mapping', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name: mappingName, mapping: mapping })
+            });
+        } catch (e) {
+            console.error('[Waypoint] Failed to save mapping', e);
+        }
+    }
+    
+    closeMappingModal();
+    
+    // Trigger CSV processing
+    if (window.currentCSVRows) {
+        processCSV(window.currentCSVRows, mapping);
+    } else {
+        showNotification('Session data lost. Please upload CSV again.', 'error');
+    }
+}
+
+async function processCSV(rows, mapping) {
+    try {
+        const response = await fetch('/api/import/process', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ rows: rows, mapping: mapping })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Imported ${result.count} issues successfully!`, 'success');
+            // Refresh dashboard data
+            if (typeof loadDashboardData === 'function') {
+                loadDashboardData();
+            }
+        } else {
+            showNotification(`Import failed: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('[Waypoint] CSV processing error:', error);
+        showNotification(`Import failed: ${error}`, 'error');
+    }
+}
+
+// Export functions to window for onclick handlers
+window.uploadCSV = uploadCSV;
+window.openMappingModal = openMappingModal;
+window.closeMappingModal = closeMappingModal;
+window.applyMapping = applyMapping;
+window.processCSV = processCSV;

@@ -256,13 +256,23 @@ class LogCapture:
                 for line in f:
                     # Try to parse timestamp from log line
                     try:
-                        # Assuming log format: [YYYY-MM-DD HH:MM:SS] ...
+                        # Support multiple log formats:
+                        # Format 1: [YYYY-MM-DD HH:MM:SS] ...
+                        # Format 2: YYYY-MM-DD HH:MM:SS,mmm - LEVEL - ...
+                        timestamp_str = None
+                        log_time = None
+                        
                         if line.startswith('['):
+                            # Format 1: [2026-01-16 13:18:24]
                             timestamp_str = line[1:20]
                             log_time = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-                            
-                            if log_time >= cutoff_time:
-                                recent_logs.append(line.strip())
+                        elif len(line) >= 23 and line[4] == '-' and line[7] == '-' and line[10] == ' ':
+                            # Format 2: 2026-01-16 13:18:24,746 - INFO -
+                            timestamp_str = line[:19]  # YYYY-MM-DD HH:MM:SS
+                            log_time = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                        
+                        if log_time and log_time >= cutoff_time:
+                            recent_logs.append(line.strip())
                     except:
                         # If can't parse timestamp, include anyway if we're capturing
                         if recent_logs:
