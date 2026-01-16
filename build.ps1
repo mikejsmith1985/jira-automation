@@ -38,6 +38,8 @@ python -m PyInstaller --clean `
     --onefile `
     --noconsole `
     --add-data "config.yaml;." `
+    --add-data "modern-ui.html;." `
+    --add-data "assets;assets" `
     --hidden-import=selenium `
     --hidden-import=yaml `
     --hidden-import=schedule `
