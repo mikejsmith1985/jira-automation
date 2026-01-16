@@ -6,18 +6,18 @@ Write-Host ""
 
 # Check Python
 Write-Host "Checking Python..." -ForegroundColor Yellow
- = python --version 2>&1
-if (0 -ne 0) {
+$version = python --version 2>&1
+if ($LASTEXITCODE -ne 0) {
     Write-Host "Python not found. Please install Python 3.10+" -ForegroundColor Red
     exit 1
 }
-Write-Host "Python version: " -ForegroundColor Green
+Write-Host "Python version: $version" -ForegroundColor Green
 
 # Install dependencies
 Write-Host ""
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 pip install -r requirements.txt --quiet
-if (0 -ne 0) {
+if ($LASTEXITCODE -ne 0) {
     Write-Host "Failed to install dependencies" -ForegroundColor Red
     exit 1
 }
@@ -33,7 +33,7 @@ if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
 
 # Build parameters
- = @(
+$params = @(
     "-m", "PyInstaller",
     "--clean",
     "--name", "waypoint",
@@ -53,30 +53,30 @@ if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
 
 # Optional extensions hidden import - may fail if extensions folder structure is invalid
 if (Test-Path "extensions\__init__.py") {
-     += "--hidden-import=extensions"
+    $params += "--hidden-import=extensions"
 }
 
 if (Test-Path "assets\icon.ico") {
-     += "--icon=assets\icon.ico"
+    $params += "--icon=assets\icon.ico"
 }
 
- += "app.py"
+$params += "app.py"
 
-Write-Host "Running: python "
-& python 
+Write-Host "Running: python $params"
+& python $params
 
-if (0 -ne 0) {
+if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed" -ForegroundColor Red
     exit 1
 }
 
- = "dist\waypoint.exe"
-if (Test-Path ) {
-     = [math]::Round((Get-Item ).Length / 1MB, 1)
-    Write-Host "Build successful! ( MB)" -ForegroundColor Green
+$exePath = "dist\waypoint.exe"
+if (Test-Path $exePath) {
+    $size = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
+    Write-Host "Build successful! ($size MB)" -ForegroundColor Green
     Write-Host ""
     Write-Host "Executable location:" -ForegroundColor Cyan
-    Write-Host "   " -ForegroundColor White
+    Write-Host "   $exePath" -ForegroundColor White
     Write-Host ""
     Write-Host "To run:" -ForegroundColor Cyan
     Write-Host "   .\dist\waypoint.exe" -ForegroundColor White
@@ -84,23 +84,26 @@ if (Test-Path ) {
     Write-Host "Creating release package..." -ForegroundColor Yellow
     
     # Create release folder
-     = "release"
-    if (Test-Path ) { Remove-Item -Recurse -Force  }
-    New-Item -ItemType Directory -Path  | Out-Null
+    $releaseDir = "release"
+    if (Test-Path $releaseDir) { Remove-Item -Recurse -Force $releaseDir }
+    New-Item -ItemType Directory -Path $releaseDir | Out-Null
     
     # Copy files
-    Copy-Item  -Destination 
-    Copy-Item "READY_TO_TEST.md" -Destination  -ErrorAction SilentlyContinue
-    Copy-Item "config.yaml" -Destination 
-    Copy-Item "requirements.txt" -Destination 
+    Copy-Item $exePath -Destination $releaseDir
+    Copy-Item "READY_TO_TEST.md" -Destination $releaseDir -ErrorAction SilentlyContinue
+    Copy-Item "config.yaml" -Destination $releaseDir
+    Copy-Item "requirements.txt" -Destination $releaseDir
     
     # Create zip
-     = "waypoint-v1.2.24.zip"
-    if (Test-Path ) { Remove-Item -Force  }
-    Compress-Archive -Path "\*" -DestinationPath 
+    $zipName = "waypoint-v1.2.25.zip"
+
+    if (Test-Path $zipName) { Remove-Item -Force $zipName }
     
-     = [math]::Round((Get-Item ).Length / 1MB, 1)
-    Write-Host "Release package created:  ( MB)" -ForegroundColor Green
+    # Compress release folder contents
+    Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipName
+    
+    $zipSize = [math]::Round((Get-Item $zipName).Length / 1MB, 1)
+    Write-Host "Release package created: $zipName ($zipSize MB)" -ForegroundColor Green
     
 } else {
     Write-Host "Executable not found" -ForegroundColor Red
