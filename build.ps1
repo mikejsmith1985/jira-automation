@@ -95,7 +95,7 @@ if (Test-Path $exePath) {
     Copy-Item "requirements.txt" -Destination $releaseDir
     
     # Create zip
-    $zipPath = "waypoint-v1.2.10.zip"
+    $zipPath = "waypoint-v1.2.23.zip"
     if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
     Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipPath
     
