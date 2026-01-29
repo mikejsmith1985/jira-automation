@@ -2014,17 +2014,24 @@ async function createFixVersionsFromDataset() {
         
         showFixVersionResult(`🔄 Creating ${filteredReleases.length} fixVersions... This may take a few minutes.`, 'info');
         
-        const releases = filteredReleases.map(r => ({ date: r.date, name: r.name }));
+        // Pass date (YYYY-MM-DD), name (release name), and originalDate (MM/DD/YYYY)
+        const releases = filteredReleases.map(r => ({ 
+            date: r.date, 
+            name: r.name,
+            originalDate: r.originalDate 
+        }));
         const response = await fetch('/api/sm/create-fixversions-from-dataset', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ project_key: projectKey, releases: releases }) });
         const result = await response.json();
         
         if (result.success) {
             const created = result.created || [];
             const skipped = result.skipped || [];
+            const skipped_past = result.skipped_past || [];
             const failed = result.failed || [];
             let html = '<div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;"><h4 style="margin: 0 0 10px 0;">✅ Summary</h4><p>✅ Created: ' + created.length + '</p>';
             if (created.length > 0) { html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">'; created.forEach(name => html += `<li>${name}</li>`); html += '</ul>'; }
             if (skipped.length > 0) { html += `<p>⏭️ Skipped: ${skipped.length} (already existed)</p><ul style="margin: 5px 0 10px 20px; font-size: 13px;">`; skipped.forEach(name => html += `<li>${name}</li>`); html += '</ul>'; }
+            if (skipped_past.length > 0) { html += `<p>📅 Skipped: ${skipped_past.length} (past dates)</p><ul style="margin: 5px 0 10px 20px; font-size: 13px;">`; skipped_past.forEach(date => html += `<li>${date}</li>`); html += '</ul>'; }
             if (failed.length > 0) { html += `<p>❌ Failed: ${failed.length}</p><ul style="margin: 5px 0 10px 20px; font-size: 13px;">`; failed.forEach(item => html += `<li>${item.name}: ${item.error}</li>`); html += '</ul>'; }
             html += `<p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">View in Jira: <a href="${result.versions_url}" target="_blank" style="color: var(--accent-primary);">Open Versions Page</a></p></div>`;
             showFixVersionResult(html, 'success');

@@ -1,3 +1,10 @@
+
+> **⚠️ DEPRECATED**: This document describes the standalone CLI tool. 
+> The fixVersion creator is now integrated into the Waypoint app (SM persona).
+> See `FIXVERSION_WAYPOINT_INTEGRATION.md` for current usage.
+
+---
+
 # Jira fixVersion Batch Creator
 
 Automatically create multiple fixVersions in Jira using Selenium browser automation.

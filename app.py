@@ -308,8 +308,6 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self.handle_load_po_data(data)
             elif self.path == '/api/sm/scrape-metrics':
                 response = self.handle_scrape_sm_metrics(data)
-            elif self.path == '/api/sm/create-fixversions':
-                response = self.handle_create_fixversions(data)
             elif self.path == '/api/sm/create-fixversions-from-dataset':
                 response = self.handle_create_fixversions_from_dataset(data)
             else:
@@ -1398,64 +1396,6 @@ class SyncHandler(BaseHTTPRequestHandler):
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
-    def handle_create_fixversions(self, data):
-        """Create multiple fixVersions in Jira using Selenium"""
-        global driver
-        
-        if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first.'}
-        
-        # Check if logged in
-        is_logged_in, _, _ = check_login_status(driver)
-        if not is_logged_in:
-            return {'success': False, 'error': 'Not logged in to Jira. Please login first.'}
-        
-        try:
-            project_key = data.get('project_key', '')
-            dates = data.get('dates', [])
-            name_format = data.get('name_format', 'Sprint {month_short} {day}')
-            description_template = data.get('description_template', '')
-            
-            if not project_key:
-                return {'success': False, 'error': 'Project key is required'}
-            
-            if not dates or len(dates) == 0:
-                return {'success': False, 'error': 'At least one date is required'}
-            
-            # Load config for base URL
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Create version creator instance
-            creator = JiraVersionCreator(driver, config)
-            
-            # Create versions
-            results = creator.create_versions_from_dates(
-                dates=dates,
-                name_format=name_format,
-                project_key=project_key,
-                description_template=description_template
-            )
-            
-            # Build versions page URL
-            base_url = config.get('jira', {}).get('base_url', '')
-            versions_url = f"{base_url}/plugins/servlet/project-config/{project_key}/versions"
-            
-            return {
-                'success': True,
-                'created': results.get('created', []),
-                'skipped': results.get('skipped', []),
-                'failed': results.get('failed', []),
-                'versions_url': versions_url
-            }
-            
-        except Exception as e:
-            safe_print(f"Error creating fixVersions: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-    
     def handle_create_fixversions_from_dataset(self, data):
         """Create fixVersions from a dataset of releases with custom names"""
         global driver
@@ -1469,14 +1409,37 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': 'Not logged in to Jira. Please login first.'}
         
         try:
+            from datetime import datetime, date as date_class
             project_key = data.get('project_key', '')
-            releases = data.get('releases', [])  # [{date: 'YYYY-MM-DD', name: 'Release Name'}, ...]
+            releases = data.get('releases', [])  # [{date: 'YYYY-MM-DD', name: 'Release Name', originalDate: 'MM/DD/YYYY'}, ...]
             
             if not project_key:
                 return {'success': False, 'error': 'Project key is required'}
             
             if not releases or len(releases) == 0:
                 return {'success': False, 'error': 'At least one release is required'}
+            
+            # Filter out past dates (today or older)
+            today = date_class.today()
+            future_releases = []
+            skipped_past = []
+            
+            for release in releases:
+                release_date_str = release.get('date', '')
+                try:
+                    release_date = datetime.strptime(release_date_str, '%Y-%m-%d').date()
+                    if release_date > today:
+                        future_releases.append(release)
+                    else:
+                        skipped_past.append(release.get('originalDate', release_date_str))
+                except:
+                    skipped_past.append(release.get('originalDate', release_date_str))
+            
+            if len(skipped_past) > 0:
+                safe_print(f"Skipped {len(skipped_past)} past/invalid dates: {', '.join(skipped_past)}")
+            
+            if len(future_releases) == 0:
+                return {'success': False, 'error': 'No future dates found. All dates are today or in the past.'}
             
             # Load config for base URL
             config_path = os.path.join(DATA_DIR, 'config.yaml')
@@ -1486,16 +1449,20 @@ class SyncHandler(BaseHTTPRequestHandler):
             # Create version creator instance
             creator = JiraVersionCreator(driver, config)
             
-            # Create each version with custom name
+            # Create each version with MM/DD/YYYY as name and release name as description
             results = {
                 'created': [],
                 'skipped': [],
                 'failed': []
             }
             
-            for release in releases:
-                version_name = release.get('name', '')
-                release_date = release.get('date', '')
+            for release in future_releases:
+                release_name = release.get('name', '')  # This goes in description
+                release_date = release.get('date', '')  # YYYY-MM-DD format
+                original_date = release.get('originalDate', '')  # MM/DD/YYYY format
+                
+                # Version name is the date in MM/DD/YYYY format
+                version_name = original_date if original_date else release_date
                 
                 if not version_name or not release_date:
                     results['failed'].append({
@@ -1504,11 +1471,14 @@ class SyncHandler(BaseHTTPRequestHandler):
                     })
                     continue
                 
+                # Description is the release name
+                description = release_name if release_name else f"Release {version_name}"
+                
                 success = creator.create_version(
                     project_key=project_key,
                     version_name=version_name,
                     release_date=release_date,
-                    description=f"Release scheduled for {release_date}"
+                    description=description
                 )
                 
                 if success:
@@ -1527,6 +1497,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 'success': True,
                 'created': results['created'],
                 'skipped': results['skipped'],
+                'skipped_past': skipped_past,
                 'failed': results['failed'],
                 'versions_url': versions_url
             }

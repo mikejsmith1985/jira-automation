@@ -265,21 +265,42 @@ class JiraVersionCreator:
                     except:
                         print("  ⚠️ Could not find description field (may not exist)")
             
-            # Set release date if provided
+            # Set release date if provided using datepicker
             if release_date:
                 try:
+                    # Click the release date field to open datepicker
                     date_field = self.driver.find_element(By.ID, 'version-releaseddate')
+                    date_field.click()
+                    time.sleep(1)
+                    
+                    # Parse the date
+                    from datetime import datetime
+                    date_obj = datetime.strptime(release_date, '%Y-%m-%d')
+                    
+                    # Format for Jira: dd/MMM/yy (e.g., 26/Feb/26)
+                    jira_date = date_obj.strftime('%d/%b/%y')
+                    
+                    # Clear and enter the date
                     date_field.clear()
-                    date_field.send_keys(release_date)
-                    print(f"  📅 Set release date: {release_date}")
+                    date_field.send_keys(jira_date)
+                    date_field.send_keys(Keys.RETURN)
+                    print(f"  📅 Set release date: {jira_date}")
+                    time.sleep(0.5)
                 except:
                     try:
                         date_field = self.driver.find_element(By.CSS_SELECTOR, "input[name='releaseDate']")
+                        date_field.click()
+                        time.sleep(1)
+                        from datetime import datetime
+                        date_obj = datetime.strptime(release_date, '%Y-%m-%d')
+                        jira_date = date_obj.strftime('%d/%b/%y')
                         date_field.clear()
-                        date_field.send_keys(release_date)
-                        print(f"  📅 Set release date: {release_date}")
-                    except:
-                        print("  ⚠️ Could not find release date field (may not exist)")
+                        date_field.send_keys(jira_date)
+                        date_field.send_keys(Keys.RETURN)
+                        print(f"  📅 Set release date: {jira_date}")
+                        time.sleep(0.5)
+                    except Exception as e:
+                        print(f"  ⚠️ Could not set release date: {e}")
             
             # Set archived status if needed
             if archived:

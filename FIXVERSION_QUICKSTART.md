@@ -1,3 +1,10 @@
+
+> **⚠️ DEPRECATED**: This document describes the standalone CLI tool. 
+> The fixVersion creator is now integrated into the Waypoint app (SM persona).
+> See `FIXVERSION_WAYPOINT_INTEGRATION.md` for current usage.
+
+---
+
 # Quick Start: Creating fixVersions in Jira
 
 This guide will walk you through creating fixVersions in 5 minutes.
