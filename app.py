@@ -65,7 +65,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.2.30"
+APP_VERSION = "1.2.33"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -488,11 +488,55 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
 
+    def _is_driver_valid(self):
+        """Check if the driver session is still valid"""
+        global driver
+        if driver is None:
+            return False
+        try:
+            # Try to access current_url - will fail if session is invalid
+            _ = driver.current_url
+            return True
+        except Exception:
+            return False
+    
+    def _reset_driver(self):
+        """Reset the driver and sync engine after invalid session"""
+        global driver, sync_engine
+        safe_print("🔄 Resetting invalid driver session...")
+        try:
+            if driver is not None:
+                driver.quit()
+        except:
+            pass
+        driver = None
+        sync_engine = None
+        safe_print("✅ Driver reset complete")
+
     def handle_init(self, data):
         """Initialize browser"""
         global driver, sync_engine
         
         try:
+            # Check if existing driver session is valid
+            if driver is not None:
+                try:
+                    # Try to get current URL to check if session is alive
+                    _ = driver.current_url
+                    # Session is valid, navigate to Jira
+                    jira_url = data.get('jiraUrl', sync_engine.config['jira']['base_url'] if sync_engine else '')
+                    driver.get(jira_url)
+                    return {'success': True, 'message': 'Browser reused. Please log in to Jira.'}
+                except Exception as e:
+                    # Session is invalid, need to reinitialize
+                    safe_print(f"⚠️ Invalid session detected: {str(e)}")
+                    try:
+                        driver.quit()
+                    except:
+                        pass
+                    driver = None
+                    sync_engine = None
+            
             # Initialize Chrome WebDriver if not already done
             if driver is None:
                 chrome_options = Options()
@@ -513,6 +557,8 @@ class SyncHandler(BaseHTTPRequestHandler):
             
             return {'success': True, 'message': 'Browser initialized. Please log in to Jira.'}
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return {'success': False, 'error': str(e)}
     
     def handle_sync_now(self):
@@ -788,6 +834,20 @@ class SyncHandler(BaseHTTPRequestHandler):
             if not jira_url or 'your-company' in jira_url:
                 return {'success': False, 'error': 'Please configure Jira URL first'}
             
+            # Check if existing driver session is valid
+            if driver is not None:
+                if not self._is_driver_valid():
+                    safe_print("⚠️ Detected invalid session, resetting driver...")
+                    self._reset_driver()
+                else:
+                    # Session is valid, just navigate
+                    driver.get(jira_url)
+                    return {
+                        'success': True,
+                        'message': f'Browser reused. Navigating to {jira_url}',
+                        'url': jira_url
+                    }
+            
             # Initialize Chrome WebDriver if not already done
             if driver is None:
                 chrome_options = Options()
@@ -823,14 +883,17 @@ class SyncHandler(BaseHTTPRequestHandler):
                 'url': jira_url
             }
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return {'success': False, 'error': str(e)}
     
     def handle_check_jira_login(self):
         """Check if user is logged in to Jira"""
         global driver
         
-        if driver is None:
-            return {'success': False, 'logged_in': False, 'error': 'Browser not open'}
+        if not self._is_driver_valid():
+            self._reset_driver()
+            return {'success': False, 'logged_in': False, 'error': 'Browser session expired. Please reopen browser.'}
         
         try:
             current_url = driver.current_url
@@ -846,6 +909,10 @@ class SyncHandler(BaseHTTPRequestHandler):
                 'debug': debug_info
             }
         except Exception as e:
+            # If we get an error accessing driver, reset it
+            if 'invalid session' in str(e).lower():
+                self._reset_driver()
+                return {'success': False, 'logged_in': False, 'error': 'Browser session expired. Please reopen browser.'}
             return {'success': False, 'logged_in': False, 'error': str(e)}
     
     def handle_load_po_data(self, data):
