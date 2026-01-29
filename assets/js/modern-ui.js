@@ -1747,3 +1747,355 @@ window.closeFeedbackModal = closeFeedbackModal;
 window.minimizeFeedbackModal = minimizeFeedbackModal;
 window.restoreFeedbackModal = restoreFeedbackModal;
 window.updateLogIndicator = updateLogIndicator;
+
+// ============================================================
+// fixVersion Creator Functions
+// ============================================================
+
+function parseReleaseDataset(datasetText) {
+    // Parse release schedule table
+    // Format: | Day MM/DD/YYYY | Type | Release Name |
+    const lines = datasetText.trim().split('\n');
+    const releases = [];
+    
+    for (const line of lines) {
+        // Skip header lines
+        if (line.includes('|| Date ||') || line.trim().startsWith('||')) {
+            continue;
+        }
+        
+        // Parse pipe-delimited format
+        const parts = line.split('|').map(p => p.trim()).filter(p => p);
+        
+        if (parts.length >= 3) {
+            const dateStr = parts[0]; // e.g., "Thu 1/22/2026"
+            const type = parts[1];    // e.g., "Monthly"
+            const name = parts[2];    // e.g., "January Monthly Release"
+            
+            // Extract date from format "Day MM/DD/YYYY"
+            const dateMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            
+            if (dateMatch) {
+                const month = dateMatch[1].padStart(2, '0');
+                const day = dateMatch[2].padStart(2, '0');
+                const year = dateMatch[3];
+                
+                // Convert to YYYY-MM-DD for backend
+                const isoDate = `${year}-${month}-${day}`;
+                
+                releases.push({
+                    date: isoDate,
+                    type: type,
+                    name: name,
+                    originalDate: dateStr
+                });
+            }
+        }
+    }
+    
+    return releases;
+}
+
+function filterReleases(releases) {
+    const includeMonthly = document.getElementById('fixversion-filter-monthly').checked;
+    const includeHotfix = document.getElementById('fixversion-filter-hotfix').checked;
+    const includeCutover = document.getElementById('fixversion-filter-cutover').checked;
+    const includeFreeze = document.getElementById('fixversion-filter-freeze').checked;
+    
+    return releases.filter(release => {
+        const type = release.type.toLowerCase();
+        
+        if (type === 'monthly' && includeMonthly) return true;
+        if (type === 'hotfix' && includeHotfix) return true;
+        if (type === 'cutover' && includeCutover) return true;
+        if (type === 'freeze' && includeFreeze) return true;
+        
+        return false;
+    });
+}
+
+async function previewDatasetVersions() {
+    const dataset = document.getElementById('fixversion-dataset').value.trim();
+    
+    if (!dataset) {
+        showFixVersionResult('Please paste your release schedule data', 'error');
+        return;
+    }
+    
+    try {
+        const allReleases = parseReleaseDataset(dataset);
+        const filteredReleases = filterReleases(allReleases);
+        
+        if (filteredReleases.length === 0) {
+            showFixVersionResult('No releases found matching selected filters', 'error');
+            return;
+        }
+        
+        const previewDiv = document.getElementById('fixversion-preview');
+        const versionList = filteredReleases.map(r => 
+            `• <strong>${r.name}</strong> <span style="color: var(--text-secondary);">(${r.originalDate} - ${r.type})</span>`
+        ).join('<br>');
+        
+        previewDiv.innerHTML = `
+            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;">
+                <h4 style="margin: 0 0 10px 0; font-size: 14px; color: var(--text-secondary);">
+                    Preview (${filteredReleases.length} versions):
+                </h4>
+                <div style="font-size: 13px; line-height: 1.8;">
+                    ${versionList}
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        showFixVersionResult(`Error parsing dataset: ${error.message}`, 'error');
+    }
+}
+
+async function createFixVersionsFromDataset() {
+    const projectKey = document.getElementById('fixversion-project-key').value.trim();
+    const dataset = document.getElementById('fixversion-dataset').value.trim();
+    
+    if (!projectKey) {
+        showFixVersionResult('Please enter a project key', 'error');
+        return;
+    }
+    
+    if (!dataset) {
+        showFixVersionResult('Please paste your release schedule data', 'error');
+        return;
+    }
+    
+    try {
+        const allReleases = parseReleaseDataset(dataset);
+        const filteredReleases = filterReleases(allReleases);
+        
+        if (filteredReleases.length === 0) {
+            showFixVersionResult('No releases found matching selected filters', 'error');
+            return;
+        }
+        
+        showFixVersionResult(`🔄 Creating ${filteredReleases.length} fixVersions... This may take a few minutes.`, 'info');
+        
+        // Prepare data for API
+        const releases = filteredReleases.map(r => ({
+            date: r.date,
+            name: r.name
+        }));
+        
+        const response = await fetch('/api/sm/create-fixversions-from-dataset', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_key: projectKey,
+                releases: releases
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            const created = result.created || [];
+            const skipped = result.skipped || [];
+            const failed = result.failed || [];
+            
+            let html = '<div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;">';
+            html += '<h4 style="margin: 0 0 10px 0;">✅ Summary</h4>';
+            html += `<p>✅ Created: ${created.length}</p>`;
+            if (created.length > 0) {
+                html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">';
+                created.forEach(name => html += `<li>${name}</li>`);
+                html += '</ul>';
+            }
+            
+            if (skipped.length > 0) {
+                html += `<p>⏭️ Skipped: ${skipped.length} (already existed)</p>`;
+                html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">';
+                skipped.forEach(name => html += `<li>${name}</li>`);
+                html += '</ul>';
+            }
+            
+            if (failed.length > 0) {
+                html += `<p>❌ Failed: ${failed.length}</p>`;
+                html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">';
+                failed.forEach(item => html += `<li>${item.name}: ${item.error}</li>`);
+                html += '</ul>';
+            }
+            
+            html += `<p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">View in Jira: <a href="${result.versions_url}" target="_blank" style="color: var(--accent-primary);">Open Versions Page</a></p>`;
+            html += '</div>';
+            
+            showFixVersionResult(html, 'success');
+        } else {
+            showFixVersionResult(`❌ Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showFixVersionResult(`❌ Failed to create versions: ${error.message}`, 'error');
+    }
+}
+
+async function previewVersionNames() {
+    const dates = document.getElementById('fixversion-dates').value.trim().split('\n').filter(d => d.trim());
+    const format = document.getElementById('fixversion-format').value;
+    
+    if (dates.length === 0) {
+        showFixVersionResult('Please enter at least one date', 'error');
+        return;
+    }
+    
+    const previewDiv = document.getElementById('fixversion-preview');
+    const versionNames = [];
+    
+    for (const dateStr of dates) {
+        const trimmedDate = dateStr.trim();
+        if (!trimmedDate) continue;
+        
+        // Validate date format
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
+            showFixVersionResult(`Invalid date format: ${trimmedDate}. Use YYYY-MM-DD`, 'error');
+            return;
+        }
+        
+        const versionName = formatVersionName(trimmedDate, format);
+        versionNames.push(`• ${versionName} <span style="color: var(--text-secondary);">(${trimmedDate})</span>`);
+    }
+    
+    previewDiv.innerHTML = `
+        <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;">
+            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: var(--text-secondary);">
+                Preview (${versionNames.length} versions):
+            </h4>
+            <div style="font-family: monospace; font-size: 13px; line-height: 1.8;">
+                ${versionNames.join('<br>')}
+            </div>
+        </div>
+    `;
+}
+
+function formatVersionName(dateStr, format) {
+    const date = new Date(dateStr + 'T00:00:00');
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    return format
+        .replace('{date}', dateStr)
+        .replace('{year}', year)
+        .replace('{month}', month)
+        .replace('{day}', day)
+        .replace('{month_name}', monthNames[date.getMonth()])
+        .replace('{month_short}', monthShort[date.getMonth()]);
+}
+
+async function createFixVersions() {
+    const projectKey = document.getElementById('fixversion-project-key').value.trim();
+    const dates = document.getElementById('fixversion-dates').value.trim().split('\n').filter(d => d.trim());
+    const format = document.getElementById('fixversion-format').value;
+    const description = document.getElementById('fixversion-description').value.trim();
+    
+    // Validation
+    if (!projectKey) {
+        showFixVersionResult('Please enter a project key', 'error');
+        return;
+    }
+    
+    if (dates.length === 0) {
+        showFixVersionResult('Please enter at least one date', 'error');
+        return;
+    }
+    
+    // Validate all dates first
+    for (const dateStr of dates) {
+        const trimmedDate = dateStr.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
+            showFixVersionResult(`Invalid date format: ${trimmedDate}. Use YYYY-MM-DD`, 'error');
+            return;
+        }
+    }
+    
+    showFixVersionResult('🔄 Creating fixVersions... This may take a few minutes.', 'info');
+    
+    try {
+        const response = await fetch('/api/sm/create-fixversions', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_key: projectKey,
+                dates: dates.map(d => d.trim()),
+                name_format: format,
+                description_template: description
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            const created = result.created || [];
+            const skipped = result.skipped || [];
+            const failed = result.failed || [];
+            
+            let html = '<div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;">';
+            html += '<h4 style="margin: 0 0 10px 0;">✅ Summary</h4>';
+            html += `<p>✅ Created: ${created.length}</p>`;
+            if (created.length > 0) {
+                html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">';
+                created.forEach(name => html += `<li>${name}</li>`);
+                html += '</ul>';
+            }
+            
+            if (skipped.length > 0) {
+                html += `<p>⏭️ Skipped: ${skipped.length} (already existed)</p>`;
+                html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">';
+                skipped.forEach(name => html += `<li>${name}</li>`);
+                html += '</ul>';
+            }
+            
+            if (failed.length > 0) {
+                html += `<p>❌ Failed: ${failed.length}</p>`;
+                html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">';
+                failed.forEach(item => html += `<li>${item.date}: ${item.error}</li>`);
+                html += '</ul>';
+            }
+            
+            html += `<p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">View in Jira: <a href="${result.versions_url}" target="_blank" style="color: var(--accent-primary);">Open Versions Page</a></p>`;
+            html += '</div>';
+            
+            showFixVersionResult(html, 'success');
+        } else {
+            showFixVersionResult(`❌ Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showFixVersionResult(`❌ Failed to create versions: ${error.message}`, 'error');
+    }
+}
+
+function showFixVersionResult(message, type) {
+    const resultDiv = document.getElementById('fixversion-result');
+    const colors = {
+        success: 'var(--success-color)',
+        error: 'var(--danger-color)',
+        info: 'var(--accent-primary)'
+    };
+    
+    const bgColors = {
+        success: 'rgba(76, 175, 80, 0.1)',
+        error: 'rgba(244, 67, 54, 0.1)',
+        info: 'rgba(96, 165, 250, 0.1)'
+    };
+    
+    resultDiv.innerHTML = `
+        <div style="background: ${bgColors[type]}; border-left: 3px solid ${colors[type]}; padding: 12px; border-radius: 4px; font-size: 14px;">
+            ${message}
+        </div>
+    `;
+}
+
+// Export functions
+window.previewVersionNames = previewVersionNames;
+window.createFixVersions = createFixVersions;
+window.previewDatasetVersions = previewDatasetVersions;
+window.createFixVersionsFromDataset = createFixVersionsFromDataset;

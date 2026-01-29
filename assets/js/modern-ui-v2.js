@@ -1934,3 +1934,110 @@ window.openMappingModal = openMappingModal;
 window.closeMappingModal = closeMappingModal;
 window.applyMapping = applyMapping;
 window.processCSV = processCSV;
+
+// ============================================================
+// fixVersion Creator Functions  
+// ============================================================
+
+function parseReleaseDataset(datasetText) {
+    const lines = datasetText.trim().split('\n');
+    const releases = [];
+    
+    for (const line of lines) {
+        if (line.includes('|| Date ||') || line.trim().startsWith('||')) continue;
+        
+        const parts = line.split('|').map(p => p.trim()).filter(p => p);
+        
+        if (parts.length >= 3) {
+            const dateStr = parts[0];
+            const type = parts[1];
+            const name = parts[2];
+            
+            const dateMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            
+            if (dateMatch) {
+                const month = dateMatch[1].padStart(2, '0');
+                const day = dateMatch[2].padStart(2, '0');
+                const year = dateMatch[3];
+                const isoDate = `${year}-${month}-${day}`;
+                
+                releases.push({ date: isoDate, type: type, name: name, originalDate: dateStr });
+            }
+        }
+    }
+    return releases;
+}
+
+function filterReleases(releases) {
+    const includeMonthly = document.getElementById('fixversion-filter-monthly').checked;
+    const includeHotfix = document.getElementById('fixversion-filter-hotfix').checked;
+    const includeCutover = document.getElementById('fixversion-filter-cutover').checked;
+    const includeFreeze = document.getElementById('fixversion-filter-freeze').checked;
+    
+    return releases.filter(release => {
+        const type = release.type.toLowerCase();
+        if (type === 'monthly' && includeMonthly) return true;
+        if (type === 'hotfix' && includeHotfix) return true;
+        if (type === 'cutover' && includeCutover) return true;
+        if (type === 'freeze' && includeFreeze) return true;
+        return false;
+    });
+}
+
+async function previewDatasetVersions() {
+    const dataset = document.getElementById('fixversion-dataset').value.trim();
+    if (!dataset) { showFixVersionResult('Please paste your release schedule data', 'error'); return; }
+    
+    try {
+        const allReleases = parseReleaseDataset(dataset);
+        const filteredReleases = filterReleases(allReleases);
+        if (filteredReleases.length === 0) { showFixVersionResult('No releases found matching selected filters', 'error'); return; }
+        
+        const previewDiv = document.getElementById('fixversion-preview');
+        const versionList = filteredReleases.map(r => `• <strong>${r.name}</strong> <span style="color: var(--text-secondary);">(${r.originalDate} - ${r.type})</span>`).join('<br>');
+        previewDiv.innerHTML = `<div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;"><h4 style="margin: 0 0 10px 0; font-size: 14px; color: var(--text-secondary);">Preview (${filteredReleases.length} versions):</h4><div style="font-size: 13px; line-height: 1.8;">${versionList}</div></div>`;
+    } catch (error) {
+        showFixVersionResult(`Error parsing dataset: ${error.message}`, 'error');
+    }
+}
+
+async function createFixVersionsFromDataset() {
+    const projectKey = document.getElementById('fixversion-project-key').value.trim();
+    const dataset = document.getElementById('fixversion-dataset').value.trim();
+    if (!projectKey) { showFixVersionResult('Please enter a project key', 'error'); return; }
+    if (!dataset) { showFixVersionResult('Please paste your release schedule data', 'error'); return; }
+    
+    try {
+        const allReleases = parseReleaseDataset(dataset);
+        const filteredReleases = filterReleases(allReleases);
+        if (filteredReleases.length === 0) { showFixVersionResult('No releases found matching selected filters', 'error'); return; }
+        
+        showFixVersionResult(`🔄 Creating ${filteredReleases.length} fixVersions... This may take a few minutes.`, 'info');
+        
+        const releases = filteredReleases.map(r => ({ date: r.date, name: r.name }));
+        const response = await fetch('/api/sm/create-fixversions-from-dataset', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ project_key: projectKey, releases: releases }) });
+        const result = await response.json();
+        
+        if (result.success) {
+            const created = result.created || [];
+            const skipped = result.skipped || [];
+            const failed = result.failed || [];
+            let html = '<div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;"><h4 style="margin: 0 0 10px 0;">✅ Summary</h4><p>✅ Created: ' + created.length + '</p>';
+            if (created.length > 0) { html += '<ul style="margin: 5px 0 10px 20px; font-size: 13px;">'; created.forEach(name => html += `<li>${name}</li>`); html += '</ul>'; }
+            if (skipped.length > 0) { html += `<p>⏭️ Skipped: ${skipped.length} (already existed)</p><ul style="margin: 5px 0 10px 20px; font-size: 13px;">`; skipped.forEach(name => html += `<li>${name}</li>`); html += '</ul>'; }
+            if (failed.length > 0) { html += `<p>❌ Failed: ${failed.length}</p><ul style="margin: 5px 0 10px 20px; font-size: 13px;">`; failed.forEach(item => html += `<li>${item.name}: ${item.error}</li>`); html += '</ul>'; }
+            html += `<p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">View in Jira: <a href="${result.versions_url}" target="_blank" style="color: var(--accent-primary);">Open Versions Page</a></p></div>`;
+            showFixVersionResult(html, 'success');
+        } else { showFixVersionResult(`❌ Error: ${result.error}`, 'error'); }
+    } catch (error) { showFixVersionResult(`❌ Failed to create versions: ${error.message}`, 'error'); }
+}
+
+function showFixVersionResult(message, type) {
+    const resultDiv = document.getElementById('fixversion-result');
+    const colors = { success: 'var(--success-color)', error: 'var(--danger-color)', info: 'var(--accent-primary)' };
+    const bgColors = { success: 'rgba(76, 175, 80, 0.1)', error: 'rgba(244, 67, 54, 0.1)', info: 'rgba(96, 165, 250, 0.1)' };
+    resultDiv.innerHTML = `<div style="background: ${bgColors[type]}; border-left: 3px solid ${colors[type]}; padding: 12px; border-radius: 4px; font-size: 14px;">${message}</div>`;
+}
+
+window.previewDatasetVersions = previewDatasetVersions;
+window.createFixVersionsFromDataset = createFixVersionsFromDataset;

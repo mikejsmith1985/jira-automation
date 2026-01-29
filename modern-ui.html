@@ -381,6 +381,54 @@
                         </div>
                     </div>
 
+                    <!-- fixVersion Creator Section -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>🏷️ Create fixVersions</h3>
+                            <p class="text-secondary">Batch create release versions from release schedule</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>Project Key</label>
+                                <input type="text" id="fixversion-project-key" class="input-field" placeholder="KAN">
+                                <small class="text-secondary">Jira project to create versions in</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Paste Release Schedule</label>
+                                <textarea id="fixversion-dataset" class="input-field" rows="10" placeholder="|| Date || Type || Release ||&#10;| Thu 1/22/2026 | Monthly | January Monthly Release |&#10;| Thu 2/26/2026 | HotFix | February HotFix Release |" style="font-family: monospace;"></textarea>
+                                <small class="text-secondary">Paste your release table here (supports MM/DD/YYYY dates)</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Filter Release Types</label>
+                                <div style="display: flex; gap: 15px; margin-top: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="checkbox" id="fixversion-filter-monthly" checked style="cursor: pointer;">
+                                        <span>Monthly</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="checkbox" id="fixversion-filter-hotfix" checked style="cursor: pointer;">
+                                        <span>HotFix</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="checkbox" id="fixversion-filter-cutover" style="cursor: pointer;">
+                                        <span>Cutover</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="checkbox" id="fixversion-filter-freeze" style="cursor: pointer;">
+                                        <span>Freeze</span>
+                                    </label>
+                                </div>
+                                <small class="text-secondary">Select which release types to create</small>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" onclick="createFixVersionsFromDataset()">🚀 Create Versions</button>
+                                <button class="btn btn-secondary" onclick="previewDatasetVersions()">👁️ Preview</button>
+                            </div>
+                            <div id="fixversion-result" style="margin-top: 15px;"></div>
+                            <div id="fixversion-preview" style="margin-top: 15px;"></div>
+                        </div>
+                    </div>
+
                     <div class="card">
                         <div class="card-header">
                             <h3>📊 Scrape Metrics from Jira</h3>

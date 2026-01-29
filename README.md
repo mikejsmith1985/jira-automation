@@ -16,11 +16,13 @@ A self-contained desktop application that syncs GitHub PRs with Jira tickets and
 - **Multi-Workflow System** - Define custom workflows for different scenarios (hourly, daily, weekly)
 - **Flexible Updates** - Update multiple fields, labels, and statuses per ticket
 - **Favorites** - Save common tasks for one-click execution
+- **Batch fixVersion Creator** - Create multiple release versions from date lists with custom formatting
 
 ### 📊 Scrum Master (SM) Persona
 - **Team Health Insights** - Rule-based detection of scope creep, defect leakage, stale tickets
 - **Hygiene Reports** - Identify missing estimates, long-running stories, blocked items
 - **Trend Analysis** - Track velocity, cycle time, and throughput over time
+- **Batch fixVersion Creator** - Create multiple release versions from date lists with custom formatting
 - **SQLite Persistence** - Store insights and metrics history locally
 
 ### 🐛 Feedback System
@@ -42,6 +44,17 @@ python app.py
 ```
 
 The app starts automatically and opens http://localhost:5000 in your browser.
+
+### Key Features Quick Access:
+
+**Create fixVersions (SM Persona)**:
+1. Open Waypoint app (http://localhost:5000)
+2. Click **SM** tab in sidebar
+3. Scroll to "Create fixVersions" card
+4. Enter project key and dates
+5. Click "Create Versions"
+
+See **[FIXVERSION_WAYPOINT_INTEGRATION.md](FIXVERSION_WAYPOINT_INTEGRATION.md)** for detailed instructions.
 
 ### Running the Packaged Application:
 
@@ -117,6 +130,7 @@ The application uses a **Selenium-based browser automation** approach with a Pyt
 - **sync_engine.py** - Coordinates GitHub scraping with Jira automation
 - **github_scraper.py** - Extracts PR information from GitHub web UI
 - **jira_automator.py** - Updates Jira tickets via browser automation
+- **jira_version_creator.py** - Batch creates fixVersions from date lists
 - **insights_engine.py** - Rule-based pattern detection (scope creep, defects, hygiene)
 - **feedback_db.py** - SQLite storage for insights, metrics, and logs
 - **github_feedback.py** - GitHub API integration for issue submission
@@ -148,6 +162,16 @@ pip install -r requirements.txt
 **Problem:** PRs not syncing from GitHub
 - **Cause:** GitHub scraping depends on GitHub's HTML structure
 - **Solution:** Check GitHub hasn't changed their PR page layout; update selectors in `github_scraper.py`
+
+### fixVersion Creator issues:
+
+**Problem:** "Could not find Create Version button"
+- **Cause:** Need admin/project lead permissions in Jira
+- **Solution:** Ask your Jira admin for project permissions
+
+**Problem:** Versions not showing up
+- **Solution:** Refresh Jira versions page, or check they didn't already exist
+- **See:** `FIXVERSION_QUICKSTART.md` for full troubleshooting
 
 ### Database issues:
 
