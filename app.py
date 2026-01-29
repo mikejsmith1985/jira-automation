@@ -86,6 +86,7 @@ feedback_db = FeedbackDB()  # SQLite-based feedback storage
 github_feedback = None  # Optional GitHub sync
 log_capture = LogCapture(LOG_FILE)
 version_checker = None  # Version update checker
+browser_opened = False  # Flag to prevent double-opening
 
 # Extension system globals
 extension_manager = None
@@ -5637,8 +5638,18 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
 
 def open_browser():
     """Open default browser to the app"""
+    global browser_opened
+    if browser_opened:
+        safe_print("[BROWSER] Already opened, skipping duplicate call")
+        return
+    browser_opened = True
     time.sleep(1.5)
-    webbrowser.open('http://127.0.0.1:5000')
+    safe_print("[BROWSER] Opening browser at http://127.0.0.1:5000")
+    # new=2 opens in a new tab (avoids potential double-open with new=0)
+    try:
+        webbrowser.open('http://127.0.0.1:5000', new=2)
+    except Exception as e:
+        safe_print(f"[WARN] Failed to open browser: {e}")
 
 def run_server():
     """Run the HTTP server"""
@@ -5668,32 +5679,63 @@ def run_server():
     httpd.serve_forever()
 
 if __name__ == '__main__':
-    # Ensure config.yaml exists in DATA_DIR
-    config_file = os.path.join(DATA_DIR, 'config.yaml')
-    if not os.path.exists(config_file):
-        # Copy from bundled template if it doesn't exist
-        template_file = os.path.join(BASE_DIR, 'config.yaml')
-        if os.path.exists(template_file):
-            import shutil
-            shutil.copy(template_file, config_file)
-            safe_print(f"[INIT] Created config.yaml at {config_file}")
-        else:
-            safe_print(f"[WARN] No config template found, creating minimal config")
-            # Create minimal config
-            minimal_config = {
-                'github': {'api_token': '', 'base_url': 'https://github.com', 'organization': 'your-org', 'repositories': []},
-                'jira': {'base_url': 'https://your-company.atlassian.net', 'project_keys': []},
-                'feedback': {'github_token': '', 'repo': ''},
-                'automation': {}
-            }
-            with open(config_file, 'w', encoding='utf-8') as f:
-                yaml.dump(minimal_config, f, default_flow_style=False)
+    # Prevent multiple instances using a lock file
+    lock_file = os.path.join(DATA_DIR, 'waypoint.lock')
+    if os.path.exists(lock_file):
+        # Try to read the PID from lock file
+        try:
+            with open(lock_file, 'r') as f:
+                old_pid = int(f.read().strip())
+            # Check if that process is still running
+            import psutil
+            if psutil.pid_exists(old_pid):
+                safe_print(f"[ERROR] Another instance is already running (PID {old_pid})")
+                safe_print("[INFO] If the app is not visible, delete waypoint.lock and try again")
+                sys.exit(1)
+        except:
+            pass  # Lock file is stale or invalid, proceed
     
-    # Start browser opener in background
-    threading.Thread(target=open_browser, daemon=True).start()
+    # Write our PID to lock file
+    try:
+        with open(lock_file, 'w') as f:
+            f.write(str(os.getpid()))
+    except:
+        pass  # Non-critical if we can't write lock file
     
-    # Run server
-    run_server()
+    try:
+        # Ensure config.yaml exists in DATA_DIR
+        config_file = os.path.join(DATA_DIR, 'config.yaml')
+        if not os.path.exists(config_file):
+            # Copy from bundled template if it doesn't exist
+            template_file = os.path.join(BASE_DIR, 'config.yaml')
+            if os.path.exists(template_file):
+                import shutil
+                shutil.copy(template_file, config_file)
+                safe_print(f"[INIT] Created config.yaml at {config_file}")
+            else:
+                safe_print(f"[WARN] No config template found, creating minimal config")
+                # Create minimal config
+                minimal_config = {
+                    'github': {'api_token': '', 'base_url': 'https://github.com', 'organization': 'your-org', 'repositories': []},
+                    'jira': {'base_url': 'https://your-company.atlassian.net', 'project_keys': []},
+                    'feedback': {'github_token': '', 'repo': ''},
+                    'automation': {}
+                }
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    yaml.dump(minimal_config, f, default_flow_style=False)
+        
+        # Start browser opener in background
+        threading.Thread(target=open_browser, daemon=True).start()
+        
+        # Run server
+        run_server()
+    finally:
+        # Clean up lock file on exit
+        try:
+            if os.path.exists(lock_file):
+                os.remove(lock_file)
+        except:
+            pass
 
 
 

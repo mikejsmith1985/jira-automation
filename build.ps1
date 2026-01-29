@@ -63,7 +63,8 @@ $params = @(
     "--hidden-import=charset_normalizer",
     "--hidden-import=idna",
     "--hidden-import=deprecated",
-    "--hidden-import=wrapt"
+    "--hidden-import=wrapt",
+    "--hidden-import=psutil"
 )
 
 # Optional extensions hidden import - may fail if extensions folder structure is invalid
