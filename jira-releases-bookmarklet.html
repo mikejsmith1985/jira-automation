@@ -180,7 +180,7 @@
                 document.querySelectorAll('.rc').forEach(function(cb){cb.addEventListener('change',upd);});
                 document.querySelectorAll('.type-filter').forEach(function(tf){tf.addEventListener('change',filterByType);});
                 document.getElementById('si').addEventListener('click',function(){
-                    var sel=Array.from(document.querySelectorAll('.rc:checked')).map(function(cb){return parseInt(cb.dataset.index);});
+                    var sel=Array.from(document.querySelectorAll('.ri:not(.hidden) .rc:checked')).map(function(cb){return parseInt(cb.dataset.index);});
                     if(sel.length===0){alert('No releases selected!');return;}
                     m.remove();
                     var idx=0;
