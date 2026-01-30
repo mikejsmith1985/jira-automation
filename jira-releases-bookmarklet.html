@@ -144,7 +144,7 @@
                 var r = [{date:new Date('2026-01-22'),type:'Monthly',release:'January Monthly Release'},{date:new Date('2026-01-31'),type:'Cutover',release:'Service Technical Cutover'},{date:new Date('2026-02-06'),type:'Cutover',release:'Claims Cutover Release'},{date:new Date('2026-02-12'),type:'Monthly',release:'February Monthly Release'},{date:new Date('2026-02-26'),type:'HotFix',release:'February HotFix Release'},{date:new Date('2026-03-12'),type:'Monthly',release:'March Monthly Release'},{date:new Date('2026-03-26'),type:'HotFix',release:'March HotFix Release'},{date:new Date('2026-04-09'),type:'Monthly',release:'April Monthly Release'},{date:new Date('2026-04-30'),type:'HotFix',release:'April HotFix Release'},{date:new Date('2026-05-14'),type:'HotFix',release:'May HotFix Release'},{date:new Date('2026-05-21'),type:'Monthly',release:'May Monthly Release'},{date:new Date('2026-06-11'),type:'Monthly',release:'June Monthly Release'},{date:new Date('2026-06-25'),type:'HotFix',release:'June HotFix Release'},{date:new Date('2026-07-09'),type:'HotFix',release:'July HotFix Release'},{date:new Date('2026-07-30'),type:'Monthly',release:'July Monthly Release'},{date:new Date('2026-08-13'),type:'Monthly',release:'August Monthly Release'},{date:new Date('2026-08-27'),type:'HotFix',release:'August HotFix Release'},{date:new Date('2026-09-10'),type:'Monthly',release:'September Monthly Release'},{date:new Date('2026-09-24'),type:'HotFix',release:'September HotFix Release'},{date:new Date('2026-10-01'),type:'Freeze',release:'AEP Freeze Begins'},{date:new Date('2026-10-08'),type:'Monthly',release:'October Monthly Release'},{date:new Date('2026-10-29'),type:'HotFix',release:'October HotFix Release'},{date:new Date('2026-11-12'),type:'Monthly',release:'November Monthly Release'},{date:new Date('2026-12-03'),type:'HotFix',release:'December HotFix Release'},{date:new Date('2026-12-05'),type:'Freeze',release:'AEP Freeze Ends'},{date:new Date('2026-12-07'),type:'Freeze',release:'2026 YE Freeze Starts'},{date:new Date('2027-01-15'),type:'Freeze',release:'2026 YE Freeze Ends'}];
                 function pad(n){return n<10?'0'+n:n;}
                 function fmtV(d){return pad(d.getMonth()+1)+'/'+pad(d.getDate())+'/'+d.getFullYear();}
-                function fmtR(d){return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+String(d.getFullYear()).slice(-2);}
+                function fmtR(d){var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return pad(d.getDate())+'/'+m[d.getMonth()]+'/'+String(d.getFullYear()).slice(-2);}
                 var m=document.createElement('div');m.id='jrm';
                 m.innerHTML='<style>#jrm{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:sans-serif}#jrc{background:white;border-radius:8px;width:90%;max-width:900px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column}#jrh{padding:20px;background:#0052cc;color:white;display:flex;justify-content:space-between;align-items:center}#jrh h2{margin:0}#jrb{padding:20px;overflow-y:auto;flex:1}#jrf{padding:15px 20px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}.ri{padding:12px;border:1px solid #ddd;border-radius:4px;margin:8px 0;display:flex;align-items:center;background:#f9f9f9}.ri:hover{background:#f0f0f0}.rc{margin-right:12px;width:18px;height:18px;cursor:pointer}.rinfo{flex:1;display:grid;grid-template-columns:120px 140px 120px 1fr;gap:15px;font-size:13px}.btn{padding:10px 20px;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:14px}.bp{background:#0052cc;color:white}.bp:hover{background:#0747a6}.bs{background:#f4f5f7;color:#42526e}.bs:hover{background:#ebecf0}.bc{background:transparent;color:white;border:none;font-size:24px;cursor:pointer;padding:0;width:30px;height:30px}.sc{margin-bottom:15px;padding:10px;background:#f4f5f7;border-radius:4px}.sc button{margin-right:10px}</style><div id=jrc><div id=jrh><h2>Select Releases to Import</h2><button class=bc onclick="document.getElementById(\'jrm\').remove()">×</button></div><div id=jrb><div class=sc><button class="btn bs" onclick="document.querySelectorAll(\'.rc\').forEach(function(cb){cb.checked=true})">Select All</button><button class="btn bs" onclick="document.querySelectorAll(\'.rc\').forEach(function(cb){cb.checked=false})">Deselect All</button></div><div id=rl></div></div><div id=jrf><span id=sc>27 of 27 selected</span><div><button class="btn bs" onclick="document.getElementById(\'jrm\').remove()" style=margin-right:10px>Cancel</button><button class="btn bp" id=si>Start Import</button></div></div></div>';
                 document.body.appendChild(m);
@@ -202,7 +202,7 @@
                         <td>1</td>
                         <td>Thu 1/22/2026</td>
                         <td><code>01/22/2026</code></td>
-                        <td><code>22/01/26</code></td>
+                        <td><code>22/Jan/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - January Monthly Release</td>
                     </tr>
@@ -210,7 +210,7 @@
                         <td>2</td>
                         <td>Sat 1/31/2026</td>
                         <td><code>01/31/2026</code></td>
-                        <td><code>31/01/26</code></td>
+                        <td><code>31/Jan/26</code></td>
                         <td><span class="type-badge type-cutover">Cutover</span></td>
                         <td>Cutover - Service Technical Cutover</td>
                     </tr>
@@ -218,7 +218,7 @@
                         <td>3</td>
                         <td>Fri 2/6/2026</td>
                         <td><code>02/06/2026</code></td>
-                        <td><code>06/02/26</code></td>
+                        <td><code>06/Feb/26</code></td>
                         <td><span class="type-badge type-cutover">Cutover</span></td>
                         <td>Cutover - Claims Cutover Release</td>
                     </tr>
@@ -226,7 +226,7 @@
                         <td>4</td>
                         <td>Thu 2/12/2026</td>
                         <td><code>02/12/2026</code></td>
-                        <td><code>12/02/26</code></td>
+                        <td><code>12/Feb/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - February Monthly Release</td>
                     </tr>
@@ -234,7 +234,7 @@
                         <td>5</td>
                         <td>Thu 2/26/2026</td>
                         <td><code>02/26/2026</code></td>
-                        <td><code>26/02/26</code></td>
+                        <td><code>26/Feb/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - February HotFix Release</td>
                     </tr>
@@ -242,7 +242,7 @@
                         <td>6</td>
                         <td>Thu 3/12/2026</td>
                         <td><code>03/12/2026</code></td>
-                        <td><code>12/03/26</code></td>
+                        <td><code>12/Mar/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - March Monthly Release</td>
                     </tr>
@@ -250,7 +250,7 @@
                         <td>7</td>
                         <td>Thu 3/26/2026</td>
                         <td><code>03/26/2026</code></td>
-                        <td><code>26/03/26</code></td>
+                        <td><code>26/Mar/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - March HotFix Release</td>
                     </tr>
@@ -258,7 +258,7 @@
                         <td>8</td>
                         <td>Thu 4/9/2026</td>
                         <td><code>04/09/2026</code></td>
-                        <td><code>09/04/26</code></td>
+                        <td><code>09/Apr/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - April Monthly Release</td>
                     </tr>
@@ -266,7 +266,7 @@
                         <td>9</td>
                         <td>Thu 4/30/2026</td>
                         <td><code>04/30/2026</code></td>
-                        <td><code>30/04/26</code></td>
+                        <td><code>30/Apr/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - April HotFix Release</td>
                     </tr>
@@ -274,7 +274,7 @@
                         <td>10</td>
                         <td>Thu 5/14/2026</td>
                         <td><code>05/14/2026</code></td>
-                        <td><code>14/05/26</code></td>
+                        <td><code>14/May/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - May HotFix Release</td>
                     </tr>
@@ -282,7 +282,7 @@
                         <td>11</td>
                         <td>Thu 5/21/2026</td>
                         <td><code>05/21/2026</code></td>
-                        <td><code>21/05/26</code></td>
+                        <td><code>21/May/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - May Monthly Release</td>
                     </tr>
@@ -290,7 +290,7 @@
                         <td>12</td>
                         <td>Thu 6/11/2026</td>
                         <td><code>06/11/2026</code></td>
-                        <td><code>11/06/26</code></td>
+                        <td><code>11/Jun/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - June Monthly Release</td>
                     </tr>
@@ -298,7 +298,7 @@
                         <td>13</td>
                         <td>Thu 6/25/2026</td>
                         <td><code>06/25/2026</code></td>
-                        <td><code>25/06/26</code></td>
+                        <td><code>25/Jun/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - June HotFix Release</td>
                     </tr>
@@ -306,7 +306,7 @@
                         <td>14</td>
                         <td>Thu 7/9/2026</td>
                         <td><code>07/09/2026</code></td>
-                        <td><code>09/07/26</code></td>
+                        <td><code>09/Jul/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - July HotFix Release</td>
                     </tr>
@@ -314,7 +314,7 @@
                         <td>15</td>
                         <td>Thu 7/30/2026</td>
                         <td><code>07/30/2026</code></td>
-                        <td><code>30/07/26</code></td>
+                        <td><code>30/Jul/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - July Monthly Release</td>
                     </tr>
@@ -322,7 +322,7 @@
                         <td>16</td>
                         <td>Thu 8/13/2026</td>
                         <td><code>08/13/2026</code></td>
-                        <td><code>13/08/26</code></td>
+                        <td><code>13/Aug/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - August Monthly Release</td>
                     </tr>
@@ -330,7 +330,7 @@
                         <td>17</td>
                         <td>Thu 8/27/2026</td>
                         <td><code>08/27/2026</code></td>
-                        <td><code>27/08/26</code></td>
+                        <td><code>27/Aug/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - August HotFix Release</td>
                     </tr>
@@ -338,7 +338,7 @@
                         <td>18</td>
                         <td>Thu 9/10/2026</td>
                         <td><code>09/10/2026</code></td>
-                        <td><code>10/09/26</code></td>
+                        <td><code>10/Sep/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - September Monthly Release</td>
                     </tr>
@@ -346,7 +346,7 @@
                         <td>19</td>
                         <td>Thu 9/24/2026</td>
                         <td><code>09/24/2026</code></td>
-                        <td><code>24/09/26</code></td>
+                        <td><code>24/Sep/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - September HotFix Release</td>
                     </tr>
@@ -354,7 +354,7 @@
                         <td>20</td>
                         <td>Thu 10/1/2026</td>
                         <td><code>10/01/2026</code></td>
-                        <td><code>01/10/26</code></td>
+                        <td><code>01/Oct/26</code></td>
                         <td><span class="type-badge type-freeze">Freeze</span></td>
                         <td>Freeze - AEP Freeze Begins</td>
                     </tr>
@@ -362,7 +362,7 @@
                         <td>21</td>
                         <td>Thu 10/8/2026</td>
                         <td><code>10/08/2026</code></td>
-                        <td><code>08/10/26</code></td>
+                        <td><code>08/Oct/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - October Monthly Release</td>
                     </tr>
@@ -370,7 +370,7 @@
                         <td>22</td>
                         <td>Thu 10/29/2026</td>
                         <td><code>10/29/2026</code></td>
-                        <td><code>29/10/26</code></td>
+                        <td><code>29/Oct/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - October HotFix Release</td>
                     </tr>
@@ -378,7 +378,7 @@
                         <td>23</td>
                         <td>Thu 11/12/2026</td>
                         <td><code>11/12/2026</code></td>
-                        <td><code>12/11/26</code></td>
+                        <td><code>12/Nov/26</code></td>
                         <td><span class="type-badge type-monthly">Monthly</span></td>
                         <td>Monthly - November Monthly Release</td>
                     </tr>
@@ -386,7 +386,7 @@
                         <td>24</td>
                         <td>Thu 12/3/2026</td>
                         <td><code>12/03/2026</code></td>
-                        <td><code>03/12/26</code></td>
+                        <td><code>03/Dec/26</code></td>
                         <td><span class="type-badge type-hotfix">HotFix</span></td>
                         <td>HotFix - December HotFix Release</td>
                     </tr>
@@ -394,7 +394,7 @@
                         <td>25</td>
                         <td>Sat 12/5/2026</td>
                         <td><code>12/05/2026</code></td>
-                        <td><code>05/12/26</code></td>
+                        <td><code>05/Dec/26</code></td>
                         <td><span class="type-badge type-freeze">Freeze</span></td>
                         <td>Freeze - AEP Freeze Ends</td>
                     </tr>
@@ -402,7 +402,7 @@
                         <td>26</td>
                         <td>Mon 12/7/2026</td>
                         <td><code>12/07/2026</code></td>
-                        <td><code>07/12/26</code></td>
+                        <td><code>07/Dec/26</code></td>
                         <td><span class="type-badge type-freeze">Freeze</span></td>
                         <td>Freeze - 2026 YE Freeze Starts</td>
                     </tr>
@@ -410,7 +410,7 @@
                         <td>27</td>
                         <td>Fri 1/15/2027</td>
                         <td><code>01/15/2027</code></td>
-                        <td><code>15/01/27</code></td>
+                        <td><code>15/Jan/27</code></td>
                         <td><span class="type-badge type-freeze">Freeze</span></td>
                         <td>Freeze - 2026 YE Freeze Ends</td>
                     </tr>
@@ -424,7 +424,7 @@
                 <li><strong>Modal preview:</strong> Shows all releases with checkboxes before import</li>
                 <li><strong>Select/Deselect:</strong> Choose which releases to import (all selected by default)</li>
                 <li><strong>Version Name:</strong> Date in <code>MM/DD/YYYY</code> format (e.g., "01/22/2026")</li>
-                <li><strong>Release Date:</strong> Date in <code>DD/MM/YY</code> format (e.g., "22/01/26")</li>
+                <li><strong>Release Date:</strong> Date in <code>DD/MMM/YY</code> format (e.g., "22/Jan/26")</li>
                 <li><strong>Description:</strong> Combined "Type - Release Name" (e.g., "Monthly - January Monthly Release")</li>
                 <li>Adds 800ms delay between submissions to ensure Jira processes each entry</li>
             </ul>
