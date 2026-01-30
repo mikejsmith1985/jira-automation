@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Release Version Bookmarklet</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Helvetica Neue", sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0052cc;
+            margin-bottom: 10px;
+        }
+        .instructions {
+            background: #f4f5f7;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            border-left: 4px solid #0052cc;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #0052cc;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 8px 0;
+        }
+        .bookmarklet-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #0052cc 0%, #2684ff 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: move;
+            box-shadow: 0 4px 12px rgba(0,82,204,0.3);
+            transition: transform 0.2s;
+        }
+        .bookmarklet-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,82,204,0.4);
+        }
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+        }
+        .button-container p {
+            margin-bottom: 15px;
+            color: #666;
+            font-style: italic;
+        }
+        .data-preview {
+            margin: 20px 0;
+        }
+        .data-preview h3 {
+            color: #0052cc;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .data-table th {
+            background: #0052cc;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .data-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .data-table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .type-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .type-monthly { background: #36b37e; color: white; }
+        .type-hotfix { background: #ff5630; color: white; }
+        .type-cutover { background: #6554c0; color: white; }
+        .type-freeze { background: #00b8d9; color: white; }
+        code {
+            background: #f4f5f7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Jira Release Version Bookmarklet</h1>
+        <p>Automate the creation of fixVersions in Jira with one click!</p>
+
+        <div class="instructions">
+            <h3>📋 How to Use:</h3>
+            <ol>
+                <li><strong>Drag the button below</strong> to your browser's bookmarks bar</li>
+                <li><strong>Navigate to your Jira project's "Releases" page</strong> (the unreleased versions view)</li>
+                <li><strong>Click the bookmark</strong> - a modal will appear showing all 27 releases</li>
+                <li><strong>Review and deselect</strong> any releases you don't want to import</li>
+                <li><strong>Click "Start Import"</strong> to begin the automation</li>
+                <li>Watch as it automatically fills and creates the selected release versions!</li>
+            </ol>
+        </div>
+
+        <div class="button-container">
+            <p>👇 <strong>Drag this button to your bookmarks bar</strong> 👇</p>
+            <a href="javascript:(function(){const releases=[{date:new Date('2026-01-22'),type:'Monthly',release:'January Monthly Release'},{date:new Date('2026-01-31'),type:'Cutover',release:'Service Technical Cutover'},{date:new Date('2026-02-06'),type:'Cutover',release:'Claims Cutover Release'},{date:new Date('2026-02-12'),type:'Monthly',release:'February Monthly Release'},{date:new Date('2026-02-26'),type:'HotFix',release:'February HotFix Release'},{date:new Date('2026-03-12'),type:'Monthly',release:'March Monthly Release'},{date:new Date('2026-03-26'),type:'HotFix',release:'March HotFix Release'},{date:new Date('2026-04-09'),type:'Monthly',release:'April Monthly Release'},{date:new Date('2026-04-30'),type:'HotFix',release:'April HotFix Release'},{date:new Date('2026-05-14'),type:'HotFix',release:'May HotFix Release'},{date:new Date('2026-05-21'),type:'Monthly',release:'May Monthly Release'},{date:new Date('2026-06-11'),type:'Monthly',release:'June Monthly Release'},{date:new Date('2026-06-25'),type:'HotFix',release:'June HotFix Release'},{date:new Date('2026-07-09'),type:'HotFix',release:'July HotFix Release'},{date:new Date('2026-07-30'),type:'Monthly',release:'July Monthly Release'},{date:new Date('2026-08-13'),type:'Monthly',release:'August Monthly Release'},{date:new Date('2026-08-27'),type:'HotFix',release:'August HotFix Release'},{date:new Date('2026-09-10'),type:'Monthly',release:'September Monthly Release'},{date:new Date('2026-09-24'),type:'HotFix',release:'September HotFix Release'},{date:new Date('2026-10-01'),type:'Freeze',release:'AEP Freeze Begins'},{date:new Date('2026-10-08'),type:'Monthly',release:'October Monthly Release'},{date:new Date('2026-10-29'),type:'HotFix',release:'October HotFix Release'},{date:new Date('2026-11-12'),type:'Monthly',release:'November Monthly Release'},{date:new Date('2026-12-03'),type:'HotFix',release:'December HotFix Release'},{date:new Date('2026-12-05'),type:'Freeze',release:'AEP Freeze Ends'},{date:new Date('2026-12-07'),type:'Freeze',release:'2026 YE Freeze Starts'},{date:new Date('2027-01-15'),type:'Freeze',release:'2026 YE Freeze Ends'}];function pad(n){return n<10?'0'+n:n;}function formatVersionName(d){return pad(d.getMonth()+1)+'/'+pad(d.getDate())+'/'+d.getFullYear();}function formatReleaseDate(d){return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+String(d.getFullYear()).slice(-2);}const modal=document.createElement('div');modal.id='jira-release-modal';modal.innerHTML=`<style>#jira-release-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:sans-serif}#jira-release-content{background:white;border-radius:8px;width:90%;max-width:900px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column}#jira-release-header{padding:20px;background:#0052cc;color:white;display:flex;justify-content:space-between;align-items:center}#jira-release-header h2{margin:0}#jira-release-body{padding:20px;overflow-y:auto;flex:1}#jira-release-footer{padding:15px 20px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}.release-item{padding:12px;border:1px solid #ddd;border-radius:4px;margin:8px 0;display:flex;align-items:center;background:#f9f9f9}.release-item:hover{background:#f0f0f0}.release-checkbox{margin-right:12px;width:18px;height:18px;cursor:pointer}.release-info{flex:1;display:grid;grid-template-columns:120px 140px 120px 1fr;gap:15px;font-size:13px}.release-label{font-weight:600;color:#333}.btn{padding:10px 20px;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:14px}.btn-primary{background:#0052cc;color:white}.btn-primary:hover{background:#0747a6}.btn-secondary{background:#f4f5f7;color:#42526e}.btn-secondary:hover{background:#ebecf0}.btn-close{background:transparent;color:white;border:none;font-size:24px;cursor:pointer;padding:0;width:30px;height:30px}.select-controls{margin-bottom:15px;padding:10px;background:#f4f5f7;border-radius:4px}.select-controls button{margin-right:10px}</style><div id='jira-release-content'><div id='jira-release-header'><h2>📅 Select Releases to Import</h2><button class='btn-close' onclick='document.getElementById(\"jira-release-modal\").remove()'>×</button></div><div id='jira-release-body'><div class='select-controls'><button class='btn btn-secondary' onclick='document.querySelectorAll(\".release-checkbox\").forEach(cb=>cb.checked=true)'>Select All</button><button class='btn btn-secondary' onclick='document.querySelectorAll(\".release-checkbox\").forEach(cb=>cb.checked=false)'>Deselect All</button></div><div id='release-list'></div></div><div id='jira-release-footer'><span id='selected-count'>27 of 27 selected</span><div><button class='btn btn-secondary' onclick='document.getElementById(\"jira-release-modal\").remove()' style='margin-right:10px'>Cancel</button><button class='btn btn-primary' id='start-import'>Start Import</button></div></div></div>`;document.body.appendChild(modal);const listContainer=document.getElementById('release-list');releases.forEach((r,i)=>{const item=document.createElement('div');item.className='release-item';item.innerHTML=`<input type='checkbox' class='release-checkbox' checked data-index='${i}'><div class='release-info'><div><strong>Version:</strong> ${formatVersionName(r.date)}</div><div><strong>Release:</strong> ${formatReleaseDate(r.date)}</div><div><strong>Type:</strong> ${r.type}</div><div><strong>Desc:</strong> ${r.type} - ${r.release}</div></div>`;listContainer.appendChild(item);});function updateCount(){const total=releases.length;const checked=document.querySelectorAll('.release-checkbox:checked').length;document.getElementById('selected-count').textContent=`${checked} of ${total} selected`;}document.querySelectorAll('.release-checkbox').forEach(cb=>cb.addEventListener('change',updateCount));document.getElementById('start-import').addEventListener('click',()=>{const selected=Array.from(document.querySelectorAll('.release-checkbox:checked')).map(cb=>parseInt(cb.dataset.index));if(selected.length===0){alert('❌ No releases selected!');return;}modal.remove();let idx=0;function addNext(){if(idx>=selected.length){alert(`✅ Successfully created ${selected.length} release(s)!`);return;}const r=releases[selected[idx]];const nameInput=document.querySelector('div.releases-add__name > input');const dateInput=document.querySelector('div.releases-add__date-release > input');const descInput=document.querySelector('div.releases-add__description > input');const addBtn=document.querySelector('#releases-add__version > div:last-child > button, button[type=\"submit\"]');if(!nameInput||!dateInput||!descInput||!addBtn){alert('❌ Could not find form fields. Make sure you are on the Jira Releases page.');return;}nameInput.value=formatVersionName(r.date);nameInput.dispatchEvent(new Event('input',{bubbles:true}));nameInput.dispatchEvent(new Event('change',{bubbles:true}));dateInput.value=formatReleaseDate(r.date);dateInput.dispatchEvent(new Event('input',{bubbles:true}));dateInput.dispatchEvent(new Event('change',{bubbles:true}));descInput.value=r.type+' - '+r.release;descInput.dispatchEvent(new Event('input',{bubbles:true}));descInput.dispatchEvent(new Event('change',{bubbles:true}));setTimeout(()=>{addBtn.click();idx++;setTimeout(addNext,800);},300);}addNext();});})();" 
+            class="bookmarklet-button">
+                📅 Create Jira Releases
+            </a>
+        </div>
+
+        <div class="data-preview">
+            <h3>📊 Data Preview (27 releases will be created):</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Date</th>
+                        <th>Version Name</th>
+                        <th>Release Date</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Thu 1/22/2026</td>
+                        <td><code>01/22/2026</code></td>
+                        <td><code>22/01/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - January Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Sat 1/31/2026</td>
+                        <td><code>01/31/2026</code></td>
+                        <td><code>31/01/26</code></td>
+                        <td><span class="type-badge type-cutover">Cutover</span></td>
+                        <td>Cutover - Service Technical Cutover</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Fri 2/6/2026</td>
+                        <td><code>02/06/2026</code></td>
+                        <td><code>06/02/26</code></td>
+                        <td><span class="type-badge type-cutover">Cutover</span></td>
+                        <td>Cutover - Claims Cutover Release</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Thu 2/12/2026</td>
+                        <td><code>02/12/2026</code></td>
+                        <td><code>12/02/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - February Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Thu 2/26/2026</td>
+                        <td><code>02/26/2026</code></td>
+                        <td><code>26/02/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - February HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Thu 3/12/2026</td>
+                        <td><code>03/12/2026</code></td>
+                        <td><code>12/03/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - March Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Thu 3/26/2026</td>
+                        <td><code>03/26/2026</code></td>
+                        <td><code>26/03/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - March HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>Thu 4/9/2026</td>
+                        <td><code>04/09/2026</code></td>
+                        <td><code>09/04/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - April Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>Thu 4/30/2026</td>
+                        <td><code>04/30/2026</code></td>
+                        <td><code>30/04/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - April HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td>Thu 5/14/2026</td>
+                        <td><code>05/14/2026</code></td>
+                        <td><code>14/05/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - May HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>11</td>
+                        <td>Thu 5/21/2026</td>
+                        <td><code>05/21/2026</code></td>
+                        <td><code>21/05/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - May Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>12</td>
+                        <td>Thu 6/11/2026</td>
+                        <td><code>06/11/2026</code></td>
+                        <td><code>11/06/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - June Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>13</td>
+                        <td>Thu 6/25/2026</td>
+                        <td><code>06/25/2026</code></td>
+                        <td><code>25/06/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - June HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>14</td>
+                        <td>Thu 7/9/2026</td>
+                        <td><code>07/09/2026</code></td>
+                        <td><code>09/07/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - July HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>15</td>
+                        <td>Thu 7/30/2026</td>
+                        <td><code>07/30/2026</code></td>
+                        <td><code>30/07/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - July Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>16</td>
+                        <td>Thu 8/13/2026</td>
+                        <td><code>08/13/2026</code></td>
+                        <td><code>13/08/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - August Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>17</td>
+                        <td>Thu 8/27/2026</td>
+                        <td><code>08/27/2026</code></td>
+                        <td><code>27/08/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - August HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>18</td>
+                        <td>Thu 9/10/2026</td>
+                        <td><code>09/10/2026</code></td>
+                        <td><code>10/09/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - September Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>19</td>
+                        <td>Thu 9/24/2026</td>
+                        <td><code>09/24/2026</code></td>
+                        <td><code>24/09/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - September HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>20</td>
+                        <td>Thu 10/1/2026</td>
+                        <td><code>10/01/2026</code></td>
+                        <td><code>01/10/26</code></td>
+                        <td><span class="type-badge type-freeze">Freeze</span></td>
+                        <td>Freeze - AEP Freeze Begins</td>
+                    </tr>
+                    <tr>
+                        <td>21</td>
+                        <td>Thu 10/8/2026</td>
+                        <td><code>10/08/2026</code></td>
+                        <td><code>08/10/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - October Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>22</td>
+                        <td>Thu 10/29/2026</td>
+                        <td><code>10/29/2026</code></td>
+                        <td><code>29/10/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - October HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>23</td>
+                        <td>Thu 11/12/2026</td>
+                        <td><code>11/12/2026</code></td>
+                        <td><code>12/11/26</code></td>
+                        <td><span class="type-badge type-monthly">Monthly</span></td>
+                        <td>Monthly - November Monthly Release</td>
+                    </tr>
+                    <tr>
+                        <td>24</td>
+                        <td>Thu 12/3/2026</td>
+                        <td><code>12/03/2026</code></td>
+                        <td><code>03/12/26</code></td>
+                        <td><span class="type-badge type-hotfix">HotFix</span></td>
+                        <td>HotFix - December HotFix Release</td>
+                    </tr>
+                    <tr>
+                        <td>25</td>
+                        <td>Sat 12/5/2026</td>
+                        <td><code>12/05/2026</code></td>
+                        <td><code>05/12/26</code></td>
+                        <td><span class="type-badge type-freeze">Freeze</span></td>
+                        <td>Freeze - AEP Freeze Ends</td>
+                    </tr>
+                    <tr>
+                        <td>26</td>
+                        <td>Mon 12/7/2026</td>
+                        <td><code>12/07/2026</code></td>
+                        <td><code>07/12/26</code></td>
+                        <td><span class="type-badge type-freeze">Freeze</span></td>
+                        <td>Freeze - 2026 YE Freeze Starts</td>
+                    </tr>
+                    <tr>
+                        <td>27</td>
+                        <td>Fri 1/15/2027</td>
+                        <td><code>01/15/2027</code></td>
+                        <td><code>15/01/27</code></td>
+                        <td><span class="type-badge type-freeze">Freeze</span></td>
+                        <td>Freeze - 2026 YE Freeze Ends</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="instructions">
+            <h3>⚙️ How It Works:</h3>
+            <ul>
+                <li><strong>Modal preview:</strong> Shows all releases with checkboxes before import</li>
+                <li><strong>Select/Deselect:</strong> Choose which releases to import (all selected by default)</li>
+                <li><strong>Version Name:</strong> Date in <code>MM/DD/YYYY</code> format (e.g., "01/22/2026")</li>
+                <li><strong>Release Date:</strong> Date in <code>DD/MM/YY</code> format (e.g., "22/01/26")</li>
+                <li><strong>Description:</strong> Combined "Type - Release Name" (e.g., "Monthly - January Monthly Release")</li>
+                <li>Adds 800ms delay between submissions to ensure Jira processes each entry</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
