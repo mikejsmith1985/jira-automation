@@ -127,7 +127,8 @@
                 <li><strong>Drag the button below</strong> to your browser's bookmarks bar</li>
                 <li><strong>Navigate to your Jira project's "Releases" page</strong> (the unreleased versions view)</li>
                 <li><strong>Click the bookmark</strong> - a modal will appear showing all 27 releases</li>
-                <li><strong>Review and deselect</strong> any releases you don't want to import</li>
+                <li><strong>Filter by type</strong> using the checkboxes (Monthly, HotFix, Cutover, Freeze)</li>
+                <li><strong>Review and deselect</strong> any individual releases you don't want to import</li>
                 <li><strong>Click "Start Import"</strong> to begin the automation</li>
                 <li>Watch as it automatically fills and creates the selected release versions!</li>
             </ol>
@@ -146,16 +147,38 @@
                 function fmtV(d){return pad(d.getMonth()+1)+'/'+pad(d.getDate())+'/'+d.getFullYear();}
                 function fmtR(d){var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return pad(d.getDate())+'/'+m[d.getMonth()]+'/'+String(d.getFullYear()).slice(-2);}
                 var m=document.createElement('div');m.id='jrm';
-                m.innerHTML='<style>#jrm{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:sans-serif}#jrc{background:white;border-radius:8px;width:90%;max-width:900px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column}#jrh{padding:20px;background:#0052cc;color:white;display:flex;justify-content:space-between;align-items:center}#jrh h2{margin:0}#jrb{padding:20px;overflow-y:auto;flex:1}#jrf{padding:15px 20px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}.ri{padding:12px;border:1px solid #ddd;border-radius:4px;margin:8px 0;display:flex;align-items:center;background:#f9f9f9}.ri:hover{background:#f0f0f0}.rc{margin-right:12px;width:18px;height:18px;cursor:pointer}.rinfo{flex:1;display:grid;grid-template-columns:120px 140px 120px 1fr;gap:15px;font-size:13px}.btn{padding:10px 20px;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:14px}.bp{background:#0052cc;color:white}.bp:hover{background:#0747a6}.bs{background:#f4f5f7;color:#42526e}.bs:hover{background:#ebecf0}.bc{background:transparent;color:white;border:none;font-size:24px;cursor:pointer;padding:0;width:30px;height:30px}.sc{margin-bottom:15px;padding:10px;background:#f4f5f7;border-radius:4px}.sc button{margin-right:10px}</style><div id=jrc><div id=jrh><h2>Select Releases to Import</h2><button class=bc onclick="document.getElementById(\'jrm\').remove()">×</button></div><div id=jrb><div class=sc><button class="btn bs" onclick="document.querySelectorAll(\'.rc\').forEach(function(cb){cb.checked=true})">Select All</button><button class="btn bs" onclick="document.querySelectorAll(\'.rc\').forEach(function(cb){cb.checked=false})">Deselect All</button></div><div id=rl></div></div><div id=jrf><span id=sc>27 of 27 selected</span><div><button class="btn bs" onclick="document.getElementById(\'jrm\').remove()" style=margin-right:10px>Cancel</button><button class="btn bp" id=si>Start Import</button></div></div></div>';
+                m.innerHTML='<style>#jrm{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:sans-serif}#jrc{background:white;border-radius:8px;width:90%;max-width:900px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column}#jrh{padding:20px;background:#0052cc;color:white;display:flex;justify-content:space-between;align-items:center}#jrh h2{margin:0}#jrb{padding:20px;overflow-y:auto;flex:1}#jrf{padding:15px 20px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}.ri{padding:12px;border:1px solid #ddd;border-radius:4px;margin:8px 0;display:flex;align-items:center;background:#f9f9f9}.ri:hover{background:#f0f0f0}.ri.hidden{display:none}.rc{margin-right:12px;width:18px;height:18px;cursor:pointer}.rinfo{flex:1;display:grid;grid-template-columns:120px 140px 120px 1fr;gap:15px;font-size:13px}.btn{padding:10px 20px;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:14px}.bp{background:#0052cc;color:white}.bp:hover{background:#0747a6}.bs{background:#f4f5f7;color:#42526e}.bs:hover{background:#ebecf0}.bc{background:transparent;color:white;border:none;font-size:24px;cursor:pointer;padding:0;width:30px;height:30px}.sc{margin-bottom:15px;padding:10px;background:#f4f5f7;border-radius:4px}.sc button{margin-right:10px}.tf{margin-bottom:15px;padding:15px;background:#fff;border:2px solid #0052cc;border-radius:4px}.tf h3{margin:0 0 10px 0;font-size:14px;color:#0052cc}.tf-checks{display:flex;gap:15px;flex-wrap:wrap}.tf-item{display:flex;align-items:center;gap:5px}.tf-item input{width:16px;height:16px;cursor:pointer}.tf-item label{cursor:pointer;font-size:13px;font-weight:600}</style><div id=jrc><div id=jrh><h2>Select Releases to Import</h2><button class=bc onclick="document.getElementById(\'jrm\').remove()">×</button></div><div id=jrb><div class=tf><h3>Filter by Type:</h3><div class=tf-checks><div class=tf-item><input type=checkbox class=type-filter data-type=Monthly checked><label>Monthly</label></div><div class=tf-item><input type=checkbox class=type-filter data-type=HotFix checked><label>HotFix</label></div><div class=tf-item><input type=checkbox class=type-filter data-type=Cutover checked><label>Cutover</label></div><div class=tf-item><input type=checkbox class=type-filter data-type=Freeze checked><label>Freeze</label></div></div></div><div class=sc><button class="btn bs" onclick="document.querySelectorAll(\'.ri:not(.hidden) .rc\').forEach(function(cb){cb.checked=true});upd()">Select All Visible</button><button class="btn bs" onclick="document.querySelectorAll(\'.ri:not(.hidden) .rc\').forEach(function(cb){cb.checked=false});upd()">Deselect All Visible</button></div><div id=rl></div></div><div id=jrf><span id=sc>27 of 27 selected</span><div><button class="btn bs" onclick="document.getElementById(\'jrm\').remove()" style=margin-right:10px>Cancel</button><button class="btn bp" id=si>Start Import</button></div></div></div>';
                 document.body.appendChild(m);
                 var lc=document.getElementById('rl');
                 r.forEach(function(rel,i){
-                    var it=document.createElement('div');it.className='ri';
+                    var it=document.createElement('div');it.className='ri';it.setAttribute('data-type',rel.type);
                     it.innerHTML='<input type=checkbox class=rc checked data-index='+i+'><div class=rinfo><div><strong>Version:</strong> '+fmtV(rel.date)+'</div><div><strong>Release:</strong> '+fmtR(rel.date)+'</div><div><strong>Type:</strong> '+rel.type+'</div><div><strong>Desc:</strong> '+rel.type+' - '+rel.release+'</div></div>';
                     lc.appendChild(it);
                 });
-                function upd(){var t=r.length;var c=document.querySelectorAll('.rc:checked').length;document.getElementById('sc').textContent=c+' of '+t+' selected';}
+                function upd(){
+                    var visibleItems=document.querySelectorAll('.ri:not(.hidden)');
+                    var t=visibleItems.length;
+                    var c=0;
+                    visibleItems.forEach(function(item){if(item.querySelector('.rc').checked)c++;});
+                    document.getElementById('sc').textContent=c+' of '+t+' visible selected';
+                }
+                function filterByType(){
+                    var activeTypes={};
+                    document.querySelectorAll('.type-filter').forEach(function(tf){
+                        activeTypes[tf.getAttribute('data-type')]=tf.checked;
+                    });
+                    document.querySelectorAll('.ri').forEach(function(item){
+                        var itemType=item.getAttribute('data-type');
+                        if(activeTypes[itemType]){
+                            item.classList.remove('hidden');
+                        }else{
+                            item.classList.add('hidden');
+                        }
+                    });
+                    upd();
+                }
                 document.querySelectorAll('.rc').forEach(function(cb){cb.addEventListener('change',upd);});
+                document.querySelectorAll('.type-filter').forEach(function(tf){tf.addEventListener('change',filterByType);});
                 document.getElementById('si').addEventListener('click',function(){
                     var sel=Array.from(document.querySelectorAll('.rc:checked')).map(function(cb){return parseInt(cb.dataset.index);});
                     if(sel.length===0){alert('No releases selected!');return;}
@@ -421,8 +444,9 @@
         <div class="instructions">
             <h3>⚙️ How It Works:</h3>
             <ul>
-                <li><strong>Modal preview:</strong> Shows all releases with checkboxes before import</li>
-                <li><strong>Select/Deselect:</strong> Choose which releases to import (all selected by default)</li>
+                <li><strong>Type filters:</strong> Show/hide releases by type (Monthly, HotFix, Cutover, Freeze)</li>
+                <li><strong>Individual selection:</strong> Fine-tune with checkboxes for each release</li>
+                <li><strong>Select All/Deselect All:</strong> Quick actions for visible releases only</li>
                 <li><strong>Version Name:</strong> Date in <code>MM/DD/YYYY</code> format (e.g., "01/22/2026")</li>
                 <li><strong>Release Date:</strong> Date in <code>DD/MMM/YY</code> format (e.g., "22/Jan/26")</li>
                 <li><strong>Description:</strong> Combined "Type - Release Name" (e.g., "Monthly - January Monthly Release")</li>
