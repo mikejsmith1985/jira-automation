@@ -30,56 +30,63 @@ Write-Host "Building executable..." -ForegroundColor Yellow
 # Clean previous builds
 if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
-if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
 
-# Build parameters
-$params = @(
-    "-m", "PyInstaller",
-    "--clean",
-    "--name", "waypoint",
-    "--onefile",
-    "--noconsole",
-    "--add-data", "config.yaml;.",
-    "--add-data", "modern-ui.html;.",
-    "--add-data", "assets;assets",
-    "--hidden-import=selenium",
-    "--hidden-import=yaml",
-    "--hidden-import=schedule",
-    "--hidden-import=github",
-    "--hidden-import=packaging",
-    "--hidden-import=requests",
-    "--hidden-import=urllib3",
-    "--hidden-import=extensions",
-    "--hidden-import=extensions.jira",
-    "--hidden-import=extensions.github",
-    "--hidden-import=extensions.reporting",
-    "--hidden-import=storage",
-    "--hidden-import=trio",
-    "--hidden-import=trio_websocket",
-    "--hidden-import=nacl",
-    "--hidden-import=jwt",
-    "--hidden-import=cryptography",
-    "--hidden-import=certifi",
-    "--hidden-import=charset_normalizer",
-    "--hidden-import=idna",
-    "--hidden-import=deprecated",
-    "--hidden-import=wrapt",
-    "--hidden-import=psutil"
-)
+# Use waypoint.spec if it exists, otherwise build inline
+if (Test-Path "waypoint.spec") {
+    Write-Host "Using waypoint.spec..." -ForegroundColor Cyan
+    python -m PyInstaller waypoint.spec --clean
+} else {
+    Write-Host "waypoint.spec not found, building inline..." -ForegroundColor Yellow
+    
+    # Build parameters
+    $params = @(
+        "-m", "PyInstaller",
+        "--clean",
+        "--name", "waypoint",
+        "--onefile",
+        "--noconsole",
+        "--add-data", "config.yaml;.",
+        "--add-data", "modern-ui.html;.",
+        "--add-data", "assets;assets",
+        "--hidden-import=selenium",
+        "--hidden-import=yaml",
+        "--hidden-import=schedule",
+        "--hidden-import=github",
+        "--hidden-import=packaging",
+        "--hidden-import=requests",
+        "--hidden-import=urllib3",
+        "--hidden-import=extensions",
+        "--hidden-import=extensions.jira",
+        "--hidden-import=extensions.github",
+        "--hidden-import=extensions.reporting",
+        "--hidden-import=storage",
+        "--hidden-import=trio",
+        "--hidden-import=trio_websocket",
+        "--hidden-import=nacl",
+        "--hidden-import=jwt",
+        "--hidden-import=cryptography",
+        "--hidden-import=certifi",
+        "--hidden-import=charset_normalizer",
+        "--hidden-import=idna",
+        "--hidden-import=deprecated",
+        "--hidden-import=wrapt",
+        "--hidden-import=psutil"
+    )
 
-# Optional extensions hidden import - may fail if extensions folder structure is invalid
-if (Test-Path "extensions\__init__.py") {
-    $params += "--hidden-import=extensions"
+    # Optional extensions hidden import - may fail if extensions folder structure is invalid
+    if (Test-Path "extensions\__init__.py") {
+        $params += "--hidden-import=extensions"
+    }
+
+    if (Test-Path "assets\icon.ico") {
+        $params += "--icon=assets\icon.ico"
+    }
+
+    $params += "app.py"
+
+    Write-Host "Running: python $params"
+    & python $params
 }
-
-if (Test-Path "assets\icon.ico") {
-    $params += "--icon=assets\icon.ico"
-}
-
-$params += "app.py"
-
-Write-Host "Running: python $params"
-& python $params
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed" -ForegroundColor Red

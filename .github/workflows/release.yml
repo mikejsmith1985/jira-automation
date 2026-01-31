@@ -35,17 +35,50 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
       
-      - name: Package application
-        run: .\build.ps1
+      - name: Build with PyInstaller using waypoint.spec
+        run: |
+          Write-Host "Building with waypoint.spec..." -ForegroundColor Cyan
+          python -m PyInstaller waypoint.spec --clean
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Build failed" -ForegroundColor Red
+            exit 1
+          }
+          if (Test-Path "dist\waypoint.exe") {
+            $size = [math]::Round((Get-Item "dist\waypoint.exe").Length / 1MB, 1)
+            Write-Host "Build successful! ($size MB)" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: waypoint.exe not found" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+      
+      - name: Prepare release folder
+        run: |
+          Write-Host "Creating release folder..." -ForegroundColor Cyan
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          
+          if (Test-Path "dist\waypoint.exe") {
+            Copy-Item "dist\waypoint.exe" -Destination "release\waypoint.exe" -Force
+            Write-Host "Copied waypoint.exe to release folder" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: dist\waypoint.exe not found" -ForegroundColor Red
+            exit 1
+          }
+          
+          # Copy additional files for portable version
+          if (Test-Path "config.yaml") { Copy-Item "config.yaml" -Destination "release\" -Force }
+          if (Test-Path "README.md") { Copy-Item "README.md" -Destination "release\" -Force }
         shell: powershell
       
       - name: Create portable ZIP
         run: |
-          if (Test-Path "dist") {
-            7z a -tzip "release/waypoint-portable.zip" "dist/*" -mx5
-            Write-Host "ZIP created successfully"
+          if (Test-Path "release\waypoint.exe") {
+            Compress-Archive -Path "release\*" -DestinationPath "release\waypoint-portable.zip" -Force
+            Write-Host "ZIP created successfully" -ForegroundColor Green
+            $zipSize = [math]::Round((Get-Item "release\waypoint-portable.zip").Length / 1MB, 1)
+            Write-Host "ZIP size: $zipSize MB" -ForegroundColor Cyan
           } else {
-            Write-Host "ERROR: No dist folder found"
+            Write-Host "ERROR: waypoint.exe not in release folder" -ForegroundColor Red
             exit 1
           }
         shell: powershell
@@ -61,13 +94,22 @@ jobs:
           echo "TAG_NAME=$tag" >> $env:GITHUB_OUTPUT
         shell: powershell
       
-      - name: Prepare assets
+      - name: Verify release assets
         run: |
-          if (Test-Path "release/waypoint.exe") {
-            Copy-Item "release/waypoint.exe" "assets/waypoint.exe" -Force
-            Write-Host "Assets prepared"
+          Write-Host "Verifying release assets..." -ForegroundColor Cyan
+          if (Test-Path "release\waypoint.exe") {
+            $exeSize = [math]::Round((Get-Item "release\waypoint.exe").Length / 1MB, 1)
+            Write-Host "✓ waypoint.exe ($exeSize MB)" -ForegroundColor Green
           } else {
-            Write-Host "WARNING: Could not find executable to prepare"
+            Write-Host "✗ waypoint.exe missing" -ForegroundColor Red
+            exit 1
+          }
+          if (Test-Path "release\waypoint-portable.zip") {
+            $zipSize = [math]::Round((Get-Item "release\waypoint-portable.zip").Length / 1MB, 1)
+            Write-Host "✓ waypoint-portable.zip ($zipSize MB)" -ForegroundColor Green
+          } else {
+            Write-Host "✗ waypoint-portable.zip missing" -ForegroundColor Red
+            exit 1
           }
         shell: powershell
       
