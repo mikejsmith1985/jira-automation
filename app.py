@@ -106,7 +106,7 @@ class SyncHandler(BaseHTTPRequestHandler):
         safe_print(f"[GET] {self.path}")
         
         if self.path == '/' or self.path == '/index.html':
-            self._serve_static_file('modern-ui.html', 'text/html; charset=utf-8')
+            self._serve_html_with_cache_busting('modern-ui.html', 'text/html; charset=utf-8')
         elif self.path.startswith('/assets/'):
             # Serve static assets
             # Strip query parameters (e.g. ?v=1.0)
@@ -164,8 +164,10 @@ class SyncHandler(BaseHTTPRequestHandler):
                 with open(abs_filepath, 'rb') as f:
                     self.send_response(200)
                     self.send_header('Content-type', content_type)
-                    # Use no-cache to prevent stale UI issues during development/updates
-                    self.send_header('Cache-Control', 'no-cache')
+                    # Aggressive no-cache to prevent stale assets
+                    self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                    self.send_header('Pragma', 'no-cache')
+                    self.send_header('Expires', '0')
                     self.end_headers()
                     self.wfile.write(f.read())
         except FileNotFoundError:
@@ -178,6 +180,48 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.wfile.write(f"File not found: {filepath}".encode())
         except Exception as e:
             safe_print(f"[ERROR] Failed to serve {filepath}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.send_response(500)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(f"Server error: {str(e)}".encode())
+    
+    def _serve_html_with_cache_busting(self, filepath, content_type):
+        """Serve HTML with cache-busting query parameters injected"""
+        try:
+            abs_filepath = os.path.join(BASE_DIR, filepath)
+            safe_print(f"[SERVE] Serving HTML with cache busting: {abs_filepath}")
+            
+            with open(abs_filepath, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            # Inject version into template
+            html_content = html_content.replace('{{VERSION}}', APP_VERSION)
+            
+            # Inject version query parameters into asset URLs
+            version_param = f"?v={APP_VERSION}"
+            html_content = html_content.replace('/assets/css/modern-ui.css', f'/assets/css/modern-ui.css{version_param}')
+            html_content = html_content.replace('/assets/js/modern-ui-v2.js', f'/assets/js/modern-ui-v2.js{version_param}')
+            html_content = html_content.replace('/assets/js/servicenow-jira.js', f'/assets/js/servicenow-jira.js{version_param}')
+            html_content = html_content.replace('/assets/js/html2canvas.min.js', f'/assets/js/html2canvas.min.js{version_param}')
+            
+            self.send_response(200)
+            self.send_header('Content-type', content_type)
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+            self.end_headers()
+            self.wfile.write(html_content.encode('utf-8'))
+            
+        except FileNotFoundError:
+            safe_print(f"[ERROR] HTML file not found: {abs_filepath}")
+            self.send_response(404)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(f"File not found: {filepath}".encode())
+        except Exception as e:
+            safe_print(f"[ERROR] Failed to serve HTML with cache busting: {str(e)}")
             import traceback
             traceback.print_exc()
             self.send_response(500)
