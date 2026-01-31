@@ -1,15 +1,9 @@
-2026/01/13-07:11:16.168 6df4 Reusing MANIFEST C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/MANIFEST-000001
-2026/01/13-07:11:16.169 6df4 Recovering log #4
-2026/01/13-07:11:16.178 6df4 Reusing old log C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/000004.log 
-2026/01/13-07:11:28.867 2624 Level-0 table #8: started
-2026/01/13-07:11:28.892 2624 Level-0 table #8: 1666147 bytes OK
-2026/01/13-07:11:28.894 2624 Delete type=0 #4
-2026/01/13-07:11:29.189 2624 Compacting 1@1 + 1@2 files
-2026/01/13-07:11:29.216 2624 Generated table #9@1: 973 keys, 137446 bytes
-2026/01/13-07:11:29.216 2624 Compacted 1@1 + 1@2 files => 137446 bytes
-2026/01/13-07:11:29.218 2624 compacted to: files[ 0 0 1 0 0 0 0 ]
-2026/01/13-07:11:29.218 2624 Delete type=2 #5
-2026/01/13-07:11:29.219 2624 Delete type=2 #8
-2026/01/13-07:28:15.682 2624 Level-0 table #11: started
-2026/01/13-07:28:15.712 2624 Level-0 table #11: 1820940 bytes OK
-2026/01/13-07:28:15.714 2624 Delete type=0 #7
+2026/01/13-07:29:58.008 9898 Reusing MANIFEST C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/MANIFEST-000001
+2026/01/13-07:29:58.009 9898 Recovering log #10
+2026/01/13-07:29:58.010 9898 Reusing old log C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/000010.log 
+2026/01/13-07:29:58.770 bcdc Compacting 1@1 + 1@2 files
+2026/01/13-07:29:58.782 bcdc Generated table #13@1: 1451 keys, 141484 bytes
+2026/01/13-07:29:58.782 bcdc Compacted 1@1 + 1@2 files => 141484 bytes
+2026/01/13-07:29:58.783 bcdc compacted to: files[ 0 0 1 0 0 0 0 ]
+2026/01/13-07:29:58.783 bcdc Delete type=2 #9
+2026/01/13-07:29:58.783 bcdc Delete type=2 #11

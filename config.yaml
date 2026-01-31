@@ -120,3 +120,12 @@ schedule:
   weekdays_only: true
 ticket_keys:
   pattern: ([A-Z]+-\d+)
+servicenow:
+  url: ''
+  jira_project: ''
+  field_mapping:
+    configuration_item: ''
+    impact: ''
+    urgency: ''
+    problem_category: ''
+    detection: ''

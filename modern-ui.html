@@ -183,6 +183,44 @@
                             <p id="po-load-result" style="margin-top: 10px;"></p>
                         </div>
                     </div>
+                    
+                    <!-- ServiceNow -> Jira Automation -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>🔄 ServiceNow → Jira Automation</h3>
+                            <p class="text-secondary">Create Jira Defect + Story from ServiceNow PRB</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>PRB Number</label>
+                                <input type="text" id="prb-number-input" class="input-field" placeholder="PRB0123456">
+                                <small class="text-secondary">Enter the ServiceNow Problem ticket number</small>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                <button class="btn btn-secondary" onclick="validatePRB()">🔍 Validate PRB</button>
+                                <button class="btn btn-primary" onclick="createJiraIssues()" id="create-jira-btn" disabled>✨ Create Jira Issues</button>
+                                <button class="btn btn-secondary" onclick="document.querySelector('.nav-item[data-tab=&quot;integrations&quot;]').click()" style="margin-left: auto;">⚙️ Configure</button>
+                            </div>
+                            
+                            <div id="prb-validation-result" style="display: none; padding: 15px; background: var(--bg-secondary); border-radius: 8px; margin-top: 15px;">
+                                <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">PRB Details</h4>
+                                <div id="prb-details" style="font-size: 13px; color: var(--text-secondary);"></div>
+                                
+                                <div id="inc-selection" style="display: none; margin-top: 15px;">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 13px;">Select Incident Number:</label>
+                                    <div id="inc-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                                </div>
+                            </div>
+                            
+                            <div id="snow-sync-status" style="margin-top: 15px;"></div>
+                            
+                            <div id="snow-sync-result" style="display: none; padding: 15px; background: var(--bg-secondary); border-radius: 8px; margin-top: 15px;">
+                                <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: var(--accent);">✅ Success!</h4>
+                                <div id="created-issues" style="font-size: 13px;"></div>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Field Mapping Modal (Hidden by default) -->
                     <div id="mapping-modal" class="modal">
@@ -557,6 +595,42 @@
                             <p id="github-test-result" style="margin-top: 10px;"></p>
                         </div>
                     </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>🔄 ServiceNow → Jira Automation</h3>
+                            <p class="text-secondary">Automate PRB → Jira Defect + Story creation</p>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label>ServiceNow Base URL</label>
+                                <input type="text" id="snow-url-input" class="input-field" placeholder="https://your-instance.service-now.com">
+                                <small class="text-secondary">Your ServiceNow instance URL</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Jira Project Key</label>
+                                <input type="text" id="snow-jira-project-input" class="input-field" placeholder="PROJ">
+                                <small class="text-secondary">Project key for created Defects and Stories</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Field Mapping (JSON)</label>
+                                <textarea id="snow-field-mapping-input" class="input-field" rows="8" placeholder='{
+  "configuration_item": "customfield_10001",
+  "impact": "customfield_10002",
+  "urgency": "customfield_10003",
+  "problem_category": "customfield_10004",
+  "detection": "customfield_10005"
+}'></textarea>
+                                <small class="text-secondary">Map ServiceNow fields to Jira custom field IDs</small>
+                            </div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <button class="btn btn-secondary" onclick="copySnowConfig()">📋 Copy JSON</button>
+                                <button class="btn btn-secondary" onclick="testSnowConnection()">🔍 Test Connection</button>
+                                <button class="btn btn-primary" onclick="saveSnowConfig()">💾 Save All</button>
+                            </div>
+                            <p id="snow-config-result" style="margin-top: 10px;"></p>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Settings Tab -->
@@ -703,5 +777,6 @@
     </div>
 
     <script src="/assets/js/modern-ui-v2.js"></script>
+    <script src="/assets/js/servicenow-jira.js"></script>
 </body>
 </html>

@@ -1,3 +1,23 @@
+# 🎉 Latest Release: v1.2.33
+
+**Release Date**: January 29, 2026  
+**GitHub**: https://github.com/mikejsmith1985/jira-automation/releases/tag/v1.2.33
+
+## What's New
+
+### 🐛 Bug Fixes
+1. **Invalid Session Error** - Auto-detects and recovers from stale browser sessions
+2. **fixVersion Creator** - Now works correctly with proper date formats and filtering
+
+### 🧹 Code Cleanup
+- Removed 109.6 KB of dead code (6 files)
+- Deleted deprecated function and unused endpoint
+- Cleaner, more maintainable codebase
+
+**Full Details**: [RELEASE_v1.2.33.md](RELEASE_v1.2.33.md)
+
+---
+
 # 🎉 Release Complete: v1.2.7
 
 ## Summary

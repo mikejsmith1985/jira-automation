@@ -1,9 +1,30 @@
-2026/01/13-07:29:58.008 9898 Reusing MANIFEST C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/MANIFEST-000001
-2026/01/13-07:29:58.009 9898 Recovering log #10
-2026/01/13-07:29:58.010 9898 Reusing old log C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/000010.log 
-2026/01/13-07:29:58.770 bcdc Compacting 1@1 + 1@2 files
-2026/01/13-07:29:58.782 bcdc Generated table #13@1: 1451 keys, 141484 bytes
-2026/01/13-07:29:58.782 bcdc Compacted 1@1 + 1@2 files => 141484 bytes
-2026/01/13-07:29:58.783 bcdc compacted to: files[ 0 0 1 0 0 0 0 ]
-2026/01/13-07:29:58.783 bcdc Delete type=2 #9
-2026/01/13-07:29:58.783 bcdc Delete type=2 #11
+2026/01/29-15:50:37.210 782c Reusing MANIFEST C:\ProjectsWin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/MANIFEST-000001
+2026/01/29-15:50:37.212 782c Recovering log #10
+2026/01/29-15:50:37.231 782c Reusing old log C:\ProjectsWin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/000010.log 
+2026/01/29-17:10:56.595 b3c0 Level-0 table #16: started
+2026/01/29-17:10:56.615 b3c0 Level-0 table #16: 1856237 bytes OK
+2026/01/29-17:10:56.617 b3c0 Delete type=0 #10
+2026/01/29-17:11:14.011 b3c0 Compacting 1@1 + 1@2 files
+2026/01/29-17:11:14.019 b3c0 Level-0 table #19: started
+2026/01/29-17:11:14.021 b3c0 Level-0 table #19: 19130 bytes OK
+2026/01/29-17:11:14.022 b3c0 Delete type=0 #15
+2026/01/29-17:11:14.024 b3c0 Generated table #17@1: 1891 keys, 153670 bytes
+2026/01/29-17:11:14.024 b3c0 Compacted 1@1 + 1@2 files => 153670 bytes
+2026/01/29-17:11:14.024 b3c0 compacted to: files[ 1 0 1 0 0 0 0 ]
+2026/01/29-17:11:14.025 b3c0 Delete type=2 #13
+2026/01/29-17:11:14.025 b3c0 Delete type=2 #16
+2026/01/29-17:11:14.025 b3c0 Manual compaction at level-0 from (begin) .. (end); will stop at '\x00\x01\x01"\x04\x02\x01\x04\x00j\x00i\x00r\x00a\x03\x00\x80\x99\xf3\xbc\xc0yB\x00\x01$\x000\x004\x00d\x002\x007\x005\x005\x00a\x00-\x004\x00b\x00e\x003\x00-\x004\x00c\x00e\x00b\x00-\x00a\x007\x005\x00b\x00-\x002\x004\x006\x000\x009\x007\x003\x00b\x00d\x00c\x002\x00b' @ 37272 : 1
+2026/01/29-17:11:14.026 b3c0 Compacting 1@0 + 0@1 files
+2026/01/29-17:11:14.027 b3c0 Generated table #20@0: 48 keys, 1068 bytes
+2026/01/29-17:11:14.027 b3c0 Compacted 1@0 + 0@1 files => 1068 bytes
+2026/01/29-17:11:14.027 b3c0 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/01/29-17:11:14.028 b3c0 Delete type=2 #19
+2026/01/29-17:11:14.028 b3c0 Manual compaction at level-0 from '\x00\x01\x01"\x04\x02\x01\x04\x00j\x00i\x00r\x00a\x03\x00\x80\x99\xf3\xbc\xc0yB\x00\x01$\x000\x004\x00d\x002\x007\x005\x005\x00a\x00-\x004\x00b\x00e\x003\x00-\x004\x00c\x00e\x00b\x00-\x00a\x007\x005\x00b\x00-\x002\x004\x006\x000\x009\x007\x003\x00b\x00d\x00c\x002\x00b' @ 37272 : 1 .. (end); will stop at (end)
+2026/01/29-17:11:14.028 b3c0 Manual compaction at level-1 from (begin) .. (end); will stop at '\x00\x01\x01"\x04\x02\x01\x04\x00j\x00i\x00r\x00a\x03\x00\x80\x99\xf3\xbc\xc0yB\x00\x01$\x000\x004\x00d\x002\x007\x005\x005\x00a\x00-\x004\x00b\x00e\x003\x00-\x004\x00c\x00e\x00b\x00-\x00a\x007\x005\x00b\x00-\x002\x004\x006\x000\x009\x007\x003\x00b\x00d\x00c\x002\x00b' @ 37272 : 1
+2026/01/29-17:11:14.028 b3c0 Compacting 1@1 + 1@2 files
+2026/01/29-17:11:14.032 b3c0 Generated table #21@1: 1877 keys, 131656 bytes
+2026/01/29-17:11:14.033 b3c0 Compacted 1@1 + 1@2 files => 131656 bytes
+2026/01/29-17:11:14.033 b3c0 compacted to: files[ 0 0 1 0 0 0 0 ]
+2026/01/29-17:11:14.033 b3c0 Delete type=2 #17
+2026/01/29-17:11:14.033 b3c0 Delete type=2 #20
+2026/01/29-17:11:14.034 b3c0 Manual compaction at level-1 from '\x00\x01\x01"\x04\x02\x01\x04\x00j\x00i\x00r\x00a\x03\x00\x80\x99\xf3\xbc\xc0yB\x00\x01$\x000\x004\x00d\x002\x007\x005\x005\x00a\x00-\x004\x00b\x00e\x003\x00-\x004\x00c\x00e\x00b\x00-\x00a\x007\x005\x00b\x00-\x002\x004\x006\x000\x009\x007\x003\x00b\x00d\x00c\x002\x00b' @ 37272 : 1 .. (end); will stop at (end)
