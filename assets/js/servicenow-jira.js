@@ -129,19 +129,28 @@ let currentPRBData = null;
 let selectedIncident = null;
 
 async function validatePRB() {
-    const prbNumber = document.getElementById('prb-number-input').value.trim();
-    const resultEl = document.getElementById('prb-validation-result');
-    const createBtn = document.getElementById('create-jira-btn');
-    
-    if (!prbNumber) {
-        showNotification('Please enter a PRB number', 'error');
-        return;
-    }
-    
-    // Show loading
-    resultEl.style.display = 'block';
-    resultEl.innerHTML = '<div style="text-align: center; padding: 20px;"><span>Validating PRB...</span></div>';
-    createBtn.disabled = true;
+    console.log('[Waypoint] validatePRB() called');
+    try {
+        const prbNumber = document.getElementById('prb-number-input').value.trim();
+        const resultEl = document.getElementById('prb-validation-result');
+        const createBtn = document.getElementById('create-jira-btn');
+        
+        console.log('[Waypoint] PRB Number:', prbNumber);
+        console.log('[Waypoint] Elements found:', {
+            prbInput: !!document.getElementById('prb-number-input'),
+            resultEl: !!resultEl,
+            createBtn: !!createBtn
+        });
+        
+        if (!prbNumber) {
+            showNotification('Please enter a PRB number', 'error');
+            return;
+        }
+        
+        // Show loading
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = '<div style="text-align: center; padding: 20px;"><span>Validating PRB...</span></div>';
+        createBtn.disabled = true;
     
     try {
         const response = await fetch('/api/snow-jira/validate-prb', {
@@ -194,14 +203,22 @@ async function validatePRB() {
             showNotification('PRB validated successfully!');
             
         } else {
+            console.error('[Waypoint] PRB validation failed:', result.error);
             resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">${result.error}</div>`;
             createBtn.disabled = true;
             showNotification(result.error, 'error');
         }
     } catch (error) {
-        resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">Failed to validate PRB</div>`;
+        console.error('[Waypoint] validatePRB() exception:', error);
+        console.error('[Waypoint] Error stack:', error.stack);
+        resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">Failed to validate PRB: ${error.message}</div>`;
         createBtn.disabled = true;
         showNotification('Failed to validate PRB', 'error');
+    }
+    } catch (error) {
+        console.error('[Waypoint] validatePRB() outer exception:', error);
+        console.error('[Waypoint] Error stack:', error.stack);
+        showNotification('Critical error in validatePRB: ' + error.message, 'error');
     }
 }
 
@@ -211,9 +228,11 @@ function selectIncident(incNumber) {
 }
 
 async function createJiraIssues() {
-    const prbNumber = document.getElementById('prb-number-input').value.trim();
-    const statusEl = document.getElementById('snow-sync-status');
-    const resultEl = document.getElementById('snow-sync-result');
+    console.log('[Waypoint] createJiraIssues() called');
+    try {
+        const prbNumber = document.getElementById('prb-number-input').value.trim();
+        const statusEl = document.getElementById('snow-sync-status');
+        const resultEl = document.getElementById('snow-sync-result');
     const createBtn = document.getElementById('create-jira-btn');
     
     if (!selectedIncident) {
@@ -270,18 +289,49 @@ async function createJiraIssues() {
             }, 10000);
             
         } else {
+            console.error('[Waypoint] Create Jira issues failed:', result.error);
             statusEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">${result.error}</div>`;
             showNotification(result.error, 'error');
             createBtn.disabled = false;
         }
     } catch (error) {
-        statusEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">Failed to create Jira issues</div>`;
+        console.error('[Waypoint] createJiraIssues() exception:', error);
+        console.error('[Waypoint] Error stack:', error.stack);
+        statusEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">Failed to create Jira issues: ${error.message}</div>`;
         showNotification('Failed to create Jira issues', 'error');
         createBtn.disabled = false;
+    }
+    } catch (error) {
+        console.error('[Waypoint] createJiraIssues() outer exception:', error);
+        console.error('[Waypoint] Error stack:', error.stack);
+        showNotification('Critical error in createJiraIssues: ' + error.message, 'error');
     }
 }
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    loadSnowConfig();
+    console.log('[Waypoint] ServiceNow module initializing...');
+    try {
+        // Check if PRB section exists
+        const prbSection = document.getElementById('prb-number-input');
+        if (prbSection) {
+            console.log('[Waypoint] ✓ PRB section found in DOM');
+        } else {
+            console.error('[Waypoint] ✗ PRB section NOT found in DOM');
+        }
+        
+        // Check if functions are defined
+        console.log('[Waypoint] Function check:', {
+            validatePRB: typeof validatePRB,
+            createJiraIssues: typeof createJiraIssues,
+            loadSnowConfig: typeof loadSnowConfig,
+            testSnowConnection: typeof testSnowConnection
+        });
+        
+        loadSnowConfig();
+        console.log('[Waypoint] ✓ ServiceNow module initialized successfully');
+    } catch (error) {
+        console.error('[Waypoint] ✗ ServiceNow module initialization FAILED:', error);
+        console.error('[Waypoint] Error stack:', error.stack);
+    }
 });

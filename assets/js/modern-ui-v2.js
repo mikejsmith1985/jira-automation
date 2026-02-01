@@ -2,6 +2,11 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('[Waypoint] Initializing...');
+    console.log('[Waypoint] Browser info:', {
+        userAgent: navigator.userAgent,
+        vendor: navigator.vendor,
+        platform: navigator.platform
+    });
     
     try {
         // Initialize theme
@@ -12,6 +17,15 @@ document.addEventListener('DOMContentLoaded', function() {
         loadRulesFromConfig();
         initFeedback();
         
+        // Check if ServiceNow section exists in DOM
+        const snowSection = document.getElementById('prb-number-input');
+        console.log('[Waypoint] ServiceNow PRB section in DOM:', !!snowSection);
+        if (snowSection) {
+            console.log('[Waypoint] ✓ PRB input element found');
+        } else {
+            console.error('[Waypoint] ✗ PRB input element NOT found - this will cause issues!');
+        }
+        
         // Load real data from APIs
         loadIntegrationStatus();
         loadAutomationRules();
@@ -21,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('[Waypoint] Initialization complete');
     } catch (error) {
         console.error('[Waypoint] Initialization error:', error);
+        console.error('[Waypoint] Error stack:', error.stack);
     }
 });
 
