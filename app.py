@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.2.37"
+APP_VERSION = "1.2.40"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -5578,9 +5578,17 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                                 if (uploadRes.ok) {
                                     const uploadData = await uploadRes.json();
                                     imageUrls.push(uploadData.content.download_url);
+                                    addLog('success', `Screenshot ${i + 1} uploaded successfully`);
+                                } else {
+                                    const errorData = await uploadRes.json();
+                                    const errorMsg = `Screenshot upload failed: ${uploadRes.status} - ${errorData.message || 'Unknown error'}`;
+                                    console.error(errorMsg, errorData);
+                                    addLog('error', errorMsg);
                                 }
                             } catch (err) {
-                                console.warn('Screenshot upload failed:', err);
+                                const errorMsg = `Screenshot upload error: ${err.message}`;
+                                console.error(errorMsg, err);
+                                addLog('error', errorMsg);
                             }
                         }
                     }
@@ -5591,6 +5599,13 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                         imageUrls.forEach(url => {
                             body += `![screenshot](${url})\\n\\n`;
                         });
+                        addLog('success', `${imageUrls.length} screenshot(s) attached to issue`);
+                    } else if (feedbackAttachments.length > 0) {
+                        // Had attachments but none uploaded successfully
+                        const imgCount = feedbackAttachments.filter(a => a.type === 'image').length;
+                        if (imgCount > 0) {
+                            addLog('warn', `${imgCount} screenshot(s) failed to upload - check token permissions`);
+                        }
                     }
                     
                     // Create the issue via GitHub API
