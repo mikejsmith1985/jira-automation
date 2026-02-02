@@ -85,46 +85,63 @@ class ServiceNowScraper:
             except Exception as e:
                 self.logger.warning(f"Could not switch to iframe: {e}")
             
-            # Wait for JavaScript to render form - try multiple possible selectors
+            # Check if PRB is in page source first (fast check)
+            if prb_number not in self.driver.page_source:
+                self.logger.error(f"PRB {prb_number} not found in page source - wrong page?")
+                return False
+            
+            self.logger.info(f"PRB {prb_number} confirmed in page source")
+            
+            # Wait for JavaScript to render form - use ONLY CSS/XPath (not By.ID with dots!)
+            # Based on user's Chrome recording JSON showing exact selectors that work
             form_loaded = False
             wait_selectors = [
-                (By.ID, "problem.short_description"),
-                (By.ID, "short_description"),  # Modern UI without prefix
-                (By.ID, "problem.number"),
-                (By.ID, "number"),  # Modern UI without prefix
-                (By.CSS_SELECTOR, "[id='problem.short_description']"),  # CSS selector for ID with dots
-                (By.CSS_SELECTOR, "[id='short_description']"),  # Modern UI CSS
-                (By.CSS_SELECTOR, "input[id*='problem']"),  # Any input with 'problem' in ID
-                (By.CSS_SELECTOR, "input[id*='description']"),  # Any input with 'description' in ID
-                (By.CLASS_NAME, "form-control")  # Generic form field
+                # PRIMARY: CSS selectors for fields with dots (from recording)
+                (By.CSS_SELECTOR, "[id='problem.short_description']"),
+                (By.CSS_SELECTOR, "[id='problem.description']"),
+                (By.CSS_SELECTOR, "[id='problem.number']"),
+                # BACKUP: XPath selectors (also from recording)
+                (By.XPATH, "//*[@id='problem.short_description']"),
+                (By.XPATH, "//*[@id='problem.description']"),
+                # FALLBACK: Modern UI without "problem." prefix
+                (By.CSS_SELECTOR, "[id='short_description']"),
+                (By.CSS_SELECTOR, "[id='description']"),
             ]
             
+            # Reduced timeout: 3 seconds per selector (not 20!)
             for by, selector in wait_selectors:
                 try:
-                    self.logger.info(f"Trying to find element: {selector}")
-                    WebDriverWait(self.driver, 20).until(  # Increased to 20s
+                    self.logger.info(f"Waiting for element: {selector}")
+                    WebDriverWait(self.driver, 3).until(
                         EC.presence_of_element_located((by, selector))
                     )
-                    self.logger.info(f"Form loaded - found element: {selector}")
+                    self.logger.info(f"✓ Form loaded - found: {selector}")
                     form_loaded = True
                     break
                 except TimeoutException:
                     continue
             
             if not form_loaded:
-                # Last resort: check if PRB is in page
-                if prb_number in self.driver.page_source:
-                    self.logger.warning(f"Form elements not found but {prb_number} in page source. Form may use different structure.")
-                    # Try to find ANY input field as proof page is interactive
-                    try:
-                        self.driver.find_element(By.TAG_NAME, "input")
-                        self.logger.info("Page has input fields, assuming form is present")
-                        return self.login_check()
-                    except:
-                        pass
+                # Debug: log all element IDs on page
+                try:
+                    all_ids = self.driver.find_elements(By.XPATH, "//*[@id]")
+                    found_ids = [el.get_attribute("id") for el in all_ids[:20]]  # First 20
+                    self.logger.warning(f"Form elements not found. IDs on page: {found_ids}")
+                except:
+                    pass
+                
+                # Save HTML for debugging
+                try:
+                    import os
+                    debug_file = os.path.join(os.path.dirname(__file__), "snow_debug.html")
+                    with open(debug_file, "w", encoding="utf-8") as f:
+                        f.write(self.driver.page_source)
+                    self.logger.info(f"Saved page HTML to: {debug_file}")
+                except Exception as e:
+                    self.logger.warning(f"Could not save debug HTML: {e}")
                 
                 self.driver.switch_to.default_content()
-                self.logger.error(f"Could not verify form loaded for {prb_number}")
+                self.logger.error(f"Could not find form fields for {prb_number} (tried 7 selectors in 21s)")
                 return False
             
             # Form loaded successfully
@@ -169,8 +186,8 @@ class ServiceNowScraper:
     def _get_field_value(self, field_id):
         """Get value from a ServiceNow form field
         
-        Tries multiple variations of field IDs because ServiceNow uses different
-        formats in different UI modes (classic vs modern)
+        Uses CSS selectors to handle dotted IDs properly (By.ID doesn't work reliably)
+        Based on user's Chrome recording showing fields like 'problem.short_description'
         """
         # Try multiple variations of the field ID
         field_variations = [
@@ -187,9 +204,12 @@ class ServiceNowScraper:
             underscore_id = field_id.replace('.', '_')
             field_variations.append(underscore_id)  # e.g., "problem_short_description"
         
+        self.logger.debug(f"Looking for field: {field_id} (variations: {field_variations})")
+        
         for variation in field_variations:
             try:
-                element = self.driver.find_element(By.ID, variation)
+                # Use CSS selector for dotted IDs (more reliable than By.ID)
+                element = self.driver.find_element(By.CSS_SELECTOR, f"[id='{variation}']")
                 
                 if element.tag_name == 'select':
                     from selenium.webdriver.support.ui import Select
@@ -207,7 +227,7 @@ class ServiceNowScraper:
                 continue
         
         # None of the variations worked
-        self.logger.warning(f"Field not found (tried: {', '.join(field_variations)})")
+        self.logger.warning(f"Field not found: {field_id} (tried: {', '.join(field_variations)})")
         return ''
     
     def extract_incident_numbers(self):
