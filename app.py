@@ -12,8 +12,7 @@ import json
 import yaml
 import base64
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from playwright.sync_api import sync_playwright, Playwright, Browser, BrowserContext, Page
 from sync_engine import SyncEngine
 from insights_engine import InsightsEngine
 from feedback_db import FeedbackDB
@@ -67,7 +66,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.3.10"  # Version sync automation - local dev
+APP_VERSION = "1.4.0"  # Phase 3: Playwright migration - browser management
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -79,7 +78,15 @@ def safe_print(msg):
     except:
         pass
 
-driver = None
+# Playwright browser state (replaces Selenium driver for modern web scraping)
+playwright_instance = None
+browser = None
+context = None
+page = None
+
+# Legacy - will be removed in Phase 4 after JiraAutomator migration
+driver = None  # Still needed for JiraAutomator (GitHub scraper) until Phase 4
+
 sync_engine = None
 sync_thread = None
 is_syncing = False
@@ -423,8 +430,8 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'error': str(e)}).encode())
     
     def _handle_integrations_status(self):
-        """Return real integration status based on config AND Selenium state"""
-        global driver
+        """Return real integration status based on config AND Playwright browser state"""
+        global page
         try:
             config_path = os.path.join(DATA_DIR, 'config.yaml')
             try:
@@ -446,19 +453,20 @@ class SyncHandler(BaseHTTPRequestHandler):
             feedback_token = feedback_config.get('github_token', '')
             feedback_configured = bool(feedback_token and feedback_token != '' and feedback_token != 'YOUR_GITHUB_TOKEN_HERE')
             
-            # Check REAL Selenium browser state for Jira
+            # Check REAL Playwright browser state for Jira
             jira_browser_open = False
             jira_logged_in = False
             jira_current_url = None
             
-            if driver is not None:
+            if page is not None and not page.is_closed():
                 try:
-                    jira_current_url = driver.current_url
+                    jira_current_url = page.url
                     jira_browser_open = True
                     
-                    # Check if logged in
+                    # Check if logged in (basic check - Phase 4: use proper login_detector)
                     if 'atlassian.net' in jira_current_url or 'jira' in jira_current_url.lower():
-                        jira_logged_in, _, _ = check_login_status(driver)
+                        # Simple check: if not on login page, assume logged in
+                        jira_logged_in = '/login' not in jira_current_url.lower() and '/auth' not in jira_current_url.lower()
                 except:
                     jira_browser_open = False
             
@@ -552,20 +560,109 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
 
+    def _is_page_valid(self):
+        """Check if the Playwright page session is still valid"""
+        global page
+        if page is None or page.is_closed():
+            return False
+        try:
+            # Try to access page.url - will fail if session is invalid
+            _ = page.url
+            return True
+        except Exception:
+            return False
+    
     def _is_driver_valid(self):
-        """Check if the driver session is still valid"""
+        """LEGACY: Check if Selenium driver is still valid (Phase 4: remove)"""
         global driver
         if driver is None:
             return False
         try:
-            # Try to access current_url - will fail if session is invalid
             _ = driver.current_url
             return True
         except Exception:
             return False
     
+    def _reset_browser(self):
+        """Reset the Playwright browser and sync engine after invalid session"""
+        global playwright_instance, browser, context, page, sync_engine
+        safe_print("🔄 Resetting invalid browser session...")
+        try:
+            if page is not None and not page.is_closed():
+                page.close()
+        except:
+            pass
+        try:
+            if context is not None:
+                context.close()
+        except:
+            pass
+        try:
+            if browser is not None:
+                browser.close()
+        except:
+            pass
+        try:
+            if playwright_instance is not None:
+                playwright_instance.stop()
+        except:
+            pass
+        playwright_instance = None
+        browser = None
+        context = None
+        page = None
+        sync_engine = None
+        safe_print("✅ Browser reset complete")
+    
+    def _init_playwright_browser(self):
+        """Initialize Playwright browser with session persistence"""
+        global playwright_instance, browser, context, page
+        
+        # Storage state path for session persistence
+        storage_dir = os.path.join(DATA_DIR, 'playwright_profile')
+        os.makedirs(storage_dir, exist_ok=True)
+        storage_state_path = os.path.join(storage_dir, 'state.json')
+        
+        # Start Playwright
+        playwright_instance = sync_playwright().start()
+        
+        # Launch browser (use system Chrome if available)
+        browser = playwright_instance.chromium.launch(
+            headless=False,
+            channel="chrome",  # Use system Chrome
+            args=['--start-maximized']
+        )
+        
+        # Create context with session persistence
+        context_options = {
+            'viewport': {'width': 1920, 'height': 1080},
+            'ignore_https_errors': False
+        }
+        
+        # Load saved session if exists
+        if os.path.exists(storage_state_path):
+            context_options['storage_state'] = storage_state_path
+            safe_print(f"📂 Loading saved session from {storage_state_path}")
+        
+        context = browser.new_context(**context_options)
+        
+        # Create page
+        page = context.new_page()
+        
+        return storage_state_path
+    
+    def _save_playwright_session(self, storage_state_path):
+        """Save current Playwright session state"""
+        global context
+        try:
+            if context is not None:
+                context.storage_state(path=storage_state_path)
+                safe_print(f"💾 Session saved to {storage_state_path}")
+        except Exception as e:
+            safe_print(f"⚠️ Failed to save session: {e}")
+    
     def _reset_driver(self):
-        """Reset the driver and sync engine after invalid session"""
+        """LEGACY: Reset Selenium driver (Phase 4: remove)"""
         global driver, sync_engine
         safe_print("🔄 Resetting invalid driver session...")
         try:
@@ -1005,8 +1102,8 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def _handle_selenium_status(self):
-        """Return REAL Selenium browser status"""
-        global driver
+        """Return REAL Playwright browser status"""
+        global page
         try:
             status = {
                 'browser_open': False,
@@ -1015,17 +1112,17 @@ class SyncHandler(BaseHTTPRequestHandler):
                 'session_active': False
             }
             
-            if driver is not None:
+            if page is not None and not page.is_closed():
                 try:
                     # Check if browser is still open
-                    current_url = driver.current_url
+                    current_url = page.url
                     status['browser_open'] = True
                     status['current_url'] = current_url
                     status['session_active'] = True
                     
-                    # Check if logged in to Jira (look for common logged-in indicators)
+                    # Check if logged in to Jira (basic check - Phase 4: proper detection)
                     if 'atlassian.net' in current_url or 'jira' in current_url.lower():
-                        status['jira_logged_in'], _, _ = check_login_status(driver)
+                        status['jira_logged_in'] = '/login' not in current_url.lower() and '/auth' not in current_url.lower()
                 except:
                     # Browser was closed
                     status['browser_open'] = False
@@ -1041,8 +1138,8 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'error': str(e)}).encode())
     
     def handle_open_jira_browser(self, data):
-        """Open Selenium browser and navigate to Jira for manual login"""
-        global driver, sync_engine
+        """Open Playwright browser and navigate to Jira for manual login"""
+        global playwright_instance, browser, context, page, sync_engine
         
         try:
             jira_url = data.get('jiraUrl', '')
@@ -1060,49 +1157,44 @@ class SyncHandler(BaseHTTPRequestHandler):
             if not jira_url or 'your-company' in jira_url:
                 return {'success': False, 'error': 'Please configure Jira URL first'}
             
-            # Check if existing driver session is valid
-            if driver is not None:
-                if not self._is_driver_valid():
-                    safe_print("⚠️ Detected invalid session, resetting driver...")
-                    self._reset_driver()
+            # Check if existing page session is valid
+            if page is not None:
+                if not self._is_page_valid():
+                    safe_print("⚠️ Detected invalid session, resetting browser...")
+                    self._reset_browser()
                 else:
                     # Session is valid, just navigate
-                    driver.get(jira_url)
+                    page.goto(jira_url, wait_until='networkidle')
                     return {
                         'success': True,
                         'message': f'Browser reused. Navigating to {jira_url}',
                         'url': jira_url
                     }
             
-            # Initialize Chrome WebDriver if not already done
-            if driver is None:
-                chrome_options = Options()
-                
-                # Use persistent user data directory for session persistence
-                user_data_dir = os.path.join(DATA_DIR, 'selenium_profile')
-                os.makedirs(user_data_dir, exist_ok=True)
-                chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
-                
-                # Browser options
-                chrome_options.add_argument('--start-maximized')
-                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-                
-                # Preserve session data
-                chrome_options.add_argument('--disable-infobars')
-                chrome_options.add_argument('--disable-dev-shm-usage')
-                chrome_options.add_argument('--no-sandbox')
-                
-                driver = webdriver.Chrome(options=chrome_options)
+            # Initialize Playwright browser if not already done
+            if page is None:
+                safe_print("🚀 Initializing Playwright browser...")
+                storage_state_path = self._init_playwright_browser()
+                safe_print("✅ Playwright browser initialized")
+            else:
+                # Browser exists but need storage path
+                storage_dir = os.path.join(DATA_DIR, 'playwright_profile')
+                storage_state_path = os.path.join(storage_dir, 'state.json')
             
             # Initialize sync engine with correct config path (DATA_DIR not relative path)
+            # NOTE: sync_engine still uses driver=None until Phase 4 (JiraAutomator migration)
             if sync_engine is None:
                 config_path = os.path.join(DATA_DIR, 'config.yaml')
-                sync_engine = SyncEngine(driver, config_path=config_path)
+                # Pass None as driver for now (Phase 4 will update SyncEngine)
+                safe_print("⚠️ SyncEngine initialization disabled until Phase 4 (needs JiraAutomator migration)")
+                # sync_engine = SyncEngine(driver=None, config_path=config_path)
             
             # Navigate to Jira
-            driver.get(jira_url)
+            safe_print(f"🌐 Navigating to {jira_url}...")
+            page.goto(jira_url, wait_until='networkidle')
+            
+            # Save session after navigation
+            self._save_playwright_session(storage_state_path)
             
             return {
                 'success': True, 
@@ -1116,17 +1208,26 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def handle_check_jira_login(self):
         """Check if user is logged in to Jira"""
-        global driver
+        global page
         
-        if not self._is_driver_valid():
-            self._reset_driver()
+        if not self._is_page_valid():
+            self._reset_browser()
             return {'success': False, 'logged_in': False, 'error': 'Browser session expired. Please reopen browser.'}
         
         try:
-            current_url = driver.current_url
+            current_url = page.url
             
-            # Check for login indicators with debug info
-            logged_in, user_info, debug_info = check_login_status(driver, debug=True)
+            # Basic login check (Phase 4: migrate login_detector.py to Playwright)
+            # For now, just check URL patterns
+            if '/login' in current_url.lower() or '/auth' in current_url.lower():
+                logged_in = False
+                user_info = None
+                debug_info = "On login/auth page"
+            else:
+                # Assume logged in if not on login page (Phase 4: proper detection)
+                logged_in = True
+                user_info = "Login status detection pending Phase 4"
+                debug_info = f"Current URL: {current_url}"
             
             return {
                 'success': True,
@@ -1136,9 +1237,9 @@ class SyncHandler(BaseHTTPRequestHandler):
                 'debug': debug_info
             }
         except Exception as e:
-            # If we get an error accessing driver, reset it
-            if 'invalid session' in str(e).lower():
-                self._reset_driver()
+            # If we get an error accessing page, reset it
+            if 'target closed' in str(e).lower() or 'page has been closed' in str(e).lower():
+                self._reset_browser()
                 return {'success': False, 'logged_in': False, 'error': 'Browser session expired. Please reopen browser.'}
             return {'success': False, 'logged_in': False, 'error': str(e)}
     
@@ -2631,102 +2732,20 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def handle_test_snow_connection(self):
-        """Test ServiceNow connection with comprehensive error handling"""
-        global driver
+        """Test ServiceNow connection with comprehensive error handling
         
-        # Check 1: Browser initialized
-        if driver is None:
-            return {
-                'success': False,
-                'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'
-            }
+        NOTE: TEMPORARILY DISABLED IN PHASE 3
+        ServiceNow scraper now uses Playwright, but JiraAutomator still uses Selenium.
+        This will be re-enabled in Phase 4 after JiraAutomator migration.
+        """
+        return {
+            'success': False,
+            'error': 'ServiceNow testing temporarily disabled during Playwright migration (Phase 3). Will be re-enabled in Phase 4.'
+        }
         
-        try:
-            # Check 2: Load config
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            if not os.path.exists(config_path):
-                return {
-                    'success': False,
-                    'error': 'Configuration file not found. Please configure integrations first.'
-                }
-            
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Check 3: ServiceNow config exists
-            if not config or 'servicenow' not in config:
-                return {
-                    'success': False,
-                    'error': 'ServiceNow not configured. Please add ServiceNow URL in Integrations tab.'
-                }
-            
-            snow_config = config.get('servicenow', {})
-            
-            # Check 4: URL is configured
-            url = snow_config.get('url', '').strip()
-            if not url:
-                return {
-                    'success': False,
-                    'error': 'ServiceNow URL not configured. Please enter your ServiceNow URL in Integrations tab.'
-                }
-            
-            # Check 5: URL format is valid
-            if not url.startswith('http://') and not url.startswith('https://'):
-                return {
-                    'success': False,
-                    'error': f'Invalid ServiceNow URL format: {url}. URL must start with http:// or https://'
-                }
-            
-            # Check 6: Jira project configured (needed for SnowJiraSync)
-            jira_project = snow_config.get('jira_project', '').strip()
-            if not jira_project:
-                return {
-                    'success': False,
-                    'error': 'Jira Project not configured for ServiceNow integration. Please enter a Jira project key.'
-                }
-            
-            # Add minimal jira config if missing (needed for SnowJiraSync initialization)
-            if 'jira' not in config:
-                config['jira'] = {'base_url': '', 'project_keys': [jira_project]}
-            
-            # Test connection
-            safe_print(f"[SNOW] Testing connection to {url}...")
-            
-            from snow_jira_sync import SnowJiraSync
-            snow_sync = SnowJiraSync(driver, config)
-            
-            result = snow_sync.test_connection()
-            
-            if result.get('success'):
-                safe_print(f"[SNOW] ✓ Connection test successful")
-            else:
-                safe_print(f"[SNOW] ✗ Connection test failed: {result.get('error')}")
-            
-            return result
-            
-        except KeyError as e:
-            # Config key missing
-            safe_print(f"[SNOW] Configuration error: missing key {e}")
-            return {
-                'success': False,
-                'error': f'Configuration incomplete: missing {e}. Please check Integrations settings.'
-            }
-        except Exception as e:
-            # Unexpected error
-            safe_print(f"[SNOW] Error testing connection: {e}")
-            error_msg = str(e)
-            # Make error user-friendly
-            if 'WebDriver' in error_msg or 'selenium' in error_msg.lower():
-                error_msg = 'Browser error. Try closing and reopening the browser.'
-            elif 'connection' in error_msg.lower() or 'network' in error_msg.lower():
-                error_msg = 'Network error. Check your internet connection and ServiceNow URL.'
-            elif len(error_msg) > 200:
-                error_msg = error_msg[:200] + '... (See logs for full error)'
-            
-            return {
-                'success': False,
-                'error': error_msg
-            }
+        # ORIGINAL CODE - RE-ENABLE IN PHASE 4:
+        # The rest of this function is commented out until Phase 4
+        # when JiraAutomator is migrated to Playwright
     
     
     def handle_export_logs(self):
