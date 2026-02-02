@@ -12,6 +12,15 @@ logs/
 *.log
 config.json
 
+# Browser profiles (cache, cookies, sessions - locked files)
+selenium_profile/
+playwright_profile/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
 # OS-specific files
 .DS_Store
 Thumbs.db

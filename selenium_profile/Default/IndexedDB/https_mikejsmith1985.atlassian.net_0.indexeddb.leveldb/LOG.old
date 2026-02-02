@@ -1,9 +1,0 @@
-2026/01/13-07:29:58.008 9898 Reusing MANIFEST C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/MANIFEST-000001
-2026/01/13-07:29:58.009 9898 Recovering log #10
-2026/01/13-07:29:58.010 9898 Reusing old log C:\projectswin\jira-automation\selenium_profile\Default\IndexedDB\https_mikejsmith1985.atlassian.net_0.indexeddb.leveldb/000010.log 
-2026/01/13-07:29:58.770 bcdc Compacting 1@1 + 1@2 files
-2026/01/13-07:29:58.782 bcdc Generated table #13@1: 1451 keys, 141484 bytes
-2026/01/13-07:29:58.782 bcdc Compacted 1@1 + 1@2 files => 141484 bytes
-2026/01/13-07:29:58.783 bcdc compacted to: files[ 0 0 1 0 0 0 0 ]
-2026/01/13-07:29:58.783 bcdc Delete type=2 #9
-2026/01/13-07:29:58.783 bcdc Delete type=2 #11
