@@ -267,19 +267,38 @@ class VersionChecker:
                     self.logger.info("Using API endpoint for private repo download")
 
             self.logger.info(f"Downloading from: {download_url}")
+            self.logger.info(f"Using token: {'Yes' if self.token else 'No'}")
+            self.logger.info(f"Headers: {list(headers.keys())}")
+            
             response = requests.get(download_url, stream=True, timeout=60, headers=headers)
+            
+            self.logger.info(f"Response status: {response.status_code}")
             
             # Check for authentication errors
             if response.status_code == 401:
                 return {
                     'success': False,
-                    'error': 'Authentication failed. Your GitHub token may be invalid or expired. Please update it in Settings > Integrations.'
+                    'error': 'Authentication failed (401). Your GitHub token may be invalid or expired. Please update it in Settings > Integrations > Feedback.'
                 }
+            
+            if response.status_code == 403:
+                # Rate limit or permissions issue
+                rate_limit_remaining = response.headers.get('X-RateLimit-Remaining', 'unknown')
+                if rate_limit_remaining == '0':
+                    return {
+                        'success': False,
+                        'error': f'GitHub rate limit exceeded (403). Resets at {response.headers.get("X-RateLimit-Reset", "unknown")}. Try again later or add a token.'
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': 'Access forbidden (403). Your token may not have permission to access this private repository. Ensure the token has "repo" scope.'
+                    }
             
             if response.status_code == 404:
                 return {
                     'success': False,
-                    'error': 'Release asset not found. This is a private repository - ensure your GitHub token is configured in Settings > Integrations.'
+                    'error': 'Release asset not found (404). This is a private repository - ensure your GitHub token is configured in Settings > Integrations > Feedback.'
                 }
             
             response.raise_for_status()

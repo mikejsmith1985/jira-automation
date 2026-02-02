@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.3.7"  # Version sync automation - local dev
+APP_VERSION = "1.3.8"  # Version sync automation - local dev
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -913,14 +913,37 @@ class SyncHandler(BaseHTTPRequestHandler):
             if not download_url:
                 return {'success': False, 'error': 'No download URL provided'}
             
-            # Get token from config
+            # Get token from config - try multiple sources
             github_token = None
+            
+            # Method 1: Try config_manager
             if config_manager:
-                config = config_manager.get_config()
-                # Try feedback token first, then generic github token
-                github_token = config.get('feedback', {}).get('github_token')
-                if not github_token:
-                    github_token = config.get('github', {}).get('api_token')
+                try:
+                    config = config_manager.get_config()
+                    github_token = config.get('feedback', {}).get('github_token')
+                    if not github_token:
+                        github_token = config.get('github', {}).get('api_token')
+                except Exception as e:
+                    safe_print(f"[WARN] Could not read from config_manager: {e}")
+            
+            # Method 2: Read directly from config file if config_manager failed
+            if not github_token:
+                try:
+                    config_path = os.path.join(DATA_DIR, 'config.yaml')
+                    if os.path.exists(config_path):
+                        with open(config_path, 'r', encoding='utf-8') as f:
+                            config = yaml.safe_load(f) or {}
+                        github_token = config.get('feedback', {}).get('github_token')
+                        if not github_token:
+                            github_token = config.get('github', {}).get('api_token')
+                        safe_print(f"[INFO] Read token from file: {'found' if github_token else 'not found'}")
+                except Exception as e:
+                    safe_print(f"[WARN] Could not read config file: {e}")
+            
+            if github_token and github_token in ['YOUR_GITHUB_TOKEN_HERE', 'your_token_here', '']:
+                github_token = None  # Ignore placeholder tokens
+            
+            safe_print(f"[UPDATE] Using token for download: {'Yes' if github_token else 'No'}")
 
             checker = VersionChecker(
                 current_version=APP_VERSION,
