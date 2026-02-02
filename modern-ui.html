@@ -603,14 +603,14 @@
                         </div>
                         <div style="padding: 20px;">
                             <div class="form-group">
-                                <label>ServiceNow Base URL</label>
-                                <input type="text" id="snow-url-input" class="input-field" placeholder="https://your-instance.service-now.com">
-                                <small class="text-secondary">Your ServiceNow instance URL</small>
+                                <label><span style="color: #de350b;">* </span>ServiceNow Base URL</label>
+                                <input type="text" id="snow-url-input" class="input-field" placeholder="https://yourcompany.service-now.com" required>
+                                <small class="text-secondary">⚠️ Required - Your ServiceNow instance URL (must start with https://)</small>
                             </div>
                             <div class="form-group">
-                                <label>Jira Project Key</label>
-                                <input type="text" id="snow-jira-project-input" class="input-field" placeholder="PROJ">
-                                <small class="text-secondary">Project key for created Defects and Stories</small>
+                                <label><span style="color: #de350b;">* </span>Jira Project Key</label>
+                                <input type="text" id="snow-jira-project-input" class="input-field" placeholder="PROJ" required maxlength="10">
+                                <small class="text-secondary">⚠️ Required - Project key for created Defects and Stories (e.g., DEV, PROJ, TEAM)</small>
                             </div>
                             <div class="form-group">
                                 <label>Field Mapping (JSON)</label>
@@ -621,7 +621,7 @@
   "problem_category": "customfield_10004",
   "detection": "customfield_10005"
 }'></textarea>
-                                <small class="text-secondary">Map ServiceNow fields to Jira custom field IDs</small>
+                                <small class="text-secondary">Optional - Map ServiceNow fields to Jira custom field IDs</small>
                             </div>
                             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                                 <button class="btn btn-secondary" onclick="copySnowConfig()">📋 Copy JSON</button>

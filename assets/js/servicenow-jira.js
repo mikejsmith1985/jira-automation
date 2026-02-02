@@ -32,6 +32,16 @@ async function copySnowConfig() {
 
 async function testSnowConnection() {
     const resultEl = document.getElementById('snow-config-result');
+    const url = document.getElementById('snow-url-input').value.trim();
+    
+    // Check if URL is configured
+    if (!url) {
+        if (resultEl) resultEl.innerHTML = '<span style="color: #de350b;">✗ Please enter a ServiceNow URL first</span>';
+        showNotification('Please enter a ServiceNow URL first', 'error');
+        document.getElementById('snow-url-input').focus();
+        return;
+    }
+    
     if (resultEl) resultEl.innerHTML = '<span>Testing connection...</span>';
     
     try {
@@ -58,12 +68,28 @@ async function saveSnowConfig() {
     const resultEl = document.getElementById('snow-config-result');
     if (resultEl) resultEl.innerHTML = '<span>Saving configuration...</span>';
     
-    const url = document.getElementById('snow-url-input').value;
-    const jiraProject = document.getElementById('snow-jira-project-input').value;
+    const url = document.getElementById('snow-url-input').value.trim();
+    const jiraProject = document.getElementById('snow-jira-project-input').value.trim();
     
-    if (!url || !jiraProject) {
-        if (resultEl) resultEl.innerHTML = '<span style="color: #de350b;">✗ URL and Project Key are required</span>';
-        showNotification('URL and Project Key are required', 'error');
+    // Frontend validation
+    if (!url) {
+        if (resultEl) resultEl.innerHTML = '<span style="color: #de350b;">✗ ServiceNow URL is required</span>';
+        showNotification('ServiceNow URL is required', 'error');
+        document.getElementById('snow-url-input').focus();
+        return;
+    }
+    
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        if (resultEl) resultEl.innerHTML = '<span style="color: #de350b;">✗ URL must start with http:// or https://</span>';
+        showNotification('URL must start with http:// or https://', 'error');
+        document.getElementById('snow-url-input').focus();
+        return;
+    }
+    
+    if (!jiraProject) {
+        if (resultEl) resultEl.innerHTML = '<span style="color: #de350b;">✗ Jira Project Key is required</span>';
+        showNotification('Jira Project Key is required', 'error');
+        document.getElementById('snow-jira-project-input').focus();
         return;
     }
     
@@ -93,7 +119,8 @@ async function saveSnowConfig() {
         
         if (result.success) {
             if (resultEl) resultEl.innerHTML = `<span style="color: #00875a;">✓ ${result.message}</span>`;
-            showNotification('ServiceNow configuration saved!');
+            showNotification('ServiceNow configuration saved successfully!');
+            console.log('[SNOW] Configuration saved:', { url, jiraProject });
         } else {
             if (resultEl) resultEl.innerHTML = `<span style="color: #de350b;">✗ ${result.error}</span>`;
             showNotification(result.error, 'error');

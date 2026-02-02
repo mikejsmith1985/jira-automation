@@ -47,6 +47,37 @@ jobs:
           echo "Tag $tag is available"
         shell: pwsh
       
+      - name: Sync version to app.py
+        run: |
+          $tag = "${{ github.event.inputs.tag_name }}"
+          $version = $tag -replace '^v', ''
+          
+          Write-Host "Syncing version $version to app.py..."
+          
+          # Read app.py
+          $appContent = Get-Content "app.py" -Raw -Encoding UTF8
+          
+          # Replace APP_VERSION
+          $appContent = $appContent -replace '(APP_VERSION\s*=\s*["\'])[^"\']+(["\'])', "`$1$version`$2"
+          
+          # Write back
+          $appContent | Set-Content "app.py" -Encoding UTF8 -NoNewline
+          
+          # Verify
+          $verify = Get-Content "app.py" -Raw
+          if ($verify -match 'APP_VERSION\s*=\s*["\']([^"\']+)["\']') {
+            $newVersion = $matches[1]
+            Write-Host "APP_VERSION updated to: $newVersion"
+            if ($newVersion -ne $version) {
+              Write-Error "Version sync failed! Expected $version but got $newVersion"
+              exit 1
+            }
+          } else {
+            Write-Error "Could not verify APP_VERSION in app.py"
+            exit 1
+          }
+        shell: pwsh
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

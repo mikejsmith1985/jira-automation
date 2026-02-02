@@ -16,8 +16,15 @@ class ServiceNowScraper:
     def __init__(self, driver, config):
         self.driver = driver
         self.config = config
-        self.base_url = config.get('servicenow', {}).get('url', '')
+        self.base_url = config.get('servicenow', {}).get('url', '').strip()
         self.logger = logging.getLogger(__name__)
+        
+        # Log configuration for debugging
+        self.logger.info(f"[SNOW] ServiceNowScraper initialized")
+        self.logger.info(f"[SNOW] Base URL: '{self.base_url}'")
+        if not self.base_url:
+            self.logger.error("[SNOW] ERROR: ServiceNow URL is empty or not configured!")
+            self.logger.error("[SNOW] Please configure ServiceNow URL in Integrations tab")
         
     def login_check(self):
         """Check if logged into ServiceNow"""

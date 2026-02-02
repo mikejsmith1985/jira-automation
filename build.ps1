@@ -4,6 +4,14 @@
 Write-Host "Building GitHub-Jira Sync Tool..." -ForegroundColor Cyan
 Write-Host ""
 
+# STEP 1: Sync version from git tag to app.py
+Write-Host "Syncing version from git tag..." -ForegroundColor Yellow
+python sync_version.py
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Version sync failed, but continuing with build..." -ForegroundColor Yellow
+}
+Write-Host ""
+
 # Check Python
 Write-Host "Checking Python..." -ForegroundColor Yellow
 $version = python --version 2>&1
@@ -118,7 +126,14 @@ if (Test-Path $exePath) {
     Copy-Item "requirements.txt" -Destination $releaseDir
     
     # Create zip
-    $zipName = "waypoint-v1.2.30.zip"
+    # Extract version from app.py
+    $appPyContent = Get-Content "app.py" -Raw
+    if ($appPyContent -match 'APP_VERSION\s*=\s*["\']([^"\']+)["\']') {
+        $appVersion = $matches[1]
+        $zipName = "waypoint-v$appVersion.zip"
+    } else {
+        $zipName = "waypoint-latest.zip"
+    }
 
     if (Test-Path $zipName) { Remove-Item -Force $zipName }
     

@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.2.40"
+APP_VERSION = "1.2.41"
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -697,6 +697,23 @@ class SyncHandler(BaseHTTPRequestHandler):
                     config['feedback'] = {}
                 config['feedback']['github_token'] = data['feedback'].get('github_token', config.get('feedback', {}).get('github_token', ''))
                 config['feedback']['repo'] = data['feedback'].get('repo', config.get('feedback', {}).get('repo', ''))
+            
+            # ADD: Handle ServiceNow config
+            if 'servicenow' in data:
+                if 'servicenow' not in config:
+                    config['servicenow'] = {}
+                # Validate required fields
+                url = data['servicenow'].get('url', '').strip()
+                jira_project = data['servicenow'].get('jira_project', '').strip()
+                
+                if url:  # Only update if URL is provided
+                    config['servicenow']['url'] = url
+                if jira_project:  # Only update if project is provided
+                    config['servicenow']['jira_project'] = jira_project
+                if 'field_mapping' in data['servicenow']:
+                    config['servicenow']['field_mapping'] = data['servicenow']['field_mapping']
+                
+                safe_print(f"[SNOW] ServiceNow config updated - URL: '{url}', Project: '{jira_project}'")
             
             safe_print(f"[DEBUG] Writing config: {config}")
             with open(config_path, 'w', encoding='utf-8') as f:
@@ -2439,8 +2456,23 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def handle_save_snow_config(self, data):
-        """Save ServiceNow configuration"""
+        """Save ServiceNow configuration with validation"""
         try:
+            # Extract and validate required fields
+            url = data.get('url', '').strip()
+            jira_project = data.get('jira_project', '').strip()
+            
+            # Validation
+            if not url:
+                return {'success': False, 'error': 'ServiceNow URL is required. Please enter your ServiceNow instance URL (e.g., https://yourcompany.service-now.com)'}
+            
+            if not url.startswith('http://') and not url.startswith('https://'):
+                return {'success': False, 'error': 'URL must start with http:// or https://'}
+            
+            if not jira_project:
+                return {'success': False, 'error': 'Jira Project Key is required. Please enter the project key where issues will be created (e.g., PROJ, DEV)'}
+            
+            # Load existing config
             config_path = os.path.join(DATA_DIR, 'config.yaml')
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
@@ -2448,18 +2480,31 @@ class SyncHandler(BaseHTTPRequestHandler):
             if 'servicenow' not in config:
                 config['servicenow'] = {}
             
-            config['servicenow'].update(data)
+            # Update with validated data
+            config['servicenow'].update({
+                'url': url,
+                'jira_project': jira_project,
+                'field_mapping': data.get('field_mapping', {})
+            })
             
+            # Save config
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, default_flow_style=False)
             
+            # Update sync engine if it exists
             global sync_engine
             if sync_engine:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     sync_engine.config = yaml.safe_load(f)
             
-            return {'success': True, 'message': 'ServiceNow configuration saved'}
+            safe_print(f"[SNOW] Configuration saved - URL: {url}, Project: {jira_project}")
+            
+            return {
+                'success': True,
+                'message': f'ServiceNow configuration saved successfully. URL: {url}'
+            }
         except Exception as e:
+            safe_print(f"ERROR in handle_save_snow_config: {str(e)}")
             return {'success': False, 'error': str(e)}
     
     def handle_test_snow_connection(self):
