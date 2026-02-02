@@ -89,9 +89,13 @@ class ServiceNowScraper:
             form_loaded = False
             wait_selectors = [
                 (By.ID, "problem.short_description"),
+                (By.ID, "short_description"),  # Modern UI without prefix
                 (By.ID, "problem.number"),
+                (By.ID, "number"),  # Modern UI without prefix
                 (By.CSS_SELECTOR, "[id='problem.short_description']"),  # CSS selector for ID with dots
+                (By.CSS_SELECTOR, "[id='short_description']"),  # Modern UI CSS
                 (By.CSS_SELECTOR, "input[id*='problem']"),  # Any input with 'problem' in ID
+                (By.CSS_SELECTOR, "input[id*='description']"),  # Any input with 'description' in ID
                 (By.CLASS_NAME, "form-control")  # Generic form field
             ]
             
@@ -163,25 +167,48 @@ class ServiceNowScraper:
             return None
     
     def _get_field_value(self, field_id):
-        """Get value from a ServiceNow form field"""
-        try:
-            element = self.driver.find_element(By.ID, field_id)
-            
-            if element.tag_name == 'select':
-                from selenium.webdriver.support.ui import Select
-                select = Select(element)
-                return select.first_selected_option.text
-            elif element.tag_name == 'textarea':
-                return element.get_attribute('value') or ''
-            else:
-                return element.get_attribute('value') or ''
+        """Get value from a ServiceNow form field
+        
+        Tries multiple variations of field IDs because ServiceNow uses different
+        formats in different UI modes (classic vs modern)
+        """
+        # Try multiple variations of the field ID
+        field_variations = [
+            field_id,  # Original (e.g., "problem.short_description")
+        ]
+        
+        # If field has "problem." prefix, also try without it
+        if field_id.startswith('problem.'):
+            short_id = field_id.replace('problem.', '', 1)
+            field_variations.append(short_id)  # e.g., "short_description"
+        
+        # If field has dots, also try with underscores (some ServiceNow configs)
+        if '.' in field_id:
+            underscore_id = field_id.replace('.', '_')
+            field_variations.append(underscore_id)  # e.g., "problem_short_description"
+        
+        for variation in field_variations:
+            try:
+                element = self.driver.find_element(By.ID, variation)
                 
-        except NoSuchElementException:
-            self.logger.warning(f"Field not found: {field_id}")
-            return ''
-        except Exception as e:
-            self.logger.error(f"Error reading field {field_id}: {e}")
-            return ''
+                if element.tag_name == 'select':
+                    from selenium.webdriver.support.ui import Select
+                    select = Select(element)
+                    return select.first_selected_option.text
+                elif element.tag_name == 'textarea':
+                    return element.get_attribute('value') or ''
+                else:
+                    return element.get_attribute('value') or ''
+                    
+            except NoSuchElementException:
+                continue  # Try next variation
+            except Exception as e:
+                self.logger.debug(f"Error reading field {variation}: {e}")
+                continue
+        
+        # None of the variations worked
+        self.logger.warning(f"Field not found (tried: {', '.join(field_variations)})")
+        return ''
     
     def extract_incident_numbers(self):
         """

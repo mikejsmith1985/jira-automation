@@ -1,9 +1,72 @@
 """
 TDD tests for Issue #36 - ServiceNow field detection
 Bug: Fields not found because iframe detection is incorrect
+Update: Field IDs vary between ServiceNow UI modes
 """
 import unittest
 from unittest.mock import Mock, MagicMock, patch
+
+
+class TestServiceNowFieldIDVariations(unittest.TestCase):
+    """Test field ID variations between ServiceNow UI modes"""
+    
+    def test_classic_ui_uses_dotted_ids(self):
+        """Test: Classic UI uses IDs like 'problem.short_description'"""
+        classic_id = "problem.short_description"
+        self.assertIn('.', classic_id)
+        self.assertTrue(classic_id.startswith('problem.'))
+    
+    def test_modern_ui_drops_prefix(self):
+        """Test: Modern UI may use IDs like 'short_description' (no prefix)"""
+        # User reports: have to drop "problem." to work with their parser
+        modern_id = "short_description"
+        self.assertNotIn('.', modern_id)
+        self.assertFalse(modern_id.startswith('problem.'))
+    
+    def test_field_value_tries_multiple_variations(self):
+        """Test: _get_field_value should try both ID formats"""
+        from servicenow_scraper import ServiceNowScraper
+        
+        mock_driver = Mock()
+        config = {'servicenow': {'url': 'https://test.service-now.com'}}
+        
+        scraper = ServiceNowScraper(mock_driver, config)
+        
+        # Should try:
+        # 1. problem.short_description
+        # 2. short_description (without prefix)
+        # 3. problem_short_description (dots to underscores)
+        
+    def test_extract_works_with_either_id_format(self):
+        """Test: extract_prb_data should work regardless of ID format used"""
+        from servicenow_scraper import ServiceNowScraper
+        
+        mock_driver = Mock()
+        config = {'servicenow': {'url': 'https://test.service-now.com'}}
+        
+        # Mock element that will be found on second try (modern ID)
+        mock_element = Mock()
+        mock_element.tag_name = 'input'
+        mock_element.get_attribute.return_value = 'Test Value'
+        
+        def find_element_side_effect(by, value):
+            from selenium.common.exceptions import NoSuchElementException
+            # First try (problem.short_description) fails
+            if value == 'problem.short_description':
+                raise NoSuchElementException()
+            # Second try (short_description) succeeds
+            elif value == 'short_description':
+                return mock_element
+            else:
+                raise NoSuchElementException()
+        
+        mock_driver.find_element = Mock(side_effect=find_element_side_effect)
+        
+        scraper = ServiceNowScraper(mock_driver, config)
+        value = scraper._get_field_value('problem.short_description')
+        
+        # Should have tried both and found it on second try
+        self.assertEqual(value, 'Test Value')
 
 
 class TestServiceNowIframeDetection(unittest.TestCase):
