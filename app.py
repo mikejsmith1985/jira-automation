@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.3.5"  # Version sync automation - local dev
+APP_VERSION = "1.3.6"  # Version sync automation - local dev
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -332,6 +332,8 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self._handle_check_updates()
             elif self.path == '/api/updates/apply':
                 response = self._handle_apply_update(data)
+            elif self.path == '/api/app/restart':
+                response = self._handle_app_restart()
             # Jira-specific endpoints
             elif self.path == '/api/jira/query':
                 response = self._handle_jira_query(data)
@@ -939,6 +941,44 @@ class SyncHandler(BaseHTTPRequestHandler):
                 threading.Thread(target=shutdown, daemon=True).start()
             
             return result
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _handle_app_restart(self):
+        """Restart the application"""
+        try:
+            import subprocess
+            
+            # Get current exe path
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                # Running as script
+                exe_path = os.path.abspath(__file__)
+            
+            safe_print("[RESTART] Restarting application...")
+            
+            # Start new instance
+            if getattr(sys, 'frozen', False):
+                # Frozen exe - just run it
+                subprocess.Popen([exe_path], 
+                               creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                               close_fds=True)
+            else:
+                # Running as script - restart with python
+                subprocess.Popen([sys.executable, exe_path],
+                               creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                               close_fds=True)
+            
+            # Schedule shutdown of current instance
+            def shutdown():
+                import time
+                time.sleep(1)
+                safe_print("[RESTART] Shutting down current instance...")
+                os._exit(0)
+            threading.Thread(target=shutdown, daemon=True).start()
+            
+            return {'success': True, 'message': 'Restarting application...'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
@@ -6095,14 +6135,57 @@ if __name__ == '__main__':
         try:
             with open(lock_file, 'r') as f:
                 old_pid = int(f.read().strip())
+            
             # Check if that process is still running
             import psutil
             if psutil.pid_exists(old_pid):
-                safe_print(f"[ERROR] Another instance is already running (PID {old_pid})")
-                safe_print("[INFO] If the app is not visible, delete waypoint.lock and try again")
-                sys.exit(1)
-        except:
-            pass  # Lock file is stale or invalid, proceed
+                try:
+                    proc = psutil.Process(old_pid)
+                    # Check if it's actually Waypoint
+                    if 'waypoint' in proc.name().lower() or 'python' in proc.name().lower():
+                        safe_print(f"[WARN] Another Waypoint instance is running (PID {old_pid})")
+                        safe_print("[ACTION] Attempting to close old instance...")
+                        
+                        # Try graceful shutdown first
+                        proc.terminate()
+                        
+                        # Wait up to 5 seconds for it to close
+                        try:
+                            proc.wait(timeout=5)
+                            safe_print("[OK] Old instance closed successfully")
+                            # Remove stale lock file
+                            if os.path.exists(lock_file):
+                                os.remove(lock_file)
+                        except psutil.TimeoutExpired:
+                            # Force kill if graceful shutdown didn't work
+                            safe_print("[WARN] Old instance didn't close gracefully, force killing...")
+                            proc.kill()
+                            proc.wait(timeout=2)
+                            safe_print("[OK] Old instance force-killed")
+                            if os.path.exists(lock_file):
+                                os.remove(lock_file)
+                    else:
+                        # Not Waypoint, might be a stale PID reused by another app
+                        safe_print(f"[INFO] Lock file PID {old_pid} is not Waypoint, removing stale lock")
+                        os.remove(lock_file)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    # Process doesn't exist or can't access it, remove lock
+                    safe_print("[INFO] Removing stale lock file")
+                    if os.path.exists(lock_file):
+                        os.remove(lock_file)
+            else:
+                # PID doesn't exist, remove stale lock
+                safe_print("[INFO] Removing stale lock file (process no longer exists)")
+                if os.path.exists(lock_file):
+                    os.remove(lock_file)
+        except Exception as e:
+            # Lock file is invalid or can't be read
+            safe_print(f"[INFO] Removing invalid lock file: {e}")
+            try:
+                if os.path.exists(lock_file):
+                    os.remove(lock_file)
+            except:
+                pass
     
     # Write our PID to lock file
     try:
