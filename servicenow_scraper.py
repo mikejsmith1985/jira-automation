@@ -56,13 +56,57 @@ class ServiceNowScraper:
             if not self.base_url:
                 raise ValueError("ServiceNow URL not configured")
             
+            # Use sysparm_query to search - this opens a LIST view
             prb_url = f"{self.base_url}/problem.do?sysparm_query=number={prb_number}"
             self.logger.info(f"Navigating to PRB: {prb_url}")
             self.driver.get(prb_url)
             
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.ID, "problem.short_description"))
-            )
+            # Wait for page to load - could be list view or form view
+            time.sleep(3)  # Allow page to settle
+            
+            # Check if we're on the form view directly (sometimes SNOW redirects)
+            try:
+                form_element = self.driver.find_element(By.ID, "problem.short_description")
+                if form_element:
+                    self.logger.info(f"Directly on form view for {prb_number}")
+                    return self.login_check()
+            except NoSuchElementException:
+                pass  # Not on form view, continue with list handling
+            
+            # We're on list view - find and click the PRB link
+            try:
+                # Wait for list to load - look for the PRB number link
+                prb_link = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.LINK_TEXT, prb_number))
+                )
+                self.logger.info(f"Found {prb_number} in list view, clicking...")
+                prb_link.click()
+                
+                # Wait for form to load after click
+                WebDriverWait(self.driver, 15).until(
+                    EC.presence_of_element_located((By.ID, "problem.short_description"))
+                )
+                self.logger.info(f"Successfully navigated to form view for {prb_number}")
+                
+            except TimeoutException:
+                # Maybe it's in an iframe or different structure
+                self.logger.warning(f"Could not find {prb_number} link, trying alternative methods...")
+                
+                # Try finding by partial link text
+                try:
+                    prb_link = self.driver.find_element(By.PARTIAL_LINK_TEXT, prb_number)
+                    prb_link.click()
+                    time.sleep(3)
+                    self.logger.info(f"Clicked {prb_number} via partial link text")
+                except NoSuchElementException:
+                    # Check if we're actually on the page but element IDs are different
+                    current_url = self.driver.current_url
+                    if prb_number in current_url or prb_number.lower() in self.driver.page_source.lower():
+                        self.logger.info(f"PRB {prb_number} found in page, assuming success")
+                        return self.login_check()
+                    else:
+                        self.logger.error(f"Could not find PRB {prb_number} on page")
+                        return False
             
             if not self.login_check():
                 self.logger.error("ServiceNow login required")
