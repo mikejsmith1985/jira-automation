@@ -66,7 +66,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.5.0"  # Phase 4: Playwright migration complete - all scrapers migrated
+APP_VERSION = "1.4.0"  # Phase 5: Playwright migration complete - cleanup done
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""

@@ -1,5 +1,5 @@
 # Release Script for Jira Automation
-# Usage: .\release.ps1 -Version "1.5.0"
+# Usage: .\release.ps1 -Version "1.4.0"
 
 param(
     [Parameter(Mandatory=$true)]
@@ -22,14 +22,13 @@ if ($tracked_changes) {
     exit 1
 }
 
-# Step 2: Update package.json version
+# Step 2: Update package.json version (manually to avoid npm hanging)
 if (Test-Path package.json) {
-    Write-Host "`n📦 Bumping npm version to v$Version..." -ForegroundColor Yellow
-    npm version "v$Version" --no-git-tag-version --allow-same-version
-    if (-not $?) {
-        Write-Host "❌ npm version bump failed" -ForegroundColor Red
-        exit 1
-    }
+    Write-Host "`n📦 Updating package.json to v$Version..." -ForegroundColor Yellow
+    $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+    $pkg.version = $Version
+    $pkg | ConvertTo-Json -Depth 100 | Set-Content package.json
+    Write-Host "✅ Updated package.json" -ForegroundColor Green
 }
 
 # Step 3: Update app.py version
@@ -45,8 +44,8 @@ Write-Host "`n🌿 Current branch: $current_branch" -ForegroundColor Cyan
 
 # Step 5: Stage and commit version bump
 Write-Host "`n📝 Staging version changes..." -ForegroundColor Yellow
-git add package.json package-lock.json app.py .gitignore 2>&1 | Out-Null
-git commit -m "Bump version to v$Version" --allow-empty
+git add package.json app.py 2>&1 | Out-Null
+git commit -m "Release v$Version" --allow-empty
 
 if (-not $?) {
     Write-Host "❌ Commit failed" -ForegroundColor Red
