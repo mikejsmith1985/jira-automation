@@ -84,9 +84,6 @@ browser = None
 context = None
 page = None
 
-# Legacy - will be removed in Phase 4 after JiraAutomator migration
-driver = None  # Still needed for JiraAutomator (GitHub scraper) until Phase 4
-
 sync_engine = None
 sync_thread = None
 is_syncing = False
@@ -572,17 +569,6 @@ class SyncHandler(BaseHTTPRequestHandler):
         except Exception:
             return False
     
-    def _is_driver_valid(self):
-        """LEGACY: Check if Selenium driver is still valid (Phase 4: remove)"""
-        global driver
-        if driver is None:
-            return False
-        try:
-            _ = driver.current_url
-            return True
-        except Exception:
-            return False
-    
     def _reset_browser(self):
         """Reset the Playwright browser and sync engine after invalid session"""
         global playwright_instance, browser, context, page, sync_engine
@@ -660,66 +646,6 @@ class SyncHandler(BaseHTTPRequestHandler):
                 safe_print(f"💾 Session saved to {storage_state_path}")
         except Exception as e:
             safe_print(f"⚠️ Failed to save session: {e}")
-    
-    def _reset_driver(self):
-        """LEGACY: Reset Selenium driver (Phase 4: remove)"""
-        global driver, sync_engine
-        safe_print("🔄 Resetting invalid driver session...")
-        try:
-            if driver is not None:
-                driver.quit()
-        except:
-            pass
-        driver = None
-        sync_engine = None
-        safe_print("✅ Driver reset complete")
-
-    def handle_init(self, data):
-        """Initialize browser"""
-        global driver, sync_engine
-        
-        try:
-            # Check if existing driver session is valid
-            if driver is not None:
-                try:
-                    # Try to get current URL to check if session is alive
-                    _ = driver.current_url
-                    # Session is valid, navigate to Jira
-                    jira_url = data.get('jiraUrl', sync_engine.config['jira']['base_url'] if sync_engine else '')
-                    driver.get(jira_url)
-                    return {'success': True, 'message': 'Browser reused. Please log in to Jira.'}
-                except Exception as e:
-                    # Session is invalid, need to reinitialize
-                    safe_print(f"⚠️ Invalid session detected: {str(e)}")
-                    try:
-                        driver.quit()
-                    except:
-                        pass
-                    driver = None
-                    sync_engine = None
-            
-            # Initialize Chrome WebDriver if not already done
-            if driver is None:
-                chrome_options = Options()
-                chrome_options.add_argument('--start-maximized')
-                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-                
-                driver = webdriver.Chrome(options=chrome_options)
-            
-            # Initialize sync engine with correct config path (DATA_DIR not relative path)
-            if sync_engine is None:
-                config_path = os.path.join(DATA_DIR, 'config.yaml')
-                sync_engine = SyncEngine(driver, config_path=config_path)
-            jira_url = data.get('jiraUrl', sync_engine.config['jira']['base_url'])
-            driver.get(jira_url)
-            
-            return {'success': True, 'message': 'Browser initialized. Please log in to Jira.'}
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
     
     def handle_sync_now(self):
         """Run sync immediately"""
