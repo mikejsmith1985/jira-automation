@@ -25,6 +25,14 @@ class ConfigManager:
             'repositories': [],
             'token': ''
         },
+        'feedback': {
+            'github_token': '',
+            'repo': ''
+        },
+        'servicenow': {
+            'base_url': '',
+            'username': ''
+        },
         'extensions': {},
         'schedule': {
             'enabled': False,
