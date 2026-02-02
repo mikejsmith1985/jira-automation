@@ -281,9 +281,13 @@ class ConfigManager:
 _config_instance: Optional[ConfigManager] = None
 
 
-def get_config_manager(config_path: str = 'config.yaml') -> ConfigManager:
+def get_config_manager(config_path: str = None) -> ConfigManager:
     """Get or create the global config manager instance"""
     global _config_instance
     if _config_instance is None:
+        # If no path provided, use DATA_DIR/config.yaml
+        if config_path is None:
+            from app import DATA_DIR
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
         _config_instance = ConfigManager(config_path)
     return _config_instance

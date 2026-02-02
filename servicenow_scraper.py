@@ -60,8 +60,18 @@ class ServiceNowScraper:
             self.logger.info(f"Navigating to PRB: {prb_url}")
             self.driver.get(prb_url)
             
-            # Wait for page to load
-            time.sleep(3)
+            # Wait for page to fully load - ServiceNow is JavaScript-heavy
+            self.logger.info("Waiting for page to load...")
+            time.sleep(5)  # Increased from 3s - ServiceNow needs time for JS execution
+            
+            # Wait for body to be present (basic page load indicator)
+            try:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+            except TimeoutException:
+                self.logger.error("Page body never loaded")
+                return False
             
             # ServiceNow often uses iframes - try to switch to gsft_main iframe
             try:
@@ -75,44 +85,46 @@ class ServiceNowScraper:
             except Exception as e:
                 self.logger.warning(f"Could not switch to iframe: {e}")
             
-            # Now wait for form element (inside iframe or main context)
-            try:
-                WebDriverWait(self.driver, 15).until(
-                    EC.presence_of_element_located((By.ID, "problem.short_description"))
-                )
-                self.logger.info(f"Form loaded successfully for {prb_number}")
-                # Stay in iframe context for subsequent operations
-                return self.login_check()
-            except TimeoutException:
-                # Form element not found - try alternative element IDs
-                self.logger.warning("problem.short_description not found, trying alternatives...")
-                
-                # Try other common ServiceNow form indicators
-                alt_elements = [
-                    (By.ID, "sys_readonly.problem.number"),
-                    (By.ID, "problem.number"),
-                    (By.NAME, "sys_uniqueValue"),
-                    (By.CLASS_NAME, "form_header")
-                ]
-                
-                for by, value in alt_elements:
-                    try:
-                        elem = self.driver.find_element(by, value)
-                        if elem:
-                            self.logger.info(f"Found form via {value}")
-                            return self.login_check()
-                    except NoSuchElementException:
-                        continue
-                
-                # Last resort: check if PRB is in the page
+            # Wait for JavaScript to render form - try multiple possible selectors
+            form_loaded = False
+            wait_selectors = [
+                (By.ID, "problem.short_description"),
+                (By.ID, "problem.number"),
+                (By.CSS_SELECTOR, "[id='problem.short_description']"),  # CSS selector for ID with dots
+                (By.CSS_SELECTOR, "input[id*='problem']"),  # Any input with 'problem' in ID
+                (By.CLASS_NAME, "form-control")  # Generic form field
+            ]
+            
+            for by, selector in wait_selectors:
+                try:
+                    self.logger.info(f"Trying to find element: {selector}")
+                    WebDriverWait(self.driver, 20).until(  # Increased to 20s
+                        EC.presence_of_element_located((by, selector))
+                    )
+                    self.logger.info(f"Form loaded - found element: {selector}")
+                    form_loaded = True
+                    break
+                except TimeoutException:
+                    continue
+            
+            if not form_loaded:
+                # Last resort: check if PRB is in page
                 if prb_number in self.driver.page_source:
-                    self.logger.info(f"PRB {prb_number} found in page source")
-                    return self.login_check()
+                    self.logger.warning(f"Form elements not found but {prb_number} in page source. Form may use different structure.")
+                    # Try to find ANY input field as proof page is interactive
+                    try:
+                        self.driver.find_element(By.TAG_NAME, "input")
+                        self.logger.info("Page has input fields, assuming form is present")
+                        return self.login_check()
+                    except:
+                        pass
                 
-                # Switch back to default content before failing
                 self.driver.switch_to.default_content()
                 self.logger.error(f"Could not verify form loaded for {prb_number}")
                 return False
+            
+            # Form loaded successfully
+            return self.login_check()
             
         except TimeoutException:
             self.driver.switch_to.default_content()
