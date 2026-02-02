@@ -1,5 +1,5 @@
 """
-ServiceNow-Jira Sync Orchestrator
+ServiceNow-Jira Sync Orchestrator - Playwright version
 Manages the workflow of creating Jira issues from ServiceNow PRBs
 """
 import logging
@@ -10,11 +10,11 @@ from jira_automator import JiraAutomator
 class SnowJiraSync:
     """Orchestrates the ServiceNow to Jira automation workflow"""
     
-    def __init__(self, driver, config):
-        self.driver = driver
+    def __init__(self, page, config):
+        self.page = page  # Playwright Page object
         self.config = config
-        self.snow = ServiceNowScraper(driver, config)
-        self.jira = JiraAutomator(driver, config)
+        self.snow = ServiceNowScraper(page, config)
+        self.jira = JiraAutomator(page, config)
         self.logger = logging.getLogger(__name__)
         
     def validate_prb(self, prb_number):
@@ -30,7 +30,7 @@ class SnowJiraSync:
         try:
             if not self.snow.navigate_to_prb(prb_number):
                 # Check if it's actually a login issue
-                current_url = self.driver.current_url
+                current_url = self.page.url
                 if 'login' in current_url.lower():
                     error_msg = f'ServiceNow login required. Please log into ServiceNow first.'
                 else:

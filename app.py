@@ -66,7 +66,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.4.0"  # Phase 3: Playwright migration - browser management
+APP_VERSION = "1.5.0"  # Phase 4: Playwright migration complete - all scrapers migrated
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -1182,12 +1182,11 @@ class SyncHandler(BaseHTTPRequestHandler):
                 storage_state_path = os.path.join(storage_dir, 'state.json')
             
             # Initialize sync engine with correct config path (DATA_DIR not relative path)
-            # NOTE: sync_engine still uses driver=None until Phase 4 (JiraAutomator migration)
             if sync_engine is None:
                 config_path = os.path.join(DATA_DIR, 'config.yaml')
-                # Pass None as driver for now (Phase 4 will update SyncEngine)
-                safe_print("⚠️ SyncEngine initialization disabled until Phase 4 (needs JiraAutomator migration)")
-                # sync_engine = SyncEngine(driver=None, config_path=config_path)
+                # Now pass page instead of driver (Playwright migration Phase 4 complete!)
+                sync_engine = SyncEngine(page, config_path=config_path)
+                safe_print("✅ SyncEngine initialized with Playwright")
             
             # Navigate to Jira
             safe_print(f"🌐 Navigating to {jira_url}...")
@@ -2732,20 +2731,102 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def handle_test_snow_connection(self):
-        """Test ServiceNow connection with comprehensive error handling
+        """Test ServiceNow connection with comprehensive error handling"""
+        global page
         
-        NOTE: TEMPORARILY DISABLED IN PHASE 3
-        ServiceNow scraper now uses Playwright, but JiraAutomator still uses Selenium.
-        This will be re-enabled in Phase 4 after JiraAutomator migration.
-        """
-        return {
-            'success': False,
-            'error': 'ServiceNow testing temporarily disabled during Playwright migration (Phase 3). Will be re-enabled in Phase 4.'
-        }
+        # Check 1: Browser initialized
+        if page is None or page.is_closed():
+            return {
+                'success': False,
+                'error': 'Browser not open. Please open Jira browser first to initialize Playwright.'
+            }
         
-        # ORIGINAL CODE - RE-ENABLE IN PHASE 4:
-        # The rest of this function is commented out until Phase 4
-        # when JiraAutomator is migrated to Playwright
+        try:
+            # Check 2: Load config
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            if not os.path.exists(config_path):
+                return {
+                    'success': False,
+                    'error': 'Configuration file not found. Please configure integrations first.'
+                }
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            # Check 3: ServiceNow config exists
+            if not config or 'servicenow' not in config:
+                return {
+                    'success': False,
+                    'error': 'ServiceNow not configured. Please add ServiceNow URL in Integrations tab.'
+                }
+            
+            snow_config = config.get('servicenow', {})
+            
+            # Check 4: URL is configured
+            url = snow_config.get('url', '').strip()
+            if not url:
+                return {
+                    'success': False,
+                    'error': 'ServiceNow URL not configured. Please enter your ServiceNow URL in Integrations tab.'
+                }
+            
+            # Check 5: URL format is valid
+            if not url.startswith('http://') and not url.startswith('https://'):
+                return {
+                    'success': False,
+                    'error': f'Invalid ServiceNow URL format: {url}. URL must start with http:// or https://'
+                }
+            
+            # Check 6: Jira project configured (needed for SnowJiraSync)
+            jira_project = snow_config.get('jira_project', '').strip()
+            if not jira_project:
+                return {
+                    'success': False,
+                    'error': 'Jira Project not configured for ServiceNow integration. Please enter a Jira project key.'
+                }
+            
+            # Add minimal jira config if missing (needed for SnowJiraSync initialization)
+            if 'jira' not in config:
+                config['jira'] = {'base_url': '', 'project_keys': [jira_project]}
+            
+            # Test connection
+            safe_print(f"[SNOW] Testing connection to {url}...")
+            
+            from snow_jira_sync import SnowJiraSync
+            snow_sync = SnowJiraSync(page, config)
+            
+            result = snow_sync.test_connection()
+            
+            if result.get('success'):
+                safe_print(f"[SNOW] ✓ Connection test successful")
+            else:
+                safe_print(f"[SNOW] ✗ Connection test failed: {result.get('error')}")
+            
+            return result
+            
+        except KeyError as e:
+            # Config key missing
+            safe_print(f"[SNOW] Configuration error: missing key {e}")
+            return {
+                'success': False,
+                'error': f'Configuration incomplete: missing {e}. Please check Integrations settings.'
+            }
+        except Exception as e:
+            # Unexpected error
+            safe_print(f"[SNOW] Error testing connection: {e}")
+            error_msg = str(e)
+            # Make error user-friendly
+            if 'playwright' in error_msg.lower() or 'page' in error_msg.lower():
+                error_msg = 'Browser error. Try closing and reopening the browser.'
+            elif 'connection' in error_msg.lower() or 'network' in error_msg.lower():
+                error_msg = 'Network error. Check your internet connection and ServiceNow URL.'
+            elif len(error_msg) > 200:
+                error_msg = error_msg[:200] + '... (See logs for full error)'
+            
+            return {
+                'success': False,
+                'error': error_msg
+            }
     
     
     def handle_export_logs(self):

@@ -1,5 +1,5 @@
 """
-GitHub-Jira Sync Engine
+GitHub-Jira Sync Engine - Playwright version
 Orchestrates the sync between GitHub PRs and Jira tickets
 """
 import yaml
@@ -13,8 +13,8 @@ from jira_automator import JiraAutomator
 class SyncEngine:
     """Main sync orchestration engine"""
     
-    def __init__(self, driver, config_path='config.yaml'):
-        self.driver = driver
+    def __init__(self, page, config_path='config.yaml'):
+        self.page = page  # Playwright Page object
         
         # Load configuration (handle missing file gracefully)
         try:
@@ -30,9 +30,9 @@ class SyncEngine:
         except Exception as e:
             raise Exception(f"Error loading config from {config_path}: {e}")
         
-        # Initialize components
-        self.github = GitHubScraper(driver, self.config)
-        self.jira = JiraAutomator(driver, self.config)
+        # Initialize components (now with Playwright page)
+        self.github = GitHubScraper(page, self.config)
+        self.jira = JiraAutomator(page, self.config)
         
         # Setup logging
         self._setup_logging()
