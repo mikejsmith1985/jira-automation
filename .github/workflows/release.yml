@@ -37,39 +37,37 @@ jobs:
       
       - name: Sync version from git tag
         run: |
-          # Extract version from git tag and update app.py BEFORE building
-          $tag = if ("${{ github.event.inputs.tag }}" -ne "") { "${{ github.event.inputs.tag }}" } else { "${{ github.ref }}" -replace 'refs/tags/', '' }
-          $version = $tag -replace '^v', ''
-          Write-Host "Git tag version: $version" -ForegroundColor Cyan
+          import re, sys
           
-          # Read current app.py version
-          $content = Get-Content "app.py" -Raw
-          $match = [regex]::Match($content, 'APP_VERSION\s*=\s*["\']([^"'']+)["\']')
-          if ($match.Success) {
-            $currentVersion = $match.Groups[1].Value
-            Write-Host "Current APP_VERSION: $currentVersion" -ForegroundColor Yellow
-            
-            if ($currentVersion -ne $version) {
-              Write-Host "Updating APP_VERSION to $version..." -ForegroundColor Green
-              $newContent = $content -replace 'APP_VERSION\s*=\s*["\'][^"'']+["\']', "APP_VERSION = `"$version`""
-              Set-Content "app.py" -Value $newContent -NoNewline
-              
-              # Verify the change
-              $verifyContent = Get-Content "app.py" -Raw
-              if ($verifyContent -match "APP_VERSION\s*=\s*[`"']$version[`"']") {
-                Write-Host "VERSION SYNC COMPLETE: $currentVersion -> $version" -ForegroundColor Green
-              } else {
-                Write-Host "ERROR: Version sync failed!" -ForegroundColor Red
-                exit 1
-              }
-            } else {
-              Write-Host "Version already in sync: $version" -ForegroundColor Green
-            }
-          } else {
-            Write-Host "ERROR: Could not find APP_VERSION in app.py" -ForegroundColor Red
-            exit 1
-          }
-        shell: powershell
+          # Get version from environment
+          tag = "${{ github.event.inputs.tag }}" or "${{ github.ref }}".replace("refs/tags/", "")
+          version = tag.lstrip("v")
+          print(f"Git tag version: {version}")
+          
+          # Read and update app.py
+          with open("app.py", "r", encoding="utf-8") as f:
+              content = f.read()
+          
+          match = re.search(r'APP_VERSION\s*=\s*["\']([^"\']+)["\']', content)
+          if not match:
+              print("ERROR: Could not find APP_VERSION in app.py")
+              sys.exit(1)
+          
+          current = match.group(1)
+          print(f"Current APP_VERSION: {current}")
+          
+          if current != version:
+              new_content = re.sub(
+                  r'APP_VERSION\s*=\s*["\'][^"\']+["\']',
+                  f'APP_VERSION = "{version}"',
+                  content
+              )
+              with open("app.py", "w", encoding="utf-8") as f:
+                  f.write(new_content)
+              print(f"VERSION SYNC COMPLETE: {current} -> {version}")
+          else:
+              print(f"Version already in sync: {version}")
+        shell: python
       
       - name: Build with PyInstaller using waypoint.spec
         run: |

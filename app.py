@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.2.44"  # Version sync automation - local dev
+APP_VERSION = "1.3.0"  # Version sync automation - local dev
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
