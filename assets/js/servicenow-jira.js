@@ -362,3 +362,55 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('[Waypoint] Error stack:', error.stack);
     }
 });
+// Export logs for debugging
+window.exportLogs = async function exportLogs() {
+    console.log('[ServiceNow] Exporting logs...');
+    
+    const resultEl = document.getElementById('snow-config-result');
+    if (resultEl) {
+        resultEl.textContent = 'Exporting logs...';
+        resultEl.className = '';
+    }
+    
+    try {
+        const response = await fetch('/api/export-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Create downloadable file
+            const blob = new Blob([result.log_data], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            a.download = `waypoint-logs-${timestamp}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            if (resultEl) {
+                resultEl.textContent = `✓ Logs exported (${result.lines} lines)`;
+                resultEl.className = 'text-success';
+            }
+            
+            console.log('[ServiceNow] Logs exported successfully');
+        } else {
+            if (resultEl) {
+                resultEl.textContent = `✗ Export failed: ${result.error}`;
+                resultEl.className = 'text-error';
+            }
+            console.error('[ServiceNow] Export failed:', result.error);
+        }
+    } catch (error) {
+        if (resultEl) {
+            resultEl.textContent = `✗ Export error: ${error.message}`;
+            resultEl.className = 'text-error';
+        }
+        console.error('[ServiceNow] Export error:', error);
+    }
+};

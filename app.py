@@ -361,6 +361,8 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self.handle_save_snow_config(data)
             elif self.path == '/api/snow-jira/test-connection':
                 response = self.handle_test_snow_connection()
+            elif self.path == '/api/export-logs':
+                response = self.handle_export_logs()
             elif self.path == '/api/snow-jira/validate-prb':
                 response = self.handle_validate_prb(data)
             elif self.path == '/api/snow-jira/sync':
@@ -796,20 +798,54 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def _handle_check_updates(self):
-        """Check for available updates"""
+        """Check for available updates with comprehensive error handling"""
+        global config_manager
         try:
             from version_checker import VersionChecker
+            
+            # Get GitHub token if available (helps avoid rate limits)
+            github_token = None
+            if config_manager:
+                cfg = config_manager.get_config()
+                # Try feedback token first, then generic github token
+                github_token = cfg.get('feedback', {}).get('github_token')
+                if not github_token:
+                    github_token = cfg.get('github', {}).get('api_token')
             
             checker = VersionChecker(
                 current_version=APP_VERSION,
                 owner='mikejsmith1985',
-                repo='jira-automation'
+                repo='jira-automation',
+                token=github_token
             )
             
+            # Check for updates (no cache for manual checks)
             result = checker.check_for_update(use_cache=False)
+            
+            # Always return success=True, errors are in update_info
             return {'success': True, 'update_info': result}
+            
+        except ImportError as e:
+            # version_checker module not found
+            return {
+                'success': False,
+                'error': 'Update checker not available. Module not found.'
+            }
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            # Any other error
+            error_msg = str(e)
+            # Make error user-friendly
+            if 'connection' in error_msg.lower() or 'network' in error_msg.lower():
+                error_msg = 'Cannot connect to GitHub. Check your internet connection.'
+            elif 'timeout' in error_msg.lower():
+                error_msg = 'GitHub request timed out. Try again later.'
+            elif len(error_msg) > 150:
+                error_msg = error_msg[:150] + '...'
+            
+            return {
+                'success': False,
+                'error': error_msg
+            }
     
     def _handle_apply_update(self, data):
         """Download and apply an update"""
@@ -2508,24 +2544,234 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def handle_test_snow_connection(self):
-        """Test ServiceNow connection"""
+        """Test ServiceNow connection with comprehensive error handling"""
         global driver
         
+        # Check 1: Browser initialized
         if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
+            return {
+                'success': False,
+                'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'
+            }
         
         try:
+            # Check 2: Load config
             config_path = os.path.join(DATA_DIR, 'config.yaml')
+            if not os.path.exists(config_path):
+                return {
+                    'success': False,
+                    'error': 'Configuration file not found. Please configure integrations first.'
+                }
+            
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
+            
+            # Check 3: ServiceNow config exists
+            if not config or 'servicenow' not in config:
+                return {
+                    'success': False,
+                    'error': 'ServiceNow not configured. Please add ServiceNow URL in Integrations tab.'
+                }
+            
+            snow_config = config.get('servicenow', {})
+            
+            # Check 4: URL is configured
+            url = snow_config.get('url', '').strip()
+            if not url:
+                return {
+                    'success': False,
+                    'error': 'ServiceNow URL not configured. Please enter your ServiceNow URL in Integrations tab.'
+                }
+            
+            # Check 5: URL format is valid
+            if not url.startswith('http://') and not url.startswith('https://'):
+                return {
+                    'success': False,
+                    'error': f'Invalid ServiceNow URL format: {url}. URL must start with http:// or https://'
+                }
+            
+            # Check 6: Jira project configured (needed for SnowJiraSync)
+            jira_project = snow_config.get('jira_project', '').strip()
+            if not jira_project:
+                return {
+                    'success': False,
+                    'error': 'Jira Project not configured for ServiceNow integration. Please enter a Jira project key.'
+                }
+            
+            # Add minimal jira config if missing (needed for SnowJiraSync initialization)
+            if 'jira' not in config:
+                config['jira'] = {'base_url': '', 'project_keys': [jira_project]}
+            
+            # Test connection
+            safe_print(f"[SNOW] Testing connection to {url}...")
             
             from snow_jira_sync import SnowJiraSync
             snow_sync = SnowJiraSync(driver, config)
             
             result = snow_sync.test_connection()
+            
+            if result.get('success'):
+                safe_print(f"[SNOW] ✓ Connection test successful")
+            else:
+                safe_print(f"[SNOW] ✗ Connection test failed: {result.get('error')}")
+            
             return result
+            
+        except KeyError as e:
+            # Config key missing
+            safe_print(f"[SNOW] Configuration error: missing key {e}")
+            return {
+                'success': False,
+                'error': f'Configuration incomplete: missing {e}. Please check Integrations settings.'
+            }
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            # Unexpected error
+            safe_print(f"[SNOW] Error testing connection: {e}")
+            error_msg = str(e)
+            # Make error user-friendly
+            if 'WebDriver' in error_msg or 'selenium' in error_msg.lower():
+                error_msg = 'Browser error. Try closing and reopening the browser.'
+            elif 'connection' in error_msg.lower() or 'network' in error_msg.lower():
+                error_msg = 'Network error. Check your internet connection and ServiceNow URL.'
+            elif len(error_msg) > 200:
+                error_msg = error_msg[:200] + '... (See logs for full error)'
+            
+            return {
+                'success': False,
+                'error': error_msg
+            }
+    
+    
+    def handle_export_logs(self):
+        """Export logs and diagnostics for debugging"""
+        try:
+            import datetime
+            
+            # Collect diagnostics
+            diagnostics = []
+            diagnostics.append("="*70)
+            diagnostics.append("WAYPOINT DIAGNOSTICS EXPORT")
+            diagnostics.append("="*70)
+            diagnostics.append(f"Generated: {datetime.datetime.now().isoformat()}")
+            diagnostics.append(f"App Version: {APP_VERSION}")
+            diagnostics.append("")
+            
+            # System info
+            diagnostics.append("--- SYSTEM INFO ---")
+            diagnostics.append(f"Python Version: {sys.version}")
+            diagnostics.append(f"Platform: {sys.platform}")
+            diagnostics.append(f"Executable: {sys.executable}")
+            if getattr(sys, 'frozen', False):
+                diagnostics.append("Running as: Frozen executable (PyInstaller)")
+            else:
+                diagnostics.append("Running as: Python script")
+            diagnostics.append("")
+            
+            # Paths
+            diagnostics.append("--- PATHS ---")
+            diagnostics.append(f"Data Directory: {DATA_DIR}")
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            diagnostics.append(f"Config Path: {config_path}")
+            diagnostics.append(f"Config Exists: {os.path.exists(config_path)}")
+            log_file = os.path.join(DATA_DIR, 'jira-sync.log')
+            diagnostics.append(f"Log File: {log_file}")
+            diagnostics.append(f"Log File Exists: {os.path.exists(log_file)}")
+            diagnostics.append("")
+            
+            # Configuration status (without sensitive data)
+            diagnostics.append("--- CONFIGURATION STATUS ---")
+            try:
+                if os.path.exists(config_path):
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = yaml.safe_load(f) or {}
+                    
+                    # Check each integration (without showing actual values)
+                    if 'servicenow' in config:
+                        snow = config['servicenow']
+                        url = snow.get('url', '')
+                        diagnostics.append(f"ServiceNow URL: {'<configured>' if url else '<NOT CONFIGURED>'}")
+                        diagnostics.append(f"  - URL length: {len(url)} chars")
+                        diagnostics.append(f"  - Jira Project: {snow.get('jira_project', '<NOT CONFIGURED>')}")
+                        diagnostics.append(f"  - Field Mapping: {'<configured>' if snow.get('field_mapping') else '<none>'}")
+                    else:
+                        diagnostics.append("ServiceNow: <NOT CONFIGURED>")
+                    
+                    if 'jira' in config:
+                        jira = config['jira']
+                        diagnostics.append(f"Jira Base URL: {'<configured>' if jira.get('base_url') else '<NOT CONFIGURED>'}")
+                        diagnostics.append(f"  - Project Keys: {jira.get('project_keys', [])}")
+                    else:
+                        diagnostics.append("Jira: <NOT CONFIGURED>")
+                    
+                    if 'github' in config:
+                        github = config['github']
+                        diagnostics.append(f"GitHub API Token: {'<configured>' if github.get('api_token') else '<NOT CONFIGURED>'}")
+                        diagnostics.append(f"  - Organization: {github.get('organization', '<none>')}")
+                    else:
+                        diagnostics.append("GitHub: <NOT CONFIGURED>")
+                    
+                    if 'feedback' in config:
+                        feedback = config['feedback']
+                        diagnostics.append(f"Feedback GitHub Token: {'<configured>' if feedback.get('github_token') else '<NOT CONFIGURED>'}")
+                        diagnostics.append(f"  - Repo: {feedback.get('repo', '<none>')}")
+                    else:
+                        diagnostics.append("Feedback: <NOT CONFIGURED>")
+                else:
+                    diagnostics.append("Config file not found!")
+            except Exception as e:
+                diagnostics.append(f"Error reading config: {e}")
+            
+            diagnostics.append("")
+            
+            # Browser status
+            diagnostics.append("--- BROWSER STATUS ---")
+            global driver
+            if driver is None:
+                diagnostics.append("Selenium Driver: NOT INITIALIZED")
+            else:
+                diagnostics.append("Selenium Driver: INITIALIZED")
+                try:
+                    diagnostics.append(f"  - Current URL: {driver.current_url}")
+                except:
+                    diagnostics.append("  - Current URL: <unable to retrieve>")
+            diagnostics.append("")
+            
+            # Recent logs (last 500 lines)
+            diagnostics.append("--- RECENT LOGS (last 500 lines) ---")
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                    
+                    # Get last 500 lines
+                    recent_lines = lines[-500:] if len(lines) > 500 else lines
+                    diagnostics.append(f"Total log lines: {len(lines)}, showing last: {len(recent_lines)}")
+                    diagnostics.append("")
+                    diagnostics.extend([line.rstrip() for line in recent_lines])
+                except Exception as e:
+                    diagnostics.append(f"Error reading log file: {e}")
+            else:
+                diagnostics.append("Log file not found")
+            
+            diagnostics.append("")
+            diagnostics.append("="*70)
+            diagnostics.append("END OF DIAGNOSTICS")
+            diagnostics.append("="*70)
+            
+            # Join all diagnostics
+            log_data = "\n".join(diagnostics)
+            
+            return {
+                'success': True,
+                'log_data': log_data,
+                'lines': len(diagnostics)
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
     def handle_validate_prb(self, data):
         """Validate a PRB and extract data"""

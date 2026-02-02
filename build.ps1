@@ -128,7 +128,8 @@ if (Test-Path $exePath) {
     # Create zip
     # Extract version from app.py
     $appPyContent = Get-Content "app.py" -Raw
-    if ($appPyContent -match 'APP_VERSION\s*=\s*["\']([^"\']+)["\']') {
+    $versionPattern = "APP_VERSION\s*=\s*[`"']([^`"']+)[`"']"
+    if ($appPyContent -match $versionPattern) {
         $appVersion = $matches[1]
         $zipName = "waypoint-v$appVersion.zip"
     } else {
