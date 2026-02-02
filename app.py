@@ -2403,6 +2403,134 @@ class SyncHandler(BaseHTTPRequestHandler):
                     }
                 jira_ext.initialize(jira_config, driver=driver)
 
+    # ========== ServiceNow Integration Handlers ==========
+    
+    def _handle_get_snow_config(self):
+        """Get ServiceNow configuration (GET handler)"""
+        try:
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            snow_config = config.get('servicenow', {})
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True, 'config': snow_config}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+    
+    def handle_get_snow_config(self):
+        """Get ServiceNow configuration"""
+        try:
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            snow_config = config.get('servicenow', {})
+            return {'success': True, 'config': snow_config}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_save_snow_config(self, data):
+        """Save ServiceNow configuration"""
+        try:
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            if 'servicenow' not in config:
+                config['servicenow'] = {}
+            
+            config['servicenow'].update(data)
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(config, f, default_flow_style=False)
+            
+            global sync_engine
+            if sync_engine:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    sync_engine.config = yaml.safe_load(f)
+            
+            return {'success': True, 'message': 'ServiceNow configuration saved'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_test_snow_connection(self):
+        """Test ServiceNow connection"""
+        global driver
+        
+        if driver is None:
+            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
+        
+        try:
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            from snow_jira_sync import SnowJiraSync
+            snow_sync = SnowJiraSync(driver, config)
+            
+            result = snow_sync.test_connection()
+            return result
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_validate_prb(self, data):
+        """Validate a PRB and extract data"""
+        global driver
+        
+        if driver is None:
+            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
+        
+        try:
+            prb_number = data.get('prb_number', '').strip()
+            if not prb_number:
+                return {'success': False, 'error': 'PRB number is required'}
+            
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            from snow_jira_sync import SnowJiraSync
+            snow_sync = SnowJiraSync(driver, config)
+            
+            result = snow_sync.validate_prb(prb_number)
+            return result
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def handle_snow_jira_sync(self, data):
+        """Execute ServiceNow to Jira sync workflow"""
+        global driver
+        
+        if driver is None:
+            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
+        
+        try:
+            prb_number = data.get('prb_number', '').strip()
+            selected_inc = data.get('selected_inc', '').strip()
+            
+            if not prb_number:
+                return {'success': False, 'error': 'PRB number is required'}
+            if not selected_inc:
+                return {'success': False, 'error': 'Incident number is required'}
+            
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            from snow_jira_sync import SnowJiraSync
+            snow_sync = SnowJiraSync(driver, config)
+            
+            result = snow_sync.sync_prb_to_jira(prb_number, selected_inc)
+            return result
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
 
 # HTML Template (embedded)
 HTML_TEMPLATE = """
@@ -5590,132 +5718,6 @@ def open_browser():
         webbrowser.open('http://127.0.0.1:5000', new=2)
     except Exception as e:
         safe_print(f"[WARN] Failed to open browser: {e}")
-
-    def _handle_get_snow_config(self):
-        """Get ServiceNow configuration (GET handler)"""
-        try:
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            snow_config = config.get('servicenow', {})
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True, 'config': snow_config}).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
-    
-    def handle_get_snow_config(self):
-        """Get ServiceNow configuration"""
-        try:
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            snow_config = config.get('servicenow', {})
-            return {'success': True, 'config': snow_config}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_save_snow_config(self, data):
-        """Save ServiceNow configuration"""
-        try:
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            if 'servicenow' not in config:
-                config['servicenow'] = {}
-            
-            config['servicenow'].update(data)
-            
-            with open(config_path, 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, default_flow_style=False)
-            
-            global sync_engine
-            if sync_engine:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    sync_engine.config = yaml.safe_load(f)
-            
-            return {'success': True, 'message': 'ServiceNow configuration saved'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_test_snow_connection(self):
-        """Test ServiceNow connection"""
-        global driver
-        
-        if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
-        
-        try:
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            from snow_jira_sync import SnowJiraSync
-            snow_sync = SnowJiraSync(driver, config)
-            
-            result = snow_sync.test_connection()
-            return result
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_validate_prb(self, data):
-        """Validate a PRB and extract data"""
-        global driver
-        
-        if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
-        
-        try:
-            prb_number = data.get('prb_number', '').strip()
-            if not prb_number:
-                return {'success': False, 'error': 'PRB number is required'}
-            
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            from snow_jira_sync import SnowJiraSync
-            snow_sync = SnowJiraSync(driver, config)
-            
-            result = snow_sync.validate_prb(prb_number)
-            return result
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def handle_snow_jira_sync(self, data):
-        """Execute ServiceNow to Jira sync workflow"""
-        global driver
-        
-        if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
-        
-        try:
-            prb_number = data.get('prb_number', '').strip()
-            selected_inc = data.get('selected_inc', '').strip()
-            
-            if not prb_number:
-                return {'success': False, 'error': 'PRB number is required'}
-            if not selected_inc:
-                return {'success': False, 'error': 'Incident number is required'}
-            
-            config_path = os.path.join(DATA_DIR, 'config.yaml')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            from snow_jira_sync import SnowJiraSync
-            snow_sync = SnowJiraSync(driver, config)
-            
-            result = snow_sync.sync_prb_to_jira(prb_number, selected_inc)
-            return result
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
 
 def run_server():
     """Run the HTTP server"""
