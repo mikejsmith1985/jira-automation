@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.3.3"  # Version sync automation - local dev
+APP_VERSION = "1.3.4"  # Version sync automation - local dev
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -985,13 +985,15 @@ class SyncHandler(BaseHTTPRequestHandler):
         try:
             jira_url = data.get('jiraUrl', '')
             if not jira_url:
-                # Try to get from config
-                try:
-                    with open(os.path.join(DATA_DIR, 'config.yaml'), 'r') as f:
-                        config = yaml.safe_load(f)
-                    jira_url = config.get('jira', {}).get('base_url', '')
-                except:
-                    pass
+                # Try to get from config if it exists
+                config_path = os.path.join(DATA_DIR, 'config.yaml')
+                if os.path.exists(config_path):
+                    try:
+                        with open(config_path, 'r') as f:
+                            config = yaml.safe_load(f)
+                        jira_url = config.get('jira', {}).get('base_url', '')
+                    except Exception:
+                        pass  # Silently fallback if config read fails
             
             if not jira_url or 'your-company' in jira_url:
                 return {'success': False, 'error': 'Please configure Jira URL first'}
@@ -2080,9 +2082,16 @@ class SyncHandler(BaseHTTPRequestHandler):
             if not token or not repo:
                 return {'success': False, 'error': 'Token and repo required'}
             
-            # Load config
-            with open(os.path.join(DATA_DIR, 'config.yaml'), 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
+            # Load config or create new one if missing
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            if os.path.exists(config_path):
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = yaml.safe_load(f) or {}
+                except Exception:
+                    config = {}
+            else:
+                config = {}
             
             # Update feedback section
             if 'feedback' not in config:
@@ -2092,7 +2101,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             config['feedback']['repo'] = repo
             
             # Save config
-            with open(os.path.join(DATA_DIR, 'config.yaml'), 'w', encoding='utf-8') as f:
+            with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, default_flow_style=False)
             
             # Initialize GitHub feedback client
@@ -6048,19 +6057,24 @@ def run_server():
     global github_feedback
     
     # Initialize GitHub feedback if token exists in config
-    try:
-        with open(os.path.join(DATA_DIR, 'config.yaml'), 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-            
-        if 'feedback' in config:
-            token = config['feedback'].get('github_token')
-            repo = config['feedback'].get('repo')
-            
-            if token and repo:
-                github_feedback = GitHubFeedback(token=token, repo_name=repo)
-                print("[OK] GitHub feedback system initialized")
-    except Exception as e:
-        print(f"[WARN] GitHub feedback not configured: {str(e)}")
+    config_path = os.path.join(DATA_DIR, 'config.yaml')
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                
+            if config and 'feedback' in config:
+                token = config['feedback'].get('github_token')
+                repo = config['feedback'].get('repo')
+                
+                if token and repo and token not in ['YOUR_GITHUB_TOKEN_HERE', 'your_token_here']:
+                    github_feedback = GitHubFeedback(token=token, repo_name=repo)
+                    print("[OK] GitHub feedback system initialized")
+        except yaml.YAMLError as e:
+            print(f"[WARN] Config file is corrupt: {str(e)}")
+        except Exception as e:
+            print(f"[WARN] Could not load config: {str(e)}")
+    # If config doesn't exist, silently continue (first launch)
     
     server_address = ('127.0.0.1', 5000)
     httpd = HTTPServer(server_address, SyncHandler)
