@@ -79,7 +79,7 @@ favorites:
       set_status: ''
 feedback:
   auto_capture_logs: true
-  github_token: YOUR_GITHUB_TOKEN_HERE
+  github_token: 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
   log_history_minutes: 5
   repo: mikejsmith1985/jira-automation
   screenshot_quality: 0.9
@@ -118,14 +118,14 @@ schedule:
   start_hour: 9
   timezone: America/New_York
   weekdays_only: true
-ticket_keys:
-  pattern: ([A-Z]+-\d+)
 servicenow:
-  url: ''
-  jira_project: ''
   field_mapping:
     configuration_item: ''
-    impact: ''
-    urgency: ''
-    problem_category: ''
     detection: ''
+    impact: ''
+    problem_category: ''
+    urgency: ''
+  jira_project: ''
+  url: ''
+ticket_keys:
+  pattern: ([A-Z]+-\d+)
