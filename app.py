@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.2.42"  # Updated for Issue #32 complete fix
+APP_VERSION = "1.2.44"  # Version sync automation - local dev
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -814,6 +814,11 @@ class SyncHandler(BaseHTTPRequestHandler):
                 # Use feedback token (same PAT for feedback and updates)
                 github_token = cfg.get('feedback', {}).get('github_token')
                 
+                # Validate token is not placeholder
+                if github_token and github_token in ['YOUR_GITHUB_TOKEN_HERE', 'your_token_here', '']:
+                    github_token = None
+                    safe_print("[UPDATE] Feedback token is placeholder, not using")
+                
                 # Parse repo from feedback.repo (format: "owner/repo")
                 feedback_repo = cfg.get('feedback', {}).get('repo', '')
                 if feedback_repo and '/' in feedback_repo:
@@ -823,6 +828,20 @@ class SyncHandler(BaseHTTPRequestHandler):
                 # Fallback: try github.api_token if feedback token not set
                 if not github_token:
                     github_token = cfg.get('github', {}).get('api_token')
+                    if github_token and github_token in ['YOUR_GITHUB_TOKEN_HERE', 'your_token_here', '']:
+                        github_token = None
+            
+            # CRITICAL: This is a private repo, must have token
+            if not github_token:
+                return {
+                    'success': True,
+                    'update_info': {
+                        'available': False,
+                        'current_version': APP_VERSION,
+                        'error': 'GitHub token required for update checks. Configure in Settings > Integrations > Feedback.',
+                        'needs_token': True
+                    }
+                }
             
             checker = VersionChecker(
                 current_version=APP_VERSION,

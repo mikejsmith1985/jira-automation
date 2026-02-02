@@ -1654,6 +1654,18 @@ async function checkForUpdates() {
         
         const updateInfo = result.update_info || {};
         
+        // Check for token requirement (private repo)
+        if (updateInfo.needs_token) {
+            if (statusEl) statusEl.textContent = 'Token Required';
+            if (iconEl) iconEl.textContent = '🔑';
+            showNotification(updateInfo.error || 'GitHub token required for update checks', 'warning');
+            setTimeout(() => {
+                if (statusEl) statusEl.textContent = 'Check Updates';
+                if (iconEl) iconEl.textContent = '🔄';
+            }, 5000);
+            return;
+        }
+        
         // Check for rate limit or errors
         if (updateInfo.rate_limited || updateInfo.error) {
             if (statusEl) statusEl.textContent = updateInfo.rate_limited ? 'Rate Limited' : 'Check Failed';
