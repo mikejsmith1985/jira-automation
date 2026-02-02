@@ -66,6 +66,9 @@ class TestPRBNavigation(unittest.TestCase):
         self.mock_driver.get = Mock()
         self.mock_driver.current_url = 'https://cigna.service-now.com/problem.do'
         self.mock_driver.page_source = 'no prb here'  # PRB not in page
+        self.mock_driver.switch_to = Mock()
+        self.mock_driver.switch_to.frame = Mock()
+        self.mock_driver.switch_to.default_content = Mock()
         
         # Mock find_element to always fail
         def mock_find_element(by, value):
@@ -74,9 +77,13 @@ class TestPRBNavigation(unittest.TestCase):
         
         self.mock_driver.find_element = mock_find_element
         
-        # Simulate timeout on all waits
+        # Simulate: iframe found, but form element times out
         with patch('servicenow_scraper.WebDriverWait') as mock_wait:
-            mock_wait.return_value.until.side_effect = TimeoutException()
+            mock_iframe = Mock()
+            mock_wait_instance = Mock()
+            mock_wait.return_value = mock_wait_instance
+            # First call finds iframe, second times out
+            mock_wait_instance.until.side_effect = [mock_iframe, TimeoutException()]
             
             with patch('servicenow_scraper.time.sleep'):
                 scraper = ServiceNowScraper(self.mock_driver, self.config)
@@ -85,53 +92,55 @@ class TestPRBNavigation(unittest.TestCase):
                 # Should return False - PRB not found
                 self.assertFalse(result)
             
-    def test_scraper_handles_list_then_form(self):
-        """Test: Scraper should navigate list → click row → verify form"""
+    def test_scraper_handles_iframe(self):
+        """Test: Scraper should switch to gsft_main iframe"""
         from servicenow_scraper import ServiceNowScraper
         
-        # Mock the flow: get list → find row → click → wait for form
-        mock_row_link = Mock()
-        mock_row_link.click = Mock()
+        mock_iframe = Mock()
+        mock_form_element = Mock()
         
         self.mock_driver.get = Mock()
-        self.mock_driver.page_source = 'PRB0071419'  # PRB found in source
-        self.mock_driver.current_url = 'https://cigna.service-now.com/problem.do?PRB0071419'
-        
-        # Mock find_element to return not found for form, then found for link
-        def mock_find_element(by, value):
-            if value == 'problem.short_description':
-                from selenium.common.exceptions import NoSuchElementException
-                raise NoSuchElementException()
-            return mock_row_link
-        
-        self.mock_driver.find_element = mock_find_element
+        self.mock_driver.switch_to = Mock()
+        self.mock_driver.switch_to.frame = Mock()
+        self.mock_driver.switch_to.default_content = Mock()
+        self.mock_driver.current_url = 'https://cigna.service-now.com/problem.do'
         
         with patch('servicenow_scraper.WebDriverWait') as mock_wait:
             mock_wait_instance = Mock()
             mock_wait.return_value = mock_wait_instance
-            mock_wait_instance.until.return_value = mock_row_link
+            # First wait returns iframe, second returns form element
+            mock_wait_instance.until.side_effect = [mock_iframe, mock_form_element]
             
-            scraper = ServiceNowScraper(self.mock_driver, self.config)
-            result = scraper.navigate_to_prb('PRB0071419')
-            
-            # Should succeed (PRB found in page source)
-            self.assertTrue(result)
+            with patch('servicenow_scraper.time.sleep'):
+                scraper = ServiceNowScraper(self.mock_driver, self.config)
+                result = scraper.navigate_to_prb('PRB0071419')
+                
+                # Should have switched to iframe
+                self.mock_driver.switch_to.frame.assert_called_with(mock_iframe)
+                self.assertTrue(result)
             
     def test_navigate_checks_form_first(self):
-        """Test: Should check if already on form view before trying list"""
+        """Test: Should find form element after switching to iframe"""
         from servicenow_scraper import ServiceNowScraper
         
+        mock_iframe = Mock()
         mock_form_element = Mock()
+        
         self.mock_driver.get = Mock()
-        self.mock_driver.find_element = Mock(return_value=mock_form_element)
+        self.mock_driver.switch_to = Mock()
+        self.mock_driver.switch_to.frame = Mock()
         self.mock_driver.current_url = 'https://cigna.service-now.com/problem.do'
         
-        with patch('servicenow_scraper.time.sleep'):
-            scraper = ServiceNowScraper(self.mock_driver, self.config)
-            result = scraper.navigate_to_prb('PRB0071419')
+        with patch('servicenow_scraper.WebDriverWait') as mock_wait:
+            mock_wait_instance = Mock()
+            mock_wait.return_value = mock_wait_instance
+            mock_wait_instance.until.side_effect = [mock_iframe, mock_form_element]
             
-            # Should succeed - found form element directly
-            self.assertTrue(result)
+            with patch('servicenow_scraper.time.sleep'):
+                scraper = ServiceNowScraper(self.mock_driver, self.config)
+                result = scraper.navigate_to_prb('PRB0071419')
+                
+                self.assertTrue(result)
 
 
 class TestPRBURLPatterns(unittest.TestCase):
