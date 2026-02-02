@@ -1218,432 +1218,11 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def handle_scrape_sm_metrics(self, data):
-        """Scrape SM metrics from Jira using Selenium"""
-        global driver
-        
-        if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first.'}
-        
-        try:
-            jql = data.get('jql', '')
-            board_url = data.get('board_url', '')
-            custom_field_names = data.get('custom_field_names', [])
-            
-            if not jql and not board_url:
-                return {'success': False, 'error': 'Provide either a JQL query or board URL'}
-            
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
-            
-            issues = []
-            debug_info = []
-            
-            if board_url:
-                # Navigate to board and scrape
-                driver.get(board_url)
-                time.sleep(3)  # Increased wait for board to load
-                
-                # Wait for board to load (try multiple common selectors)
-                try:
-                    WebDriverWait(driver, 15).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, '.ghx-issue, [role="button"], [data-testid*="card"], [data-testid*="list"]'))
-                    )
-                    debug_info.append("✓ Board loaded successfully")
-                except:
-                    debug_info.append("⚠ Timeout waiting for board elements")
-                
-                # Scrape issue cards - using broader selectors to catch different Jira versions
-                # 1. Classic Kanban/Scrum boards (.ghx-issue)
-                # 2. Next-gen/Team-managed boards ([data-testid*="card"])
-                # 3. Generic accessible elements ([role="button"] with issue keys)
-                
-                # Find all potential card elements
-                selectors_tried = []
-                
-                # Strategy 1: Classic board cards
-                try:
-                    classic_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue')
-                    selectors_tried.append(f"Classic cards (.ghx-issue): {len(classic_cards)} found")
-                except: pass
-                
-                # Strategy 2: Next-gen cards
-                try:
-                    nextgen_cards = driver.find_elements(By.CSS_SELECTOR, '[data-testid*="card"]')
-                    selectors_tried.append(f"Next-gen cards ([data-testid*='card']): {len(nextgen_cards)} found")
-                except: pass
-                
-                # Strategy 3: List items
-                try:
-                    list_items = driver.find_elements(By.CSS_SELECTOR, '[role="listitem"]')
-                    selectors_tried.append(f"List items ([role='listitem']): {len(list_items)} found")
-                except: pass
-                
-                # Strategy 4: Board swimlane cards
-                try:
-                    swimlane_cards = driver.find_elements(By.CSS_SELECTOR, '[data-test-id*="software-board.card"], [data-testid="list.draggable-list.draggable-item"]')
-                    selectors_tried.append(f"Swimlane cards: {len(swimlane_cards)} found")
-                except: pass
-                
-                # Strategy 5: Table rows (Backlog/List view)
-                try:
-                    table_rows = driver.find_elements(By.CSS_SELECTOR, 'tr[data-testid="issue-table-row"], .issuerow')
-                    selectors_tried.append(f"Table rows: {len(table_rows)} found")
-                except: pass
-                
-                # Strategy 6: Generic Grid Rows (Structure, Advanced Roadmaps)
-                try:
-                    grid_rows = driver.find_elements(By.CSS_SELECTOR, 'div[role="row"], .structure-row, .grid-row')
-                    selectors_tried.append(f"Grid rows: {len(grid_rows)} found")
-                except: pass
-                
-                debug_info.extend(selectors_tried)
-                
-                # Combine all potential cards
-                potential_cards = driver.find_elements(By.CSS_SELECTOR, '.ghx-issue, [data-testid*="card"], [role="listitem"], [data-test-id*="software-board.card"], [data-testid="list.draggable-list.draggable-item"], tr[data-testid="issue-table-row"], .issuerow, div[role="row"], .structure-row, .grid-row')
-                
-                debug_info.append(f"Total potential cards found: {len(potential_cards)}")
-                
-                # Deduplicate by key
-                seen_keys = set()
-                
-                # Track which issues are visible vs hidden for debugging
-                visible_issues = []
-                hidden_issues = []
-                
-                for el in potential_cards:
-                    try:
-                        key = None
-                        
-                        # Check if element is actually visible (not display:none, visibility:hidden, etc)
-                        is_visible = el.is_displayed()
-                        
-                        # Strategy 1: Data attribute
-                        if not key:
-                            key = el.get_attribute('data-issue-key')
-                            
-                        # Strategy 2: Text search for pattern
-                        if not key:
-                            text = el.text
-                            import re
-                            # Look for PROJ-123 pattern
-                            match = re.search(r'([A-Z]+-\d+)', text)
-                            if match:
-                                key = match.group(1)
-                                
-                        # Strategy 3: Child element
-                        if not key:
-                            try:
-                                key_el = el.find_element(By.CSS_SELECTOR, '.ghx-key, [data-testid*="issue-key"], a[href*="/browse/"]')
-                                key = key_el.text
-                            except:
-                                pass
-
-                        if key and key not in seen_keys:
-                            seen_keys.add(key)
-                            
-                            # Extract additional fields from card
-                            issue_data = {
-                                'key': key,
-                                'visible': is_visible
-                            }
-                            
-                            # Try to extract summary/title
-                            try:
-                                summary_el = el.find_element(By.CSS_SELECTOR, '.ghx-summary, [data-testid*="summary"], .issue-summary')
-                                issue_data['summary'] = summary_el.text.strip()
-                            except:
-                                try:
-                                    # Fallback: Get all text and remove the key
-                                    card_text = el.text.strip()
-                                    issue_data['summary'] = card_text.replace(key, '').strip()
-                                except:
-                                    issue_data['summary'] = None
-                            
-                            # Try to extract status
-                            try:
-                                status_el = el.find_element(By.CSS_SELECTOR, '.ghx-end, [data-testid*="status"], .status-lozenge, .issue-status')
-                                issue_data['status'] = status_el.text.strip()
-                            except:
-                                issue_data['status'] = None
-                            
-                            # Try to extract assignee
-                            try:
-                                assignee_el = el.find_element(By.CSS_SELECTOR, '.ghx-avatar img, [data-testid*="assignee"] img, .assignee img')
-                                issue_data['assignee'] = assignee_el.get_attribute('alt') or assignee_el.get_attribute('title')
-                            except:
-                                try:
-                                    assignee_el = el.find_element(By.CSS_SELECTOR, '.ghx-avatar, [data-testid*="assignee"], .assignee')
-                                    issue_data['assignee'] = assignee_el.get_attribute('title') or assignee_el.text.strip()
-                                except:
-                                    issue_data['assignee'] = None
-                            
-                            # Try to extract priority
-                            try:
-                                priority_el = el.find_element(By.CSS_SELECTOR, '.ghx-priority img, [data-testid*="priority"] img, .priority img')
-                                issue_data['priority'] = priority_el.get_attribute('alt') or priority_el.get_attribute('title')
-                            except:
-                                issue_data['priority'] = None
-                            
-                            # Try to extract issue type
-                            try:
-                                type_el = el.find_element(By.CSS_SELECTOR, '.ghx-type img, [data-testid*="type"] img, .issue-type img')
-                                issue_data['type'] = type_el.get_attribute('alt') or type_el.get_attribute('title')
-                            except:
-                                issue_data['type'] = None
-                            
-                            # Extract Custom Fields by Name
-                            if custom_field_names and isinstance(custom_field_names, list):
-                                for field_name in custom_field_names:
-                                    safe_name = field_name.strip()
-                                    if not safe_name: continue
-                                    
-                                    try:
-                                        # Strategy A: Structure/Grid specific - Column matching
-                                        # In grid views, columns often have IDs or classes related to the field
-                                        # But finding the column index is hard without headers.
-                                        # Instead, look for common attributes in the row.
-                                        
-                                        field_el = None
-                                        
-                                        # 1. Try generic robust selectors first (titles/tooltips)
-                                        # Use case-insensitive matching where supported by browser/driver
-                                        selector = f"[title*='{safe_name}' i], [data-tooltip*='{safe_name}' i], [aria-label*='{safe_name}' i]"
-                                        
-                                        try:
-                                            field_el = el.find_element(By.CSS_SELECTOR, selector)
-                                        except:
-                                            # Fallback for browsers not supporting 'i' modifier
-                                            try:
-                                                selector = f"[title*='{safe_name}'], [data-tooltip*='{safe_name}'], [aria-label*='{safe_name}']"
-                                                field_el = el.find_element(By.CSS_SELECTOR, selector)
-                                            except: pass
-                                            
-                                        # 2. Try Structure/Grid specific cell selectors
-                                        if not field_el:
-                                            try:
-                                                # Look for cells with data-id or class containing the field name
-                                                # e.g. .cell-customfield_1000 or data-column-id="story-points"
-                                                grid_selector = f"[data-column-id*='{safe_name.lower().replace(' ', '-')}' i], [class*='{safe_name.lower().replace(' ', '-')}' i]"
-                                                field_el = el.find_element(By.CSS_SELECTOR, grid_selector)
-                                            except: pass
-
-                                        # If found, extract value
-                                        if field_el:
-                                            # Try to get value from text or attributes
-                                            val = field_el.text.strip()
-                                            
-                                            # If text is empty, check attributes
-                                            if not val:
-                                                raw_val = field_el.get_attribute('title') or field_el.get_attribute('data-tooltip') or field_el.get_attribute('aria-label') or field_el.get_attribute('value')
-                                                if raw_val:
-                                                    # If attribute is "Field: Value", split it
-                                                    if ':' in raw_val and safe_name in raw_val:
-                                                        try:
-                                                            val = raw_val.split(':', 1)[1].strip()
-                                                        except: val = raw_val
-                                                    else:
-                                                        val = raw_val
-                                            
-                                            if val:
-                                                issue_data[safe_name] = val
-                                    except:
-                                        # Field not found on this card
-                                        pass
-
-                            # Construct URL
-                            base_url = driver.current_url.split('/secure/')[0].split('/browse/')[0]
-                            issue_data['url'] = f"{base_url}/browse/{key}"
-                            
-                            if is_visible:
-                                visible_issues.append(key)
-                            else:
-                                hidden_issues.append(key)
-                            
-                            issues.append(issue_data)
-                            # Log each found issue for debugging
-                            visibility_tag = "VISIBLE" if is_visible else "HIDDEN"
-                            summary_preview = issue_data.get('summary', '')[:50] if issue_data.get('summary') else 'No summary'
-                            print(f"[SCRAPE] Found issue: {key} [{visibility_tag}] - {summary_preview}")
-                    except Exception as e:
-                        # Log card extraction failures
-                        print(f"[SCRAPE] Failed to extract key from card: {e}")
-                        pass
-                
-                debug_info.append(f"Issues extracted from cards: {len(issues)} (Visible: {len(visible_issues)}, Hidden: {len(hidden_issues)})")
-                if hidden_issues:
-                    debug_info.append(f"Hidden issues: {', '.join(hidden_issues)}")
-                
-                # Fallback Strategy: Look for any links to issues
-                # This is the most robust method as it doesn't rely on card structure, just links
-                if len(issues) == 0:
-                    debug_info.append("⚠ No issues found with card selectors, trying link strategy...")
-                    try:
-                        # Find all links containing /browse/
-                        links = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/browse/"]')
-                        debug_info.append(f"Found {len(links)} links with /browse/")
-                        import re
-                        for link in links:
-                            href = link.get_attribute('href')
-                            # Match /browse/PROJECT-123
-                            match = re.search(r'/browse/([A-Z]+-\d+)', href)
-                            if match:
-                                key = match.group(1)
-                                
-                                # Check if we already have this key
-                                existing_issue = next((i for i in issues if i['key'] == key), None)
-                                
-                                if existing_issue:
-                                    # We already have this issue, but maybe this link has a better summary?
-                                    # (e.g. first link was "PROJ-123", this link is "Fix bug in login")
-                                    if not existing_issue.get('summary') or existing_issue['summary'] == key:
-                                        try:
-                                            text = link.text.strip()
-                                            if text and text != key:
-                                                existing_issue['summary'] = text
-                                                print(f"[SCRAPE] Updated summary for {key}: {text}")
-                                        except: pass
-                                else:
-                                    if key not in seen_keys:
-                                        seen_keys.add(key)
-                                        issue_data = {'key': key, 'visible': True}
-                                        
-                                        # Try to get summary from text or title
-                                        try:
-                                            text = link.text.strip()
-                                            title = link.get_attribute('title')
-                                            
-                                            if text and text != key:
-                                                issue_data['summary'] = text
-                                            elif title:
-                                                issue_data['summary'] = title
-                                            else:
-                                                # Use key as fallback summary
-                                                issue_data['summary'] = key
-                                        except:
-                                            issue_data['summary'] = key
-                                            
-                                        issues.append(issue_data)
-                                        print(f"[SCRAPE] Found issue from link: {key}")
-                        debug_info.append(f"Issues extracted from links: {len(issues)}")
-                    except Exception as e:
-                        debug_info.append(f"❌ Link strategy failed: {e}")
-
-                # DEBUG: If still 0 issues, save page source for inspection
-                if len(issues) == 0:
-                    debug_info.append("❌ Still found 0 issues. Saving page source to debug_jira_scrape.html")
-                    try:
-                        with open(os.path.join(DATA_DIR, 'debug_jira_scrape.html'), 'w', encoding='utf-8') as f:
-                            f.write(driver.page_source)
-                        debug_info.append(f"✓ Debug file saved to {os.path.join(DATA_DIR, 'debug_jira_scrape.html')}")
-                    except Exception as e:
-                        debug_info.append(f"❌ Failed to save debug file: {e}")
-            
-            elif jql:
-                # Navigate to issue search with JQL
-                base_url = driver.current_url.split('/browse')[0].split('/jira')[0]
-                search_url = f"{base_url}/issues/?jql={jql.replace(' ', '%20')}"
-                driver.get(search_url)
-                
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="issue-table"], .issue-table, .navigator-content'))
-                )
-                
-                # Scrape issue rows
-                issue_rows = driver.find_elements(By.CSS_SELECTOR, '[data-testid="issue-table-row"], .issuerow, tr.issue-row')
-                for row in issue_rows:
-                    try:
-                        key_el = row.find_element(By.CSS_SELECTOR, '[data-testid="issue-key"], .issuekey a, td.issuekey a')
-                        
-                        issue_data = {
-                            'key': key_el.text,
-                            'url': key_el.get_attribute('href'),
-                            'visible': row.is_displayed()
-                        }
-                        
-                        # Summary
-                        try:
-                            summary_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="summary"], .summary, td.summary')
-                            issue_data['summary'] = summary_el.text.strip()
-                        except: issue_data['summary'] = None
-                        
-                        # Priority
-                        try:
-                            priority_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="priority"] img, .priority img, td.priority img')
-                            issue_data['priority'] = priority_el.get_attribute('alt') or priority_el.get_attribute('title')
-                        except: issue_data['priority'] = None
-                        
-                        # Status
-                        try:
-                            status_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="status"], .status, td.status')
-                            issue_data['status'] = status_el.text.strip()
-                        except: issue_data['status'] = None
-                        
-                        # Type
-                        try:
-                            type_el = row.find_element(By.CSS_SELECTOR, '[data-testid*="issuetype"] img, .issuetype img, td.issuetype img')
-                            issue_data['type'] = type_el.get_attribute('alt') or type_el.get_attribute('title')
-                        except: issue_data['type'] = None
-                        
-                        issues.append(issue_data)
-                    except:
-                        pass
-            
-            # Calculate basic metrics
-            visible_count = sum(1 for i in issues if i.get('visible', True))
-            hidden_count = len(issues) - visible_count
-            
-            metrics = {
-                'total_issues': len(issues),
-                'visible_issues': visible_count,
-                'hidden_issues': hidden_count,
-                'issues_scraped': issues,  # Return ALL issues with visibility flag
-                'scrape_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'debug_info': debug_info,
-                'scraping_explanation': {
-                    'how_it_works': 'The scraper uses multiple strategies to find issue keys on the board',
-                    'strategies': [
-                        '1. Classic boards: Looks for .ghx-issue CSS class',
-                        '2. Next-gen boards: Looks for [data-testid*="card"] elements',
-                        '3. List items: Looks for [role="listitem"] elements',
-                        '4. Swimlane cards: Looks for [data-test-id*="software-board.card"]',
-                        '5. Data attributes: Checks data-issue-key attribute on elements',
-                        '6. Text pattern: Searches element text for PROJ-123 pattern using regex',
-                        '7. Child elements: Looks for .ghx-key or issue links inside cards',
-                        '8. Fallback: Finds all <a> tags with href containing /browse/ and extracts keys'
-                    ],
-                    'visibility_detection': 'Each issue is checked with is_displayed() to detect if visible in Jira UI',
-                    'phantom_issues': 'Issues marked as hidden exist in DOM but are not visible (archived, filtered, collapsed, stale DOM)',
-                    'why_scrape_finds_more': [
-                        'Jira may keep archived/resolved issues in DOM',
-                        'Client-side filters hide issues without removing from HTML',
-                        'Collapsed swimlanes keep issues in DOM',
-                        'Stale DOM from previous board state',
-                        'Lazy loading artifacts'
-                    ],
-                    'recommendation': 'Use visible_issues count to match Jira UI. Hidden issues are phantom entries.'
-                }
-            }
-            
-            # Save metrics for SM view
-            try:
-                with open(os.path.join(DATA_DIR, 'sm_metrics.json'), 'w', encoding='utf-8') as f:
-                    json.dump({'issues': issues, 'metrics': metrics}, f, indent=2)
-            except:
-                pass
-            
-            return {
-                'success': True,
-                'message': f'Scraped {len(issues)} issues from Jira ({visible_count} visible, {hidden_count} hidden)',
-                'metrics': metrics
-            }
-        except Exception as e:
-            import traceback
-            return {
-                'success': False, 
-                'error': str(e),
-                'traceback': traceback.format_exc()
-            }
+        """Scrape SM metrics from Jira - TEMPORARILY DISABLED"""
+        return {
+            'success': False,
+            'error': 'SM Metrics scraping temporarily disabled. This feature is being migrated to Playwright. Please use manual JQL export for now.'
+        }
 
     def _handle_get_insights(self):
         """Return recent insights"""
@@ -2838,13 +2417,13 @@ class SyncHandler(BaseHTTPRequestHandler):
             
             # Browser status
             diagnostics.append("--- BROWSER STATUS ---")
-            global driver
-            if driver is None:
-                diagnostics.append("Selenium Driver: NOT INITIALIZED")
+            global page
+            if page is None:
+                diagnostics.append("Playwright Browser: NOT INITIALIZED")
             else:
-                diagnostics.append("Selenium Driver: INITIALIZED")
+                diagnostics.append("Playwright Browser: INITIALIZED")
                 try:
-                    diagnostics.append(f"  - Current URL: {driver.current_url}")
+                    diagnostics.append(f"  - Current URL: {page.url}")
                 except:
                     diagnostics.append("  - Current URL: <unable to retrieve>")
             diagnostics.append("")
@@ -2888,10 +2467,10 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def handle_validate_prb(self, data):
         """Validate a PRB and extract data"""
-        global driver
+        global page
         
-        if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
+        if page is None:
+            return {'success': False, 'error': 'Browser not open. Please open Jira browser first.'}
         
         try:
             prb_number = data.get('prb_number', '').strip()
@@ -2903,7 +2482,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 config = yaml.safe_load(f)
             
             from snow_jira_sync import SnowJiraSync
-            snow_sync = SnowJiraSync(driver, config)
+            snow_sync = SnowJiraSync(page, config)
             
             result = snow_sync.validate_prb(prb_number)
             return result
@@ -2912,10 +2491,10 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def handle_snow_jira_sync(self, data):
         """Execute ServiceNow to Jira sync workflow"""
-        global driver
+        global page
         
-        if driver is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first to initialize Selenium.'}
+        if page is None:
+            return {'success': False, 'error': 'Browser not open. Please open Jira browser first.'}
         
         try:
             prb_number = data.get('prb_number', '').strip()
@@ -2931,7 +2510,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 config = yaml.safe_load(f)
             
             from snow_jira_sync import SnowJiraSync
-            snow_sync = SnowJiraSync(driver, config)
+            snow_sync = SnowJiraSync(page, config)
             
             result = snow_sync.sync_prb_to_jira(prb_number, selected_inc)
             return result
