@@ -680,8 +680,13 @@ class SyncHandler(BaseHTTPRequestHandler):
             config_path = os.path.join(DATA_DIR, 'config.yaml')
             safe_print(f"[DEBUG] Saving integrations to: {config_path}")
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f) or {}
+            # Create config file if it doesn't exist
+            if not os.path.exists(config_path):
+                safe_print(f"[DEBUG] Config file not found, creating new one")
+                config = {}
+            else:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f) or {}
             
             if 'github' in data:
                 if 'github' not in config:
@@ -740,8 +745,14 @@ class SyncHandler(BaseHTTPRequestHandler):
                     safe_print(f"[WARN] Failed to re-initialize feedback system: {e}")
             
             return {'success': True, 'message': 'Integration settings saved'}
+        except PermissionError as e:
+            safe_print(f"[ERROR] Permission denied writing config: {e}")
+            return {'success': False, 'error': f'Permission denied: Cannot write to config file. Try running as administrator.'}
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            safe_print(f"[ERROR] Failed to save integrations: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': f'Save failed: {str(e)}'}
     
     def handle_test_github_connection(self, data):
         """Test GitHub API connection with provided token"""
