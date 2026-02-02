@@ -611,11 +611,10 @@ class SyncHandler(BaseHTTPRequestHandler):
                 
                 driver = webdriver.Chrome(options=chrome_options)
             
-            # Initialize sync engine
+            # Initialize sync engine with correct config path (DATA_DIR not relative path)
             if sync_engine is None:
-                sync_engine = SyncEngine(driver)
-            
-            # Navigate to Jira for authentication
+                config_path = os.path.join(DATA_DIR, 'config.yaml')
+                sync_engine = SyncEngine(driver, config_path=config_path)
             jira_url = data.get('jiraUrl', sync_engine.config['jira']['base_url'])
             driver.get(jira_url)
             
@@ -1097,9 +1096,10 @@ class SyncHandler(BaseHTTPRequestHandler):
                 
                 driver = webdriver.Chrome(options=chrome_options)
             
-            # Initialize sync engine
+            # Initialize sync engine with correct config path (DATA_DIR not relative path)
             if sync_engine is None:
-                sync_engine = SyncEngine(driver)
+                config_path = os.path.join(DATA_DIR, 'config.yaml')
+                sync_engine = SyncEngine(driver, config_path=config_path)
             
             # Navigate to Jira
             driver.get(jira_url)

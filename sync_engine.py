@@ -16,9 +16,19 @@ class SyncEngine:
     def __init__(self, driver, config_path='config.yaml'):
         self.driver = driver
         
-        # Load configuration
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
+        # Load configuration (handle missing file gracefully)
+        try:
+            with open(config_path, 'r') as f:
+                self.config = yaml.safe_load(f)
+        except FileNotFoundError:
+            # Config doesn't exist yet - use minimal defaults
+            self.config = {
+                'jira': {'base_url': ''},
+                'github': {'organization': '', 'repositories': []},
+                'logging': {'level': 'INFO', 'file': 'waypoint.log'}
+            }
+        except Exception as e:
+            raise Exception(f"Error loading config from {config_path}: {e}")
         
         # Initialize components
         self.github = GitHubScraper(driver, self.config)
