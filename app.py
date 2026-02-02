@@ -137,7 +137,12 @@ class SyncHandler(BaseHTTPRequestHandler):
         elif self.path == '/api/version':
             self._handle_get_version()
         elif self.path == '/api/version/check':
-            self._handle_check_updates()
+            # Handle update check - returns dict that needs to be sent as JSON
+            result = self._handle_check_updates()
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
         elif self.path == '/api/version/releases':
             self._handle_list_releases()
         elif self.path == '/api/snow-jira/config':

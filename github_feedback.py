@@ -110,16 +110,15 @@ class GitHubFeedback:
                         
                         # For images, embed in comment (GitHub supports this)
                         if mime_type.startswith('image/') and len(file_data) < 10_000_000:  # 10MB limit
-                            # GitHub automatically converts uploaded images to URLs
-                            # We'll save to temp file and note the attachment
+                            # GitHub does NOT support data URLs in comments!
+                            # GitHub comment limit is 65536 chars, base64 images exceed this
+                            # Just note the attachment - user can describe what they saw
+                            size_kb = len(file_data) / 1024
                             comment_body = f"### {name}\n\n"
-                            
-                            # Try to embed small images (< 1MB) as data URLs
-                            if len(file_data) < 1_000_000:
-                                comment_body += f"![{name}](data:{mime_type};base64,{content})\n\n"
-                            else:
-                                comment_body += f"*Image attached: {name} ({len(file_data) / 1024:.1f} KB)*\n\n"
-                                comment_body += "*Note: Image too large to embed. Please see attachment in the issue.*"
+                            comment_body += f"**Type:** {mime_type}\n"
+                            comment_body += f"**Size:** {size_kb:.1f} KB\n\n"
+                            comment_body += "*Screenshot captured during feedback. GitHub API does not support direct image upload to issue comments.*\n"
+                            comment_body += "*Tip: Manually drag-and-drop the screenshot to add it, or describe the issue in the body.*"
                             
                             issue.create_comment(comment_body)
                         else:

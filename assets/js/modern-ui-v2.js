@@ -1638,7 +1638,7 @@ async function checkForUpdates() {
     if (iconEl) iconEl.textContent = '⏳';
     
     try {
-        const response = await fetch('/api/updates/check');
+        const response = await fetch('/api/version/check');
         const result = await response.json();
         
         if (!result.success) {

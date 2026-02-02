@@ -21,6 +21,8 @@ class ServiceNowScraper:
         
         # Log configuration for debugging
         self.logger.info(f"[SNOW] ServiceNowScraper initialized")
+        # Normalize base_url - remove trailing slash to prevent double slashes
+        self.base_url = self.base_url.rstrip('/') if self.base_url else ''
         self.logger.info(f"[SNOW] Base URL: '{self.base_url}'")
         if not self.base_url:
             self.logger.error("[SNOW] ERROR: ServiceNow URL is empty or not configured!")
