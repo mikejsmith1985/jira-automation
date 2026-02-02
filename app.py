@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.2.41"
+APP_VERSION = "1.2.42"  # Updated for Issue #32 complete fix
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -803,19 +803,31 @@ class SyncHandler(BaseHTTPRequestHandler):
         try:
             from version_checker import VersionChecker
             
-            # Get GitHub token if available (helps avoid rate limits)
+            # Get GitHub token and repo from feedback config (same PAT for both)
             github_token = None
+            repo_owner = 'mikejsmith1985'  # Default fallback
+            repo_name = 'jira-automation'
+            
             if config_manager:
                 cfg = config_manager.get_config()
-                # Try feedback token first, then generic github token
+                
+                # Use feedback token (same PAT for feedback and updates)
                 github_token = cfg.get('feedback', {}).get('github_token')
+                
+                # Parse repo from feedback.repo (format: "owner/repo")
+                feedback_repo = cfg.get('feedback', {}).get('repo', '')
+                if feedback_repo and '/' in feedback_repo:
+                    repo_owner, repo_name = feedback_repo.split('/', 1)
+                    safe_print(f"[UPDATE] Using repo from feedback config: {repo_owner}/{repo_name}")
+                
+                # Fallback: try github.api_token if feedback token not set
                 if not github_token:
                     github_token = cfg.get('github', {}).get('api_token')
             
             checker = VersionChecker(
                 current_version=APP_VERSION,
-                owner='mikejsmith1985',
-                repo='jira-automation',
+                owner=repo_owner,
+                repo=repo_name,
                 token=github_token
             )
             
@@ -1610,45 +1622,6 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
-    
-    def _handle_check_updates(self):
-        """Check for available updates"""
-        global version_checker, config_manager
-        try:
-            if version_checker is None:
-                # Get token from config
-                github_token = None
-                if config_manager:
-                    config = config_manager.get_config()
-                    # Try feedback token first, then generic github token
-                    github_token = config.get('feedback', {}).get('github_token')
-                    if not github_token:
-                        github_token = config.get('github', {}).get('api_token')
-                
-                version_checker = VersionChecker(
-                    current_version=APP_VERSION,
-                    owner='mikejsmith1985',
-                    repo='jira-automation',
-                    token=github_token
-                )
-            
-            # Force fresh check (ignore cache)
-            use_cache = self.headers.get('X-Force-Check', 'false').lower() != 'true'
-            result = version_checker.check_for_update(use_cache=use_cache)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {
-                'success': True,
-                'update_info': result
-            }
-            self.wfile.write(json.dumps(response).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
     
     def _handle_list_releases(self):
         """List recent releases"""

@@ -70,6 +70,23 @@ class VersionChecker:
             
             response = requests.get(url, headers=headers, timeout=10)
             
+            if response.status_code == 403:
+                # Rate limit exceeded
+                error_msg = "GitHub rate limit exceeded. "
+                if self.token:
+                    error_msg += "Your token may be invalid or expired."
+                else:
+                    error_msg += "Please add a GitHub token in Integrations > GitHub to increase rate limit (60/hour → 5000/hour)."
+                
+                result = {
+                    'available': False,
+                    'current_version': self.current_version,
+                    'error': error_msg,
+                    'rate_limited': True
+                }
+                self._update_cache(result)
+                return result
+            
             if response.status_code == 404:
                 # No releases yet
                 result = {

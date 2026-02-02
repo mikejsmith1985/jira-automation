@@ -29,9 +29,16 @@ class SnowJiraSync:
         """
         try:
             if not self.snow.navigate_to_prb(prb_number):
+                # Check if it's actually a login issue
+                current_url = self.driver.current_url
+                if 'login' in current_url.lower():
+                    error_msg = f'ServiceNow login required. Please log into ServiceNow first.'
+                else:
+                    error_msg = f'Could not load PRB {prb_number}. Check if the PRB number exists or try refreshing.'
+                
                 return {
                     'success': False,
-                    'error': f'Could not navigate to PRB {prb_number}. Check if it exists and you are logged in.'
+                    'error': error_msg
                 }
             
             prb_data = self.snow.extract_prb_data()

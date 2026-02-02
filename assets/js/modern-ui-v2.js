@@ -1652,7 +1652,19 @@ async function checkForUpdates() {
             return;
         }
         
-        const updateInfo = result.update_info;
+        const updateInfo = result.update_info || {};
+        
+        // Check for rate limit or errors
+        if (updateInfo.rate_limited || updateInfo.error) {
+            if (statusEl) statusEl.textContent = updateInfo.rate_limited ? 'Rate Limited' : 'Check Failed';
+            if (iconEl) iconEl.textContent = updateInfo.rate_limited ? '⏸️' : '❌';
+            showNotification(updateInfo.error || 'Update check failed', 'error');
+            setTimeout(() => {
+                if (statusEl) statusEl.textContent = 'Check Updates';
+                if (iconEl) iconEl.textContent = '🔄';
+            }, 5000);
+            return;
+        }
         
         if (updateInfo.available) {
             // Update available!
