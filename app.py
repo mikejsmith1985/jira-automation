@@ -744,6 +744,12 @@ class SyncHandler(BaseHTTPRequestHandler):
                 except Exception as e:
                     safe_print(f"[WARN] Failed to re-initialize feedback system: {e}")
             
+            # Reload config_manager to pick up new settings for update checker etc.
+            global config_manager
+            if config_manager:
+                config_manager.load()
+                safe_print("[OK] Config reloaded")
+            
             return {'success': True, 'message': 'Integration settings saved'}
         except PermissionError as e:
             safe_print(f"[ERROR] Permission denied writing config: {e}")
@@ -815,17 +821,19 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def _handle_check_updates(self):
         """Check for available updates with comprehensive error handling"""
-        global config_manager
         try:
             from version_checker import VersionChecker
             
-            # Get GitHub token and repo from feedback config (same PAT for both)
+            # Get GitHub token and repo from config file directly
+            # (not from config_manager which may be cached)
             github_token = None
             repo_owner = 'mikejsmith1985'  # Default fallback
             repo_name = 'jira-automation'
             
-            if config_manager:
-                cfg = config_manager.get_config()
+            config_path = os.path.join(DATA_DIR, 'config.yaml')
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    cfg = yaml.safe_load(f) or {}
                 
                 # Use feedback token (same PAT for feedback and updates)
                 github_token = cfg.get('feedback', {}).get('github_token')
@@ -839,7 +847,6 @@ class SyncHandler(BaseHTTPRequestHandler):
                 feedback_repo = cfg.get('feedback', {}).get('repo', '')
                 if feedback_repo and '/' in feedback_repo:
                     repo_owner, repo_name = feedback_repo.split('/', 1)
-                    safe_print(f"[UPDATE] Using repo from feedback config: {repo_owner}/{repo_name}")
                 
                 # Fallback: try github.api_token if feedback token not set
                 if not github_token:
