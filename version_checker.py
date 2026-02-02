@@ -126,10 +126,14 @@ class VersionChecker:
             download_url = None
             asset_name = None
             asset_size = 0
+            asset_url = None  # API URL for private repo downloads
             
             for asset in release.get('assets', []):
                 if asset['name'].endswith('.exe') or 'windows' in asset['name'].lower():
-                    download_url = asset['browser_download_url']
+                    # For private repos, use API URL (asset['url']) not browser_download_url
+                    # API URL works with Authorization header, browser URL doesn't
+                    asset_url = asset['url']  # API endpoint
+                    download_url = asset['browser_download_url']  # Fallback for public repos
                     asset_name = asset['name']
                     asset_size = asset['size']
                     break
@@ -144,7 +148,7 @@ class VersionChecker:
                 'current_version': self.current_version,
                 'latest_version': release['tag_name'],
                 'release_notes': release.get('body', 'No release notes available'),
-                'download_url': download_url,
+                'download_url': asset_url if asset_url and self.token else download_url,  # Use API URL if we have token
                 'published_at': release.get('published_at', ''),
                 'asset_name': asset_name,
                 'asset_size': asset_size
@@ -249,17 +253,35 @@ class VersionChecker:
                 progress_callback(0, 0, 'Downloading update...')
             
             # Download the file with progress tracking
-            headers = {}
+            headers = {
+                'User-Agent': 'Jira-Automation-Updater'
+            }
+            
             if self.token:
-                # If using API URL (contains api.github.com), we need Accept header
+                # Always use token if available (private repo requirement)
+                headers['Authorization'] = f'token {self.token}'
+                
+                # If using API URL (contains api.github.com), we MUST use Accept header
                 if 'api.github.com' in download_url:
-                    headers['Authorization'] = f'token {self.token}'
                     headers['Accept'] = 'application/octet-stream'
-                # If using browser download URL but with token (might happen), use standard auth
-                else:
-                    headers['Authorization'] = f'token {self.token}'
+                    self.logger.info("Using API endpoint for private repo download")
 
+            self.logger.info(f"Downloading from: {download_url}")
             response = requests.get(download_url, stream=True, timeout=60, headers=headers)
+            
+            # Check for authentication errors
+            if response.status_code == 401:
+                return {
+                    'success': False,
+                    'error': 'Authentication failed. Your GitHub token may be invalid or expired. Please update it in Settings > Integrations.'
+                }
+            
+            if response.status_code == 404:
+                return {
+                    'success': False,
+                    'error': 'Release asset not found. This is a private repository - ensure your GitHub token is configured in Settings > Integrations.'
+                }
+            
             response.raise_for_status()
             
             total_size = int(response.headers.get('content-length', 0))
