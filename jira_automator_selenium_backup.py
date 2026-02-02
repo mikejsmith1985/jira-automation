@@ -62,8 +62,10 @@ class JiraAutomator:
         """
         try:
             # Step 1: Go to the ticket page
+            # Like typing "https://jira.com/browse/ABC-123" in your browser
             ticket_url = f"{self.base_url}/browse/{ticket_key}"
-            self.page.goto(ticket_url, wait_until='networkidle')
+            self.driver.get(ticket_url)
+            time.sleep(2)  # Wait 2 seconds for the page to load
             
             success = True  # Keep track of whether everything works
             
@@ -124,39 +126,48 @@ class JiraAutomator:
             # Strategy 1: Try to find a comment box that's already visible
             # This works on older Jira versions
             try:
-                comment_field = self.page.locator('#comment').first
-                if comment_field.is_visible(timeout=5000):
-                    comment_field.click()
-                    comment_field.fill(comment_text)
-                    # Submit with Ctrl+Enter (Jira shortcut to save)
-                    comment_field.press('Control+Enter')
-                    return True
+                # Look for a text box with id="comment"
+                comment_field = WebDriverWait(self.driver, 5).until(
+                    EC.presence_of_element_located((By.ID, 'comment'))
+                )
+                comment_field.click()  # Click it to make sure it's active
+                time.sleep(0.5)  # Wait half a second
+                comment_field.send_keys(comment_text)  # Type the comment
+                
+                # Submit with Ctrl+Enter (Jira shortcut to save)
+                comment_field.send_keys(Keys.CONTROL, Keys.ENTER)
+                time.sleep(1)  # Wait for it to save
+                return True
             except:
                 pass  # If that didn't work, try the next strategy
             
             # Strategy 2: Click "Add a comment" button first, THEN type
             # This works when the comment box is hidden until you click a button
             try:
-                comment_btn = self.page.locator('#footer-comment-button').first
-                if comment_btn.is_visible(timeout=5000):
-                    comment_btn.click()
-                    # Now find the comment box and type
-                    comment_field = self.page.locator('#comment').first
-                    comment_field.fill(comment_text)
-                    comment_field.press('Control+Enter')
-                    return True
+                # Find and click the "Add comment" button
+                comment_btn = self.driver.find_element(By.ID, 'footer-comment-button')
+                comment_btn.click()
+                time.sleep(1)  # Wait for comment box to appear
+                
+                # Now find the comment box and type
+                comment_field = self.driver.find_element(By.ID, 'comment')
+                comment_field.send_keys(comment_text)
+                comment_field.send_keys(Keys.CONTROL, Keys.ENTER)
+                time.sleep(1)
+                return True
             except:
                 pass  # Try next strategy
             
             # Strategy 3: Modern Jira interface (cloud version)
             # Looks for a textarea with "comment" in the placeholder text
             try:
-                comment_field = self.page.locator('textarea[placeholder*="comment" i]').first
-                if comment_field.is_visible(timeout=5000):
-                    comment_field.click()
-                    comment_field.fill(comment_text)
-                    comment_field.press('Control+Enter')
-                    return True
+                comment_field = self.driver.find_element(By.CSS_SELECTOR, 'textarea[placeholder*="comment" i]')
+                comment_field.click()
+                time.sleep(0.5)
+                comment_field.send_keys(comment_text)
+                comment_field.send_keys(Keys.CONTROL, Keys.ENTER)
+                time.sleep(1)
+                return True
             except:
                 pass
             
@@ -188,9 +199,9 @@ class JiraAutomator:
         """
         try:
             # Step 1: Click the "Edit" button to put the ticket in edit mode
-            edit_btn = self.page.locator('#edit-issue').first
+            edit_btn = self.driver.find_element(By.ID, 'edit-issue')
             edit_btn.click()
-            self.page.wait_for_load_state('networkidle')
+            time.sleep(2)  # Wait for edit form to load
             
             all_success = True  # Track if all fields update successfully
             
@@ -198,8 +209,9 @@ class JiraAutomator:
             for field_id, field_value in fields.items():
                 try:
                     # Try to find the field by its ID
-                    field_element = self.page.locator(f'#{field_id}').first
-                    field_element.fill(field_value)  # Clear and type new value
+                    field_element = self.driver.find_element(By.ID, field_id)
+                    field_element.clear()  # Clear old value
+                    field_element.send_keys(field_value)  # Type new value
                     print(f"  ✓ Updated field {field_id} = {field_value}")
                     
                 except Exception as e:
@@ -207,9 +219,9 @@ class JiraAutomator:
                     all_success = False
             
             # Step 3: Save all the changes by clicking "Update"
-            update_btn = self.page.locator('#edit-issue-submit').first
+            update_btn = self.driver.find_element(By.ID, 'edit-issue-submit')
             update_btn.click()
-            self.page.wait_for_load_state('networkidle')
+            time.sleep(2)  # Wait for changes to save
             
             return all_success
             
@@ -251,13 +263,15 @@ class JiraAutomator:
         """
         try:
             # Click on the labels area to open it
-            labels_elem = self.page.locator('#labels-field').first
+            labels_elem = self.driver.find_element(By.ID, 'labels-field')
             labels_elem.click()
+            time.sleep(0.5)
             
             # Type the label name
-            label_input = self.page.locator('#labels-textarea').first
-            label_input.fill(label)
-            label_input.press('Enter')  # Press Enter to add it
+            label_input = self.driver.find_element(By.ID, 'labels-textarea')
+            label_input.send_keys(label)
+            label_input.send_keys(Keys.ENTER)  # Press Enter to add it
+            time.sleep(1)
             return True
             
         except Exception as e:
@@ -281,27 +295,25 @@ class JiraAutomator:
         """
         try:
             # Find all buttons on the page
-            workflow_btns = self.page.locator('button[type="button"]').all()
+            workflow_btns = self.driver.find_elements(By.CSS_SELECTOR, 'button[type="button"]')
             
             # Look through each button to find one that matches our target status
             for btn in workflow_btns:
-                try:
-                    # Check if the button text contains our target status
-                    btn_text = btn.text_content()
-                    if btn_text and target_status.lower() in btn_text.lower():
-                        btn.click()  # Click the button!
-                        
-                        # Sometimes Jira shows a confirmation popup - if so, click "OK"
-                        try:
-                            confirm_btn = self.page.locator('#issue-workflow-transition-submit').first
-                            if confirm_btn.is_visible(timeout=2000):
-                                confirm_btn.click()
-                        except:
-                            pass  # No popup, that's fine
-                        
-                        return True
-                except:
-                    continue
+                # Check if the button text contains our target status
+                # (We use .lower() to ignore uppercase/lowercase differences)
+                if target_status.lower() in btn.text.lower():
+                    btn.click()  # Click the button!
+                    time.sleep(2)
+                    
+                    # Sometimes Jira shows a confirmation popup - if so, click "OK"
+                    try:
+                        confirm_btn = self.driver.find_element(By.ID, 'issue-workflow-transition-submit')
+                        confirm_btn.click()
+                        time.sleep(2)
+                    except:
+                        pass  # No popup, that's fine
+                    
+                    return True
             
             # If we get here, we never found a button with that status name
             print(f"Could not find transition button for: {target_status}")

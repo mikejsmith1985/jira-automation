@@ -1,27 +1,19 @@
-"""
-Login Detection - Playwright Version
-Checks if user is logged in to Jira using Playwright page object
-"""
+from selenium.webdriver.common.by import By
+import time
 
-def check_login_status(page, debug=False):
+def check_login_status(driver, debug=False):
     """
     Check if the user is logged in to Jira by looking for common DOM elements.
     Uses multiple strategies to reliably detect login state.
-    
-    Args:
-        page: Playwright Page object
-        debug: If True, returns detailed debug info
-    
-    Returns:
-        tuple: (is_logged_in, user_info, debug_info)
+    Returns a tuple (is_logged_in, user_info, debug_info)
     """
-    if page is None or page.is_closed():
-        return False, None, "Page is None or closed"
+    if driver is None:
+        return False, None, "Driver is None"
         
     try:
         # Check if browser is still open
         try:
-            current_url = page.url
+            current_url = driver.current_url
         except Exception as e:
             return False, None, f"Browser not accessible: {e}"
 
@@ -35,23 +27,18 @@ def check_login_status(page, debug=False):
         # Strategy 1: Check for absence of login form
         # If there's NO login form visible, user is likely logged in
         try:
-            # Check if login form exists and is visible
-            login_indicators = page.locator('input[name="username"], input[type="email"][placeholder*="email" i]')
-            count = login_indicators.count()
-            if count > 0:
-                # Check if any are visible
-                for i in range(count):
-                    if login_indicators.nth(i).is_visible():
-                        debug_info.append("Login form detected - not logged in")
-                        return False, None, "; ".join(debug_info)
+            login_indicators = driver.find_elements(By.CSS_SELECTOR, 'input[name="username"], input[type="email"][placeholder*="email" i]')
+            if login_indicators and any(elem.is_displayed() for elem in login_indicators):
+                debug_info.append("Login form detected - not logged in")
+                return False, None, "; ".join(debug_info)
         except:
             pass
         
         # Strategy 2: Check page title and body content
         try:
-            page_title = page.title().lower()
+            page_title = driver.title.lower()
             if 'log in' in page_title or 'sign in' in page_title:
-                return False, None, f"Login page detected in title: {page.title()}"
+                return False, None, f"Login page detected in title: {driver.title}"
         except:
             pass
         
@@ -91,14 +78,11 @@ def check_login_status(page, debug=False):
         
         for selector, indicator_type in logged_in_indicators:
             try:
-                locator = page.locator(selector)
-                count = locator.count()
-                if count > 0:
-                    # Check if any of the elements are visible
-                    for i in range(count):
+                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                if elements:
+                    for elem in elements:
                         try:
-                            elem = locator.nth(i)
-                            if elem.is_visible(timeout=1000):  # 1 second timeout
+                            if elem.is_displayed():
                                 logged_in = True
                                 found_selector = f"{selector} ({indicator_type})"
                                 if indicator_type == 'username':
@@ -136,10 +120,9 @@ def check_login_status(page, debug=False):
                         return True, None, "; ".join(debug_info)
                     return True, None, None
         
-        # Strategy 5: Cookie-based check
+        # Strategy 5: JavaScript-based check (cookies)
         try:
-            # Get cookies from browser context
-            cookies = page.context.cookies()
+            cookies = driver.get_cookies()
             jira_cookies = [c for c in cookies if 'atlassian' in c.get('domain', '').lower() or 'jira' in c.get('name', '').lower()]
             if jira_cookies:
                 debug_info.append(f"Found {len(jira_cookies)} Jira-related cookies")

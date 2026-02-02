@@ -70,17 +70,19 @@ class GitHubScraper:
             }
         """
         # Build the URL to the Pull Requests page
+        # Example: https://github.com/my-org/my-repo/pulls
         url = f"{self.base_url}/{self.org}/{repo_name}/pulls"
         
         try:
             # Step 1: Navigate to the PRs page
-            self.page.goto(url, wait_until='networkidle')
+            self.driver.get(url)
+            time.sleep(2)  # Wait for page to load
             
             prs = []  # Empty list to store PRs we find
             
             # Step 2: Find all PR boxes on the page
             # GitHub shows PRs in divs with IDs like "issue_1", "issue_2", etc.
-            pr_elements = self.page.locator('div[id^="issue_"]').all()
+            pr_elements = self.driver.find_elements(By.CSS_SELECTOR, 'div[id^="issue_"]')
             
             # Step 3: Loop through each PR and extract its data
             for pr_elem in pr_elements[:20]:  # Only look at first 20 PRs
@@ -113,7 +115,7 @@ class GitHubScraper:
         not meant to be called from outside this class"
         
         Args:
-            pr_elem: The Playwright Locator containing PR info
+            pr_elem: The HTML element containing PR info
             repo_name: The repository name
             
         Returns:
@@ -121,8 +123,9 @@ class GitHubScraper:
         """
         try:
             # Step 1: Get the PR title and URL
-            title_elem = pr_elem.locator('a.Link--primary').first
-            title = title_elem.text_content()  # Get the text
+            # Look for the main link (has class "Link--primary")
+            title_elem = pr_elem.find_element(By.CSS_SELECTOR, 'a.Link--primary')
+            title = title_elem.text  # Get the text
             pr_url = title_elem.get_attribute('href')  # Get the link
             
             # Step 2: Extract PR number from the URL
@@ -145,9 +148,9 @@ class GitHubScraper:
             status = 'open'  # Start by assuming it's open
             try:
                 # Look for status badges
-                if pr_elem.locator('.State--merged').count() > 0:
+                if pr_elem.find_elements(By.CSS_SELECTOR, '.State--merged'):
                     status = 'merged'  # Purple badge = merged
-                elif pr_elem.locator('.State--closed').count() > 0:
+                elif pr_elem.find_elements(By.CSS_SELECTOR, '.State--closed'):
                     status = 'closed'  # Red badge = closed
             except:
                 pass  # If we can't find status, just use 'open'
@@ -156,9 +159,8 @@ class GitHubScraper:
             author = ''
             try:
                 # Look for the "opened by X" link
-                author_elem = pr_elem.locator('.opened-by a').first
-                if author_elem.count() > 0:
-                    author = author_elem.text_content()
+                author_elem = pr_elem.find_element(By.CSS_SELECTOR, '.opened-by a')
+                author = author_elem.text
             except:
                 pass  # If can't find author, leave empty
             
