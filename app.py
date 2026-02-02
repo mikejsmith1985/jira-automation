@@ -44,8 +44,11 @@ def get_base_dir():
 def get_data_dir():
     """Get writable data directory for config and user data"""
     if getattr(sys, 'frozen', False):
-        # Running as executable - use same directory as .exe
-        return os.path.dirname(sys.executable)
+        # Running as executable - use AppData for persistence across versions
+        appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+        data_dir = os.path.join(appdata, 'Waypoint')
+        os.makedirs(data_dir, exist_ok=True)
+        return data_dir
     else:
         # Running as script - use script directory
         return os.path.dirname(os.path.abspath(__file__))
@@ -81,7 +84,7 @@ sync_engine = None
 sync_thread = None
 is_syncing = False
 insights_engine = None
-feedback_db = FeedbackDB()  # SQLite-based feedback storage
+feedback_db = FeedbackDB(db_path=os.path.join(DATA_DIR, 'feedback.db'))  # SQLite-based feedback storage
 github_feedback = None  # Optional GitHub sync
 log_capture = LogCapture(LOG_FILE)
 version_checker = None  # Version update checker
@@ -5747,6 +5750,9 @@ def run_server():
     httpd.serve_forever()
 
 if __name__ == '__main__':
+    # Print data directory info
+    safe_print(f"[CONFIG] Data directory: {DATA_DIR}")
+    
     # Prevent multiple instances using a lock file
     lock_file = os.path.join(DATA_DIR, 'waypoint.lock')
     if os.path.exists(lock_file):
@@ -5773,6 +5779,17 @@ if __name__ == '__main__':
     try:
         # Ensure config.yaml exists in DATA_DIR
         config_file = os.path.join(DATA_DIR, 'config.yaml')
+        
+        # Migration: Check if running as frozen executable and config doesn't exist in new location
+        if getattr(sys, 'frozen', False) and not os.path.exists(config_file):
+            # Look for config in old location (exe directory)
+            old_config = os.path.join(os.path.dirname(sys.executable), 'config.yaml')
+            if os.path.exists(old_config):
+                import shutil
+                shutil.copy(old_config, config_file)
+                safe_print(f"[MIGRATE] Copied config from old location to {config_file}")
+                safe_print(f"[INFO] Config is now stored in {DATA_DIR} for persistence across versions")
+        
         if not os.path.exists(config_file):
             # Copy from bundled template if it doesn't exist
             template_file = os.path.join(BASE_DIR, 'config.yaml')
