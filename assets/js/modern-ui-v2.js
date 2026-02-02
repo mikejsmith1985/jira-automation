@@ -1232,7 +1232,8 @@ async function saveFeedbackSettings() {
             statusEl.style.color = '#DE350B';
         }
     } catch (error) {
-        statusEl.textContent = '❌ Failed to save';
+        console.error('[Waypoint] Save feedback error:', error);
+        statusEl.textContent = `❌ Failed to save: ${error.message || 'Network error'}`;
         statusEl.style.color = '#DE350B';
     }
 }
