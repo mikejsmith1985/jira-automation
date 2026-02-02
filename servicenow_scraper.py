@@ -1,26 +1,30 @@
 """
-ServiceNow scraper module
+ServiceNow scraper module - Playwright version
 Handles data extraction from ServiceNow PRB tickets via browser automation
+Now using Playwright for better modern web app support and native Shadow DOM handling
 """
 import time
 import logging
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import os
 
 class ServiceNowScraper:
-    """Scrapes data from ServiceNow Problem (PRB) tickets"""
+    """Scrapes data from ServiceNow Problem (PRB) tickets using Playwright"""
     
-    def __init__(self, driver, config):
-        self.driver = driver
+    def __init__(self, page, config):
+        """
+        Initialize ServiceNow scraper
+        
+        Args:
+            page: Playwright Page object (not Selenium driver)
+            config: Configuration dict with servicenow settings
+        """
+        self.page = page
         self.config = config
         self.base_url = config.get('servicenow', {}).get('url', '').strip()
         self.logger = logging.getLogger(__name__)
         
         # Log configuration for debugging
-        self.logger.info(f"[SNOW] ServiceNowScraper initialized")
+        self.logger.info(f"[SNOW] ServiceNowScraper initialized (Playwright)")
         # Normalize base_url - remove trailing slash to prevent double slashes
         self.base_url = self.base_url.rstrip('/') if self.base_url else ''
         self.logger.info(f"[SNOW] Base URL: '{self.base_url}'")
@@ -31,9 +35,8 @@ class ServiceNowScraper:
     def login_check(self):
         """Check if logged into ServiceNow"""
         try:
-            current_url = self.driver.current_url
+            current_url = self.page.url
             # Only return False if explicitly on a login page
-            # Don't fail if user is on valid ServiceNow pages
             if 'login' in current_url.lower() and 'service-now.com' in current_url:
                 self.logger.warning("ServiceNow login page detected")
                 return False
@@ -57,103 +60,167 @@ class ServiceNowScraper:
                 raise ValueError("ServiceNow URL not configured")
             
             prb_url = f"{self.base_url}/problem.do?sysparm_query=number={prb_number}"
-            self.logger.info(f"Navigating to PRB: {prb_url}")
-            self.driver.get(prb_url)
+            self.logger.info(f"[SNOW] Navigating to PRB: {prb_url}")
             
-            # Wait for page to fully load - ServiceNow is JavaScript-heavy
-            self.logger.info("Waiting for page to load...")
-            time.sleep(5)  # Increased from 3s - ServiceNow needs time for JS execution
+            # Playwright's goto with networkidle waits for page to fully load
+            self.page.goto(prb_url, wait_until='networkidle', timeout=30000)
             
-            # Wait for body to be present (basic page load indicator)
-            try:
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "body"))
-                )
-            except TimeoutException:
-                self.logger.error("Page body never loaded")
+            self.logger.info(f"[SNOW] Page loaded, checking for PRB...")
+            
+            # Quick check: Is PRB in page content?
+            page_content = self.page.content()
+            if prb_number not in page_content:
+                self.logger.error(f"[SNOW] PRB {prb_number} not found in page source - wrong page?")
                 return False
             
-            # ServiceNow often uses iframes - try to switch to gsft_main iframe
+            self.logger.info(f"[SNOW] PRB {prb_number} confirmed in page source")
+            
+            # Check if we're in an iframe context (ServiceNow often uses gsft_main)
+            # Playwright handles iframes more elegantly than Selenium
             try:
-                iframe = WebDriverWait(self.driver, 5).until(
-                    EC.presence_of_element_located((By.ID, "gsft_main"))
-                )
-                self.driver.switch_to.frame(iframe)
-                self.logger.info("Switched to gsft_main iframe")
-            except TimeoutException:
-                self.logger.info("No gsft_main iframe found, staying in main context")
-            except Exception as e:
-                self.logger.warning(f"Could not switch to iframe: {e}")
+                # Try to find the main iframe
+                frame = self.page.frame_locator('#gsft_main')
+                # Test if frame exists by trying to find body in it
+                frame.locator('body').wait_for(state='attached', timeout=5000)
+                self.logger.info("[SNOW] Found gsft_main iframe, using frame context")
+                self.frame = frame
+            except Exception:
+                self.logger.info("[SNOW] No gsft_main iframe, using main page context")
+                # Use main page as "frame"
+                self.frame = self.page
             
-            # Check if PRB is in page source first (fast check)
-            if prb_number not in self.driver.page_source:
-                self.logger.error(f"PRB {prb_number} not found in page source - wrong page?")
-                return False
+            # Try to find form fields with Playwright's smart waiting
+            # Playwright automatically pierces Shadow DOM and handles dynamic content!
+            form_found = False
             
-            self.logger.info(f"PRB {prb_number} confirmed in page source")
-            
-            # Wait for JavaScript to render form - use ONLY CSS/XPath (not By.ID with dots!)
-            # Based on user's Chrome recording JSON showing exact selectors that work
-            form_loaded = False
-            wait_selectors = [
-                # PRIMARY: CSS selectors for fields with dots (from recording)
-                (By.CSS_SELECTOR, "[id='problem.short_description']"),
-                (By.CSS_SELECTOR, "[id='problem.description']"),
-                (By.CSS_SELECTOR, "[id='problem.number']"),
-                # BACKUP: XPath selectors (also from recording)
-                (By.XPATH, "//*[@id='problem.short_description']"),
-                (By.XPATH, "//*[@id='problem.description']"),
-                # FALLBACK: Modern UI without "problem." prefix
-                (By.CSS_SELECTOR, "[id='short_description']"),
-                (By.CSS_SELECTOR, "[id='description']"),
+            # Try multiple selectors (Playwright will wait automatically)
+            selectors_to_try = [
+                "[id='problem.short_description']",
+                "[id='short_description']",
+                "[id='problem.description']",
+                "[id='description']",
+                "[id='problem.number']",
+                "[id='number']",
             ]
             
-            # Reduced timeout: 3 seconds per selector (not 20!)
-            for by, selector in wait_selectors:
+            for selector in selectors_to_try:
                 try:
-                    self.logger.info(f"Waiting for element: {selector}")
-                    WebDriverWait(self.driver, 3).until(
-                        EC.presence_of_element_located((by, selector))
-                    )
-                    self.logger.info(f"✓ Form loaded - found: {selector}")
-                    form_loaded = True
+                    self.logger.info(f"[SNOW] Trying selector: {selector}")
+                    # Playwright waits automatically, timeout 3s per selector
+                    locator = self.frame.locator(selector).first
+                    locator.wait_for(state='attached', timeout=3000)
+                    self.logger.info(f"[SNOW] ✓ Found element: {selector}")
+                    form_found = True
                     break
-                except TimeoutException:
+                except Exception as e:
+                    self.logger.debug(f"[SNOW] Selector {selector} not found: {e}")
                     continue
             
-            if not form_loaded:
-                # Debug: log all element IDs on page
-                try:
-                    all_ids = self.driver.find_elements(By.XPATH, "//*[@id]")
-                    found_ids = [el.get_attribute("id") for el in all_ids[:20]]  # First 20
-                    self.logger.warning(f"Form elements not found. IDs on page: {found_ids}")
-                except:
-                    pass
+            if not form_found:
+                # Enhanced debugging: Use JavaScript to find ALL elements with IDs
+                self.logger.warning("[SNOW] Form fields not found with standard selectors")
+                self.logger.info("[SNOW] Running JavaScript debug to find all IDs on page...")
                 
-                # Save HTML for debugging
                 try:
-                    import os
-                    debug_file = os.path.join(os.path.dirname(__file__), "snow_debug.html")
-                    with open(debug_file, "w", encoding="utf-8") as f:
-                        f.write(self.driver.page_source)
-                    self.logger.info(f"Saved page HTML to: {debug_file}")
+                    # Execute JavaScript to find all element IDs
+                    all_ids = self.page.evaluate("""
+                        () => {
+                            const elements = document.querySelectorAll('[id]');
+                            return Array.from(elements).slice(0, 50).map(el => ({
+                                id: el.id,
+                                tag: el.tagName,
+                                type: el.type || 'N/A',
+                                visible: el.offsetParent !== null
+                            }));
+                        }
+                    """)
+                    self.logger.warning(f"[SNOW] Found {len(all_ids)} elements with IDs:")
+                    for elem in all_ids[:20]:  # Log first 20
+                        self.logger.info(f"[SNOW]   - {elem['id']} ({elem['tag']}, visible={elem['visible']})")
                 except Exception as e:
-                    self.logger.warning(f"Could not save debug HTML: {e}")
+                    self.logger.error(f"[SNOW] Could not execute debug JavaScript: {e}")
                 
-                self.driver.switch_to.default_content()
-                self.logger.error(f"Could not find form fields for {prb_number} (tried 7 selectors in 21s)")
-                return False
+                # Check for Shadow DOM
+                try:
+                    shadow_roots = self.page.evaluate("""
+                        () => {
+                            const findShadowRoots = (root = document.body) => {
+                                const shadows = [];
+                                root.querySelectorAll('*').forEach(el => {
+                                    if (el.shadowRoot) {
+                                        shadows.push(el.tagName);
+                                    }
+                                });
+                                return shadows;
+                            };
+                            return findShadowRoots();
+                        }
+                    """)
+                    if shadow_roots:
+                        self.logger.warning(f"[SNOW] Found Shadow DOM roots: {shadow_roots}")
+                        self.logger.info("[SNOW] Playwright should pierce these automatically")
+                    else:
+                        self.logger.info("[SNOW] No Shadow DOM detected")
+                except Exception as e:
+                    self.logger.error(f"[SNOW] Could not check for Shadow DOM: {e}")
+                
+                # Try ServiceNow's GlideForm API (JavaScript-based field access)
+                try:
+                    self.logger.info("[SNOW] Attempting ServiceNow GlideForm API...")
+                    glide_form_data = self.page.evaluate("""
+                        () => {
+                            if (typeof g_form !== 'undefined') {
+                                return {
+                                    hasGlideForm: true,
+                                    number: g_form.getValue('number'),
+                                    short_description: g_form.getValue('short_description'),
+                                    description: g_form.getValue('description')
+                                };
+                            }
+                            return {hasGlideForm: false};
+                        }
+                    """)
+                    
+                    if glide_form_data.get('hasGlideForm'):
+                        self.logger.info(f"[SNOW] ✓ GlideForm API available!")
+                        self.logger.info(f"[SNOW] Number: {glide_form_data.get('number')}")
+                        self.logger.info(f"[SNOW] Short desc: {glide_form_data.get('short_description', '')[:50]}...")
+                        # We can use GlideForm as fallback!
+                        self.use_glide_form = True
+                        form_found = True
+                    else:
+                        self.logger.warning("[SNOW] GlideForm API not available")
+                        self.use_glide_form = False
+                except Exception as e:
+                    self.logger.error(f"[SNOW] Error checking GlideForm API: {e}")
+                    self.use_glide_form = False
+                
+                # Save debug HTML
+                if not form_found:
+                    try:
+                        # Try to import DATA_DIR, if fails use current directory
+                        try:
+                            from app import DATA_DIR
+                        except:
+                            DATA_DIR = os.getcwd()
+                        debug_file = os.path.join(DATA_DIR, "snow_debug.html")
+                        html_content = self.page.content()
+                        with open(debug_file, "w", encoding="utf-8") as f:
+                            f.write(html_content)
+                        self.logger.info(f"[SNOW] Saved page HTML to: {debug_file}")
+                    except Exception as e:
+                        self.logger.warning(f"[SNOW] Could not save debug HTML: {e}")
+                    
+                    self.logger.error(f"[SNOW] Could not find form fields for {prb_number}")
+                    return False
             
-            # Form loaded successfully
+            self.logger.info(f"[SNOW] ✓ Successfully navigated to PRB {prb_number}")
             return self.login_check()
             
-        except TimeoutException:
-            self.driver.switch_to.default_content()
-            self.logger.error(f"Timeout loading PRB {prb_number}")
-            return False
         except Exception as e:
-            self.driver.switch_to.default_content()
-            self.logger.error(f"Error navigating to PRB {prb_number}: {e}")
+            self.logger.error(f"[SNOW] Error navigating to PRB {prb_number}: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return False
     
     def extract_prb_data(self):
@@ -176,19 +243,49 @@ class ServiceNowScraper:
             prb_data['problem_category'] = self._get_field_value('problem.u_problem_category')
             prb_data['detection'] = self._get_field_value('problem.u_dectection')
             
-            self.logger.info(f"Extracted PRB data: {prb_data.get('prb_number', 'Unknown')}")
+            self.logger.info(f"[SNOW] Extracted PRB data: {prb_data.get('prb_number', 'Unknown')}")
             return prb_data
             
         except Exception as e:
-            self.logger.error(f"Error extracting PRB data: {e}")
+            self.logger.error(f"[SNOW] Error extracting PRB data: {e}")
             return None
     
     def _get_field_value(self, field_id):
-        """Get value from a ServiceNow form field
-        
-        Uses CSS selectors to handle dotted IDs properly (By.ID doesn't work reliably)
-        Based on user's Chrome recording showing fields like 'problem.short_description'
         """
+        Get value from a ServiceNow form field using Playwright
+        
+        Playwright advantages over Selenium:
+        - Automatically pierces Shadow DOM
+        - Smart auto-waiting
+        - Better handling of modern web apps
+        
+        Args:
+            field_id: Field ID (e.g., 'problem.short_description')
+            
+        Returns:
+            str: Field value or empty string if not found
+        """
+        # If GlideForm API is available, use it as primary method
+        if hasattr(self, 'use_glide_form') and self.use_glide_form:
+            try:
+                # Extract field name from ID (remove 'problem.' prefix if present)
+                field_name = field_id.replace('problem.', '').replace('sys_display.problem.', '')
+                
+                value = self.page.evaluate(f"""
+                    () => {{
+                        if (typeof g_form !== 'undefined') {{
+                            return g_form.getValue('{field_name}');
+                        }}
+                        return null;
+                    }}
+                """)
+                
+                if value:
+                    self.logger.debug(f"[SNOW] Got value for {field_id} via GlideForm")
+                    return value
+            except Exception as e:
+                self.logger.debug(f"[SNOW] GlideForm failed for {field_id}: {e}")
+        
         # Try multiple variations of the field ID
         field_variations = [
             field_id,  # Original (e.g., "problem.short_description")
@@ -199,35 +296,44 @@ class ServiceNowScraper:
             short_id = field_id.replace('problem.', '', 1)
             field_variations.append(short_id)  # e.g., "short_description"
         
-        # If field has dots, also try with underscores (some ServiceNow configs)
+        # If field has dots, also try with underscores
         if '.' in field_id:
             underscore_id = field_id.replace('.', '_')
-            field_variations.append(underscore_id)  # e.g., "problem_short_description"
+            field_variations.append(underscore_id)
         
-        self.logger.debug(f"Looking for field: {field_id} (variations: {field_variations})")
+        self.logger.debug(f"[SNOW] Looking for field: {field_id} (variations: {field_variations})")
         
         for variation in field_variations:
             try:
-                # Use CSS selector for dotted IDs (more reliable than By.ID)
-                element = self.driver.find_element(By.CSS_SELECTOR, f"[id='{variation}']")
+                # Use Playwright's locator (auto-waits, pierces Shadow DOM)
+                locator = self.frame.locator(f"[id='{variation}']").first
                 
-                if element.tag_name == 'select':
-                    from selenium.webdriver.support.ui import Select
-                    select = Select(element)
-                    return select.first_selected_option.text
-                elif element.tag_name == 'textarea':
-                    return element.get_attribute('value') or ''
+                # Check if element exists (with short timeout)
+                try:
+                    locator.wait_for(state='attached', timeout=2000)
+                except:
+                    continue  # Element doesn't exist, try next variation
+                
+                # Get the element's tag name to determine how to extract value
+                tag_name = locator.evaluate('el => el.tagName.toLowerCase()')
+                
+                if tag_name == 'select':
+                    # For select elements, get selected option text
+                    value = locator.evaluate('el => el.options[el.selectedIndex]?.text || ""')
+                    return value
+                elif tag_name == 'textarea':
+                    # For textarea, use input_value()
+                    return locator.input_value()
                 else:
-                    return element.get_attribute('value') or ''
+                    # For input fields, use input_value()
+                    return locator.input_value()
                     
-            except NoSuchElementException:
-                continue  # Try next variation
             except Exception as e:
-                self.logger.debug(f"Error reading field {variation}: {e}")
+                self.logger.debug(f"[SNOW] Error reading field {variation}: {e}")
                 continue
         
         # None of the variations worked
-        self.logger.warning(f"Field not found: {field_id} (tried: {', '.join(field_variations)})")
+        self.logger.warning(f"[SNOW] Field not found: {field_id} (tried: {', '.join(field_variations)})")
         return ''
     
     def extract_incident_numbers(self):
@@ -235,61 +341,48 @@ class ServiceNowScraper:
         Navigate to Incidents tab and extract related INC numbers
         
         Returns:
-            list: List of dicts with INC data [{'number': 'INC0123456', 'summary': '...', ...}, ...]
+            list: List of dicts with INC data
         """
         incidents = []
         
         try:
-            incident_tab = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Incidents')]"))
-            )
-            incident_tab.click()
+            # Click Incidents tab (Playwright auto-waits for clickable)
+            self.frame.locator("text='Incidents'").first.click(timeout=10000)
+            
+            # Wait for incident table to load
             time.sleep(2)
             
-            self.driver.switch_to.frame(self.driver.find_element(By.ID, "gsft_main"))
+            # Find all incident rows
+            rows = self.frame.locator(".list_table tr").all()
             
-            incident_table = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "list_table"))
-            )
-            
-            rows = incident_table.find_elements(By.TAG_NAME, "tr")
-            
-            for row in rows[1:]:
+            for row in rows[1:]:  # Skip header
                 try:
-                    cells = row.find_elements(By.TAG_NAME, "td")
+                    cells = row.locator("td").all()
                     if len(cells) >= 2:
-                        inc_number_elem = cells[0].find_element(By.TAG_NAME, "a")
-                        inc_number = inc_number_elem.text.strip()
+                        inc_number = cells[0].locator("a").text_content().strip()
                         
                         inc_summary = ''
                         if len(cells) >= 3:
-                            inc_summary = cells[2].text.strip()
+                            inc_summary = cells[2].text_content().strip()
                         
                         if inc_number.startswith('INC'):
                             incidents.append({
                                 'number': inc_number,
                                 'summary': inc_summary
                             })
-                            self.logger.info(f"Found incident: {inc_number}")
+                            self.logger.info(f"[SNOW] Found incident: {inc_number}")
                             
                 except Exception as e:
-                    self.logger.warning(f"Error parsing incident row: {e}")
+                    self.logger.warning(f"[SNOW] Error parsing incident row: {e}")
                     continue
             
-            self.driver.switch_to.default_content()
-            
             if not incidents:
-                self.logger.warning("No incidents found in Incidents tab")
+                self.logger.warning("[SNOW] No incidents found in Incidents tab")
             
             return incidents
             
-        except TimeoutException:
-            self.logger.error("Timeout finding Incidents tab")
-            self.driver.switch_to.default_content()
-            return []
         except Exception as e:
-            self.logger.error(f"Error extracting incident numbers: {e}")
-            self.driver.switch_to.default_content()
+            self.logger.error(f"[SNOW] Error extracting incident numbers: {e}")
             return []
     
     def update_prb_problem_statement(self, prb_number, jira_key):
@@ -307,26 +400,27 @@ class ServiceNowScraper:
             if not self.navigate_to_prb(prb_number):
                 return False
             
-            problem_statement_field = self.driver.find_element(By.ID, "problem.short_description")
-            current_value = problem_statement_field.get_attribute('value')
+            # Find problem statement field
+            field_locator = self.frame.locator("[id='problem.short_description']").first
+            current_value = field_locator.input_value()
             
             if jira_key in current_value:
-                self.logger.info(f"Jira key {jira_key} already in Problem Statement")
+                self.logger.info(f"[SNOW] Jira key {jira_key} already in Problem Statement")
                 return True
             
             new_value = f"{current_value} - {jira_key}"
             
-            problem_statement_field.clear()
-            problem_statement_field.send_keys(new_value)
+            # Clear and fill (Playwright makes this easier)
+            field_locator.fill(new_value)
             
-            save_button = self.driver.find_element(By.ID, "sysverb_update")
-            save_button.click()
+            # Click save button
+            self.frame.locator("[id='sysverb_update']").click()
             
             time.sleep(2)
             
-            self.logger.info(f"Updated PRB {prb_number} with Jira key {jira_key}")
+            self.logger.info(f"[SNOW] Updated PRB {prb_number} with Jira key {jira_key}")
             return True
             
         except Exception as e:
-            self.logger.error(f"Error updating PRB {prb_number}: {e}")
+            self.logger.error(f"[SNOW] Error updating PRB {prb_number}: {e}")
             return False
