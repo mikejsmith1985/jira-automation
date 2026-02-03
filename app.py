@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.5.1"  # Fixed: Update process cleans up old PyInstaller temp folders
+APP_VERSION = "1.5.2"  # Comprehensive SNOW diagnostics - screenshots, timing, SAML handling
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -4441,7 +4441,23 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                     resultDiv.innerHTML = html;
                     addLog('success', `PRB ${prbNumber} validated successfully`);
                 } else {
-                    resultDiv.innerHTML = '<div style="background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px; border-radius: 4px;"><strong>❌ Validation Failed</strong><br>' + data.error + '</div>';
+                    let errorHtml = '<div style="background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px; border-radius: 4px;">';
+                    errorHtml += '<strong>❌ Validation Failed</strong><br>';
+                    errorHtml += data.error;
+                    
+                    // Show diagnostics path if available
+                    if (data.diagnostics_path) {
+                        errorHtml += '<br><br><small style="color: #666;">📁 Diagnostics (screenshots/logs): ' + data.diagnostics_path + '</small>';
+                    }
+                    if (data.hint) {
+                        errorHtml += '<br><small style="color: #666;">' + data.hint + '</small>';
+                    }
+                    if (data.current_url) {
+                        errorHtml += '<br><small style="color: #666;">📍 Current URL: ' + data.current_url + '</small>';
+                    }
+                    errorHtml += '</div>';
+                    
+                    resultDiv.innerHTML = errorHtml;
                     addLog('error', `PRB validation failed: ${data.error}`);
                 }
             } catch (error) {

@@ -6,9 +6,14 @@ Now using Playwright for better modern web app support and native Shadow DOM han
 import time
 import logging
 import os
+from datetime import datetime
 
 class ServiceNowScraper:
     """Scrapes data from ServiceNow Problem (PRB) tickets using Playwright"""
+    
+    # Constants
+    SAML_TIMEOUT_MS = 60000  # 60 seconds for SAML auth
+    ELEMENT_TIMEOUT_MS = 10000  # 10 seconds for elements
     
     def __init__(self, page, config):
         """
@@ -22,16 +27,122 @@ class ServiceNowScraper:
         self.config = config
         self.base_url = config.get('servicenow', {}).get('url', '').strip()
         self.logger = logging.getLogger(__name__)
+        self.start_time = None  # For timing logs
+        
+        # Setup diagnostics directory
+        try:
+            from app import DATA_DIR
+            self.data_dir = DATA_DIR
+        except:
+            self.data_dir = os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming', 'Waypoint')
+        
+        self.diagnostics_dir = os.path.join(self.data_dir, 'diagnostics')
+        os.makedirs(self.diagnostics_dir, exist_ok=True)
         
         # Log configuration for debugging
         self.logger.info(f"[SNOW] ServiceNowScraper initialized (Playwright)")
         # Normalize base_url - remove trailing slash to prevent double slashes
         self.base_url = self.base_url.rstrip('/') if self.base_url else ''
         self.logger.info(f"[SNOW] Base URL: '{self.base_url}'")
+        self.logger.info(f"[SNOW] Diagnostics dir: '{self.diagnostics_dir}'")
         if not self.base_url:
             self.logger.error("[SNOW] ERROR: ServiceNow URL is empty or not configured!")
             self.logger.error("[SNOW] Please configure ServiceNow URL in Integrations tab")
+    
+    def _elapsed(self):
+        """Get elapsed time since operation started"""
+        if self.start_time is None:
+            return "00:00.0"
+        elapsed = time.time() - self.start_time
+        mins = int(elapsed // 60)
+        secs = elapsed % 60
+        return f"{mins:02d}:{secs:05.2f}"
+    
+    def _log(self, message, level='info'):
+        """Log with timestamp"""
+        full_msg = f"[SNOW] [{self._elapsed()}] {message}"
+        if level == 'error':
+            self.logger.error(full_msg)
+        elif level == 'warning':
+            self.logger.warning(full_msg)
+        else:
+            self.logger.info(full_msg)
+    
+    def _capture_diagnostic_screenshot(self, prb_number, reason):
+        """Capture screenshot for debugging"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"prb_fail_{prb_number}_{timestamp}.png"
+            filepath = os.path.join(self.diagnostics_dir, filename)
+            self.page.screenshot(path=filepath)
+            self._log(f"Screenshot saved: {filepath}")
+            return filepath
+        except Exception as e:
+            self._log(f"Failed to capture screenshot: {e}", 'error')
+            return None
+    
+    def _capture_page_state(self, prb_number):
+        """Capture comprehensive page state for debugging"""
+        self._log("=== DIAGNOSTIC SNAPSHOT ===")
         
+        screenshot_path = None
+        
+        try:
+            # Current URL
+            current_url = self.page.url
+            self._log(f"URL: {current_url}")
+            
+            # Page title
+            title = self.page.title()
+            self._log(f"Title: {title}")
+            
+            # Screenshot
+            screenshot_path = self._capture_diagnostic_screenshot(prb_number, "failure")
+            
+            # Page content preview
+            content = self.page.content()
+            preview = content[:500].replace('\n', ' ').replace('\r', '')
+            self._log(f"Content preview: {preview}...")
+            
+            # Check for PRB number in content
+            prb_in_content = prb_number in content if prb_number else False
+            self._log(f"PRB in content: {'YES' if prb_in_content else 'NO'}")
+            
+            # Check for gsft_main iframe
+            try:
+                iframe_count = self.page.locator('#gsft_main').count()
+                self._log(f"gsft_main iframe: {'FOUND' if iframe_count > 0 else 'NOT FOUND'}")
+            except:
+                self._log("gsft_main iframe: CHECK FAILED")
+            
+            # Count input elements
+            try:
+                input_count = self.page.locator('input').count()
+                self._log(f"Input elements: {input_count}")
+            except:
+                pass
+            
+            # Check for common SAML/SSO indicators
+            url_lower = current_url.lower()
+            if 'okta' in url_lower:
+                self._log("⚠️ DETECTED: Okta SSO page")
+            if 'saml' in url_lower:
+                self._log("⚠️ DETECTED: SAML auth page")
+            if 'login' in url_lower:
+                self._log("⚠️ DETECTED: Login page")
+            
+            # Save full HTML for debugging
+            html_path = os.path.join(self.diagnostics_dir, f"prb_fail_{prb_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html")
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            self._log(f"HTML saved: {html_path}")
+            
+        except Exception as e:
+            self._log(f"Error capturing page state: {e}", 'error')
+        
+        self._log("=== END DIAGNOSTIC ===")
+        return screenshot_path
+    
     def login_check(self):
         """Check if logged into ServiceNow"""
         try:
@@ -72,7 +183,7 @@ class ServiceNowScraper:
     
     def navigate_to_prb(self, prb_number):
         """
-        Navigate to a specific PRB ticket
+        Navigate to a specific PRB ticket with comprehensive diagnostics
         
         Args:
             prb_number: The PRB number (e.g., 'PRB0123456')
@@ -80,193 +191,151 @@ class ServiceNowScraper:
         Returns:
             bool: True if navigation successful, False otherwise
         """
+        self.start_time = time.time()
+        screenshot_path = None
+        
         try:
             if not self.base_url:
-                raise ValueError("ServiceNow URL not configured")
+                raise ValueError("ServiceNow URL not configured. Please set it in Settings > Integrations.")
             
             prb_url = f"{self.base_url}/problem.do?sysparm_query=number={prb_number}"
-            self.logger.info(f"[SNOW] Navigating to PRB: {prb_url}")
+            self._log(f"Starting navigation to {prb_number}")
+            self._log(f"Target URL: {prb_url}")
+            self._log(f"Timeout: {self.SAML_TIMEOUT_MS}ms (for SAML/Okta)")
             
-            # Playwright's goto with networkidle waits for page to fully load
-            # This will wait through SAML redirects
-            self.page.goto(prb_url, wait_until='networkidle', timeout=30000)
-            
-            # After SAML redirect, we might be on the homepage, not the PRB page
-            # Check the final URL
-            final_url = self.page.url
-            self.logger.info(f"[SNOW] Page loaded, final URL: {final_url}")
-            
-            # If we got redirected away from the PRB page (SAML redirect to home)
-            if 'problem.do' not in final_url and prb_number not in final_url:
-                self.logger.warning(f"[SNOW] SAML redirect detected - landed on {final_url} instead of PRB page")
-                self.logger.info(f"[SNOW] Attempting to navigate to PRB again...")
-                
-                # Try navigating again - should work now that SAML auth is complete
-                self.page.goto(prb_url, wait_until='networkidle', timeout=30000)
-                final_url = self.page.url
-                self.logger.info(f"[SNOW] Second attempt - final URL: {final_url}")
-            
-            self.logger.info(f"[SNOW] Page loaded, checking for PRB...")
-            
-            # Quick check: Is PRB in page content?
-            page_content = self.page.content()
-            if prb_number not in page_content:
-                self.logger.error(f"[SNOW] PRB {prb_number} not found in page source")
-                self.logger.error(f"[SNOW] Current URL: {self.page.url}")
-                self.logger.error(f"[SNOW] This usually means:")
-                self.logger.error(f"[SNOW]   1. PRB doesn't exist or is misspelled")
-                self.logger.error(f"[SNOW]   2. SAML/SSO redirected to login or home page")
-                self.logger.error(f"[SNOW]   3. You don't have permission to view this PRB")
-                return False
-            
-            self.logger.info(f"[SNOW] PRB {prb_number} confirmed in page source")
-            
-            # Check if we're in an iframe context (ServiceNow often uses gsft_main)
-            # Playwright handles iframes more elegantly than Selenium
+            # === STEP 1: Initial navigation ===
+            self._log("Step 1: Initial page.goto...")
             try:
-                # Try to find the main iframe
-                frame = self.page.frame_locator('#gsft_main')
-                # Test if frame exists by trying to find body in it
-                frame.locator('body').wait_for(state='attached', timeout=5000)
-                self.logger.info("[SNOW] Found gsft_main iframe, using frame context")
-                self.frame = frame
-            except Exception:
-                self.logger.info("[SNOW] No gsft_main iframe, using main page context")
-                # Use main page as "frame"
-                self.frame = self.page
+                self.page.goto(prb_url, wait_until='networkidle', timeout=self.SAML_TIMEOUT_MS)
+            except Exception as e:
+                self._log(f"Initial navigation error: {e}", 'error')
+                # Don't fail yet - might be timeout during SAML
+                
+            current_url = self.page.url
+            self._log(f"Step 1 complete. Current URL: {current_url}")
             
-            # Try to find form fields with Playwright's smart waiting
-            # Playwright automatically pierces Shadow DOM and handles dynamic content!
-            form_found = False
+            # === STEP 2: Handle SAML redirect ===
+            if 'problem.do' not in current_url and prb_number not in current_url:
+                self._log("SAML redirect detected - not on PRB page yet")
+                
+                # Check if we're on an auth page
+                url_lower = current_url.lower()
+                if any(x in url_lower for x in ['okta', 'saml', 'login', 'sso', 'auth']):
+                    self._log(f"⚠️ Auth page detected: {current_url}")
+                    self._log("Waiting for authentication to complete...")
+                    
+                    # Wait for navigation away from auth page (up to 60s)
+                    try:
+                        self.page.wait_for_url(
+                            lambda url: 'okta' not in url.lower() and 'saml' not in url.lower() and 'login' not in url.lower(),
+                            timeout=self.SAML_TIMEOUT_MS
+                        )
+                        self._log(f"Auth complete. New URL: {self.page.url}")
+                    except Exception as e:
+                        self._log(f"Timeout waiting for auth: {e}", 'error')
+                        screenshot_path = self._capture_page_state(prb_number)
+                        return False
+                
+                # Navigate to PRB again now that auth should be complete
+                self._log("Step 2: Re-navigating to PRB after SAML...")
+                try:
+                    self.page.goto(prb_url, wait_until='networkidle', timeout=self.SAML_TIMEOUT_MS)
+                except Exception as e:
+                    self._log(f"Second navigation error: {e}", 'error')
+                    
+                current_url = self.page.url
+                self._log(f"Step 2 complete. Current URL: {current_url}")
             
-            # Try multiple selectors (Playwright will wait automatically)
-            selectors_to_try = [
-                "[id='problem.short_description']",
-                "[id='short_description']",
-                "[id='problem.description']",
-                "[id='description']",
+            # === STEP 3: Wait for PRB form elements ===
+            self._log("Step 3: Waiting for PRB form elements...")
+            
+            # Wait for specific form elements instead of just networkidle
+            form_selectors = [
                 "[id='problem.number']",
-                "[id='number']",
+                "[id='problem.short_description']",
+                "[id='sys_readonly.problem.number']",  # Read-only variant
+                "input[id*='problem']",  # Any input with 'problem' in ID
             ]
             
-            for selector in selectors_to_try:
+            form_found = False
+            for selector in form_selectors:
                 try:
-                    self.logger.info(f"[SNOW] Trying selector: {selector}")
-                    # Playwright waits automatically, timeout 3s per selector
-                    locator = self.frame.locator(selector).first
-                    locator.wait_for(state='attached', timeout=3000)
-                    self.logger.info(f"[SNOW] ✓ Found element: {selector}")
+                    self._log(f"Checking for element: {selector}")
+                    locator = self.page.locator(selector).first
+                    locator.wait_for(state='visible', timeout=self.ELEMENT_TIMEOUT_MS)
+                    self._log(f"✓ Found form element: {selector}")
                     form_found = True
                     break
-                except Exception as e:
-                    self.logger.debug(f"[SNOW] Selector {selector} not found: {e}")
+                except Exception:
                     continue
             
             if not form_found:
-                # Enhanced debugging: Use JavaScript to find ALL elements with IDs
-                self.logger.warning("[SNOW] Form fields not found with standard selectors")
-                self.logger.info("[SNOW] Running JavaScript debug to find all IDs on page...")
-                
+                # Try iframe
+                self._log("Form not found in main page, checking iframe...")
                 try:
-                    # Execute JavaScript to find all element IDs
-                    all_ids = self.page.evaluate("""
-                        () => {
-                            const elements = document.querySelectorAll('[id]');
-                            return Array.from(elements).slice(0, 50).map(el => ({
-                                id: el.id,
-                                tag: el.tagName,
-                                type: el.type || 'N/A',
-                                visible: el.offsetParent !== null
-                            }));
-                        }
-                    """)
-                    self.logger.warning(f"[SNOW] Found {len(all_ids)} elements with IDs:")
-                    for elem in all_ids[:20]:  # Log first 20
-                        self.logger.info(f"[SNOW]   - {elem['id']} ({elem['tag']}, visible={elem['visible']})")
-                except Exception as e:
-                    self.logger.error(f"[SNOW] Could not execute debug JavaScript: {e}")
-                
-                # Check for Shadow DOM
-                try:
-                    shadow_roots = self.page.evaluate("""
-                        () => {
-                            const findShadowRoots = (root = document.body) => {
-                                const shadows = [];
-                                root.querySelectorAll('*').forEach(el => {
-                                    if (el.shadowRoot) {
-                                        shadows.push(el.tagName);
-                                    }
-                                });
-                                return shadows;
-                            };
-                            return findShadowRoots();
-                        }
-                    """)
-                    if shadow_roots:
-                        self.logger.warning(f"[SNOW] Found Shadow DOM roots: {shadow_roots}")
-                        self.logger.info("[SNOW] Playwright should pierce these automatically")
-                    else:
-                        self.logger.info("[SNOW] No Shadow DOM detected")
-                except Exception as e:
-                    self.logger.error(f"[SNOW] Could not check for Shadow DOM: {e}")
-                
-                # Try ServiceNow's GlideForm API (JavaScript-based field access)
-                try:
-                    self.logger.info("[SNOW] Attempting ServiceNow GlideForm API...")
-                    glide_form_data = self.page.evaluate("""
-                        () => {
-                            if (typeof g_form !== 'undefined') {
-                                return {
-                                    hasGlideForm: true,
-                                    number: g_form.getValue('number'),
-                                    short_description: g_form.getValue('short_description'),
-                                    description: g_form.getValue('description')
-                                };
-                            }
-                            return {hasGlideForm: false};
-                        }
-                    """)
-                    
-                    if glide_form_data.get('hasGlideForm'):
-                        self.logger.info(f"[SNOW] ✓ GlideForm API available!")
-                        self.logger.info(f"[SNOW] Number: {glide_form_data.get('number')}")
-                        self.logger.info(f"[SNOW] Short desc: {glide_form_data.get('short_description', '')[:50]}...")
-                        # We can use GlideForm as fallback!
-                        self.use_glide_form = True
-                        form_found = True
-                    else:
-                        self.logger.warning("[SNOW] GlideForm API not available")
-                        self.use_glide_form = False
-                except Exception as e:
-                    self.logger.error(f"[SNOW] Error checking GlideForm API: {e}")
-                    self.use_glide_form = False
-                
-                # Save debug HTML
-                if not form_found:
-                    try:
-                        # Try to import DATA_DIR, if fails use current directory
+                    frame = self.page.frame_locator('#gsft_main')
+                    for selector in form_selectors:
                         try:
-                            from app import DATA_DIR
+                            locator = frame.locator(selector).first
+                            locator.wait_for(state='visible', timeout=5000)
+                            self._log(f"✓ Found form element in iframe: {selector}")
+                            form_found = True
+                            self.frame = frame
+                            break
                         except:
-                            DATA_DIR = os.getcwd()
-                        debug_file = os.path.join(DATA_DIR, "snow_debug.html")
-                        html_content = self.page.content()
-                        with open(debug_file, "w", encoding="utf-8") as f:
-                            f.write(html_content)
-                        self.logger.info(f"[SNOW] Saved page HTML to: {debug_file}")
-                    except Exception as e:
-                        self.logger.warning(f"[SNOW] Could not save debug HTML: {e}")
-                    
-                    self.logger.error(f"[SNOW] Could not find form fields for {prb_number}")
+                            continue
+                except Exception as e:
+                    self._log(f"Iframe check failed: {e}")
+            
+            if not form_found:
+                # Last resort: check if PRB number is anywhere in page content
+                self._log("Form elements not found, checking page content...")
+                content = self.page.content()
+                if prb_number in content:
+                    self._log(f"✓ PRB {prb_number} found in page content (form may still be loading)")
+                    form_found = True
+                    self.frame = self.page
+                else:
+                    self._log(f"✗ PRB {prb_number} NOT found in page content", 'error')
+                    screenshot_path = self._capture_page_state(prb_number)
                     return False
             
-            self.logger.info(f"[SNOW] ✓ Successfully navigated to PRB {prb_number}")
-            return self.login_check()
+            # === STEP 4: Final verification ===
+            self._log("Step 4: Final verification...")
+            
+            # Set frame context
+            if not hasattr(self, 'frame') or self.frame is None:
+                try:
+                    frame = self.page.frame_locator('#gsft_main')
+                    frame.locator('body').wait_for(state='attached', timeout=3000)
+                    self.frame = frame
+                    self._log("Using gsft_main iframe context")
+                except:
+                    self.frame = self.page
+                    self._log("Using main page context")
+            
+            # Check for GlideForm API
+            try:
+                glide_check = self.page.evaluate("""
+                    () => typeof g_form !== 'undefined' ? g_form.getValue('number') : null
+                """)
+                if glide_check:
+                    self._log(f"✓ GlideForm API available. PRB number: {glide_check}")
+                    self.use_glide_form = True
+                else:
+                    self.use_glide_form = False
+            except:
+                self.use_glide_form = False
+            
+            elapsed_total = time.time() - self.start_time
+            self._log(f"✓ Successfully navigated to PRB {prb_number} (total: {elapsed_total:.2f}s)")
+            return True
             
         except Exception as e:
-            self.logger.error(f"[SNOW] Error navigating to PRB {prb_number}: {e}")
+            self._log(f"Error navigating to PRB: {e}", 'error')
             import traceback
             self.logger.error(traceback.format_exc())
+            screenshot_path = self._capture_page_state(prb_number)
             return False
     
     def extract_prb_data(self):

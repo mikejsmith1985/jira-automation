@@ -4,6 +4,7 @@ Manages the workflow of creating Jira issues from ServiceNow PRBs
 """
 import logging
 import time
+import os
 from servicenow_scraper import ServiceNowScraper
 from jira_automator import JiraAutomator
 
@@ -25,27 +26,39 @@ class SnowJiraSync:
             prb_number: PRB number to validate
             
         Returns:
-            dict: {'success': bool, 'data': {...}, 'incidents': [...], 'error': str}
+            dict: {'success': bool, 'data': {...}, 'incidents': [...], 'error': str, 'diagnostics_path': str}
         """
         try:
             if not self.snow.navigate_to_prb(prb_number):
-                # Check if it's actually a login issue
+                # Build detailed error message
                 current_url = self.page.url
-                if 'login' in current_url.lower():
-                    error_msg = f'ServiceNow login required. Please log into ServiceNow first.'
+                url_lower = current_url.lower()
+                
+                # Determine specific error type
+                if any(x in url_lower for x in ['okta', 'saml', 'login', 'sso', 'auth']):
+                    error_msg = f'ServiceNow authentication required. Please complete login in the browser window, then try again.'
+                elif 'welcome' in url_lower or 'home' in url_lower or 'nav_to' in url_lower:
+                    error_msg = f'Landed on ServiceNow homepage instead of PRB page. This may be a session/redirect issue. Try again.'
                 else:
-                    error_msg = f'Could not load PRB {prb_number}. Check if the PRB number exists or try refreshing.'
+                    error_msg = f'Could not load PRB {prb_number}. Check the diagnostics for details.'
+                
+                # Get diagnostics path
+                diagnostics_path = self.snow.diagnostics_dir
                 
                 return {
                     'success': False,
-                    'error': error_msg
+                    'error': error_msg,
+                    'current_url': current_url,
+                    'diagnostics_path': diagnostics_path,
+                    'hint': f'Screenshots and logs saved to: {diagnostics_path}'
                 }
             
             prb_data = self.snow.extract_prb_data()
             if not prb_data:
                 return {
                     'success': False,
-                    'error': 'Failed to extract PRB data'
+                    'error': 'Failed to extract PRB data. The form may not have loaded correctly.',
+                    'diagnostics_path': self.snow.diagnostics_dir
                 }
             
             incidents = self.snow.extract_incident_numbers()
@@ -60,7 +73,8 @@ class SnowJiraSync:
             self.logger.error(f"Error validating PRB {prb_number}: {e}")
             return {
                 'success': False,
-                'error': str(e)
+                'error': str(e),
+                'diagnostics_path': getattr(self.snow, 'diagnostics_dir', None)
             }
     
     def create_jira_issues(self, prb_data, selected_inc):
