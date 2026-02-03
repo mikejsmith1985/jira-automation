@@ -36,11 +36,36 @@ class ServiceNowScraper:
         """Check if logged into ServiceNow"""
         try:
             current_url = self.page.url
-            # Only return False if explicitly on a login page
-            if 'login' in current_url.lower() and 'service-now.com' in current_url:
-                self.logger.warning("ServiceNow login page detected")
-                return False
-            return True  # Assume logged in if not on login page
+            
+            # Check for various login/auth pages
+            login_indicators = [
+                'login',
+                'sso',
+                'saml',
+                'oauth',
+                'auth',
+                'signin',
+                'logon'
+            ]
+            
+            url_lower = current_url.lower()
+            
+            # Check if on any auth-related page
+            for indicator in login_indicators:
+                if indicator in url_lower:
+                    self.logger.warning(f"ServiceNow authentication page detected ('{indicator}' in URL)")
+                    self.logger.warning(f"Current URL: {current_url}")
+                    return False
+            
+            # Also check for common SSO providers in URL
+            sso_providers = ['okta.com', 'login.microsoftonline.com', 'adfs', 'pingidentity', 'onelogin']
+            for provider in sso_providers:
+                if provider in url_lower:
+                    self.logger.warning(f"SSO provider detected: {provider}")
+                    self.logger.warning(f"Current URL: {current_url}")
+                    return False
+            
+            return True  # Assume logged in if not on auth page
         except Exception as e:
             self.logger.error(f"Error checking ServiceNow login: {e}")
             return True  # Don't fail on error, assume logged in
@@ -63,14 +88,35 @@ class ServiceNowScraper:
             self.logger.info(f"[SNOW] Navigating to PRB: {prb_url}")
             
             # Playwright's goto with networkidle waits for page to fully load
+            # This will wait through SAML redirects
             self.page.goto(prb_url, wait_until='networkidle', timeout=30000)
+            
+            # After SAML redirect, we might be on the homepage, not the PRB page
+            # Check the final URL
+            final_url = self.page.url
+            self.logger.info(f"[SNOW] Page loaded, final URL: {final_url}")
+            
+            # If we got redirected away from the PRB page (SAML redirect to home)
+            if 'problem.do' not in final_url and prb_number not in final_url:
+                self.logger.warning(f"[SNOW] SAML redirect detected - landed on {final_url} instead of PRB page")
+                self.logger.info(f"[SNOW] Attempting to navigate to PRB again...")
+                
+                # Try navigating again - should work now that SAML auth is complete
+                self.page.goto(prb_url, wait_until='networkidle', timeout=30000)
+                final_url = self.page.url
+                self.logger.info(f"[SNOW] Second attempt - final URL: {final_url}")
             
             self.logger.info(f"[SNOW] Page loaded, checking for PRB...")
             
             # Quick check: Is PRB in page content?
             page_content = self.page.content()
             if prb_number not in page_content:
-                self.logger.error(f"[SNOW] PRB {prb_number} not found in page source - wrong page?")
+                self.logger.error(f"[SNOW] PRB {prb_number} not found in page source")
+                self.logger.error(f"[SNOW] Current URL: {self.page.url}")
+                self.logger.error(f"[SNOW] This usually means:")
+                self.logger.error(f"[SNOW]   1. PRB doesn't exist or is misspelled")
+                self.logger.error(f"[SNOW]   2. SAML/SSO redirected to login or home page")
+                self.logger.error(f"[SNOW]   3. You don't have permission to view this PRB")
                 return False
             
             self.logger.info(f"[SNOW] PRB {prb_number} confirmed in page source")
