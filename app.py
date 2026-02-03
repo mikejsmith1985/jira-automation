@@ -3691,6 +3691,35 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             </div>
 
             <div class="card">
+                <h2>ServiceNow Integration</h2>
+                <div class="input-group">
+                    <label>ServiceNow URL</label>
+                    <input type="text" id="setting-snow-url" placeholder="https://yourcompany.service-now.com">
+                </div>
+                <div class="input-group">
+                    <label>Jira Project Key (for PRB sync)</label>
+                    <input type="text" id="setting-snow-jira-project" placeholder="PROJ">
+                </div>
+                <button onclick="saveSnowConfig()" class="btn-success">💾 Save ServiceNow Config</button>
+                <button onclick="testSnowConnection()" class="btn-secondary" style="margin-left: 10px;">
+                    🔗 Test Connection
+                </button>
+                
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #DFE1E6;">
+                    <h3 style="margin-bottom: 10px;">PRB Validation Test</h3>
+                    <p style="color: #5E6C84; font-size: 13px; margin-bottom: 10px;">
+                        Test PRB validation by entering a PRB number below. The browser will auto-launch if needed.
+                    </p>
+                    <div class="input-group">
+                        <label>PRB Number</label>
+                        <input type="text" id="test-prb-number" placeholder="PRB0123456">
+                    </div>
+                    <button onclick="validateTestPRB()" class="btn-success">✅ Validate PRB</button>
+                    <div id="prb-validation-result" style="margin-top: 15px; display: none;"></div>
+                </div>
+            </div>
+
+            <div class="card">
                 <h2>Advanced</h2>
                 <button onclick="editConfig()" class="btn-secondary">📝 Edit config.yaml</button>
                 <button onclick="viewLogs()" class="btn-secondary" style="margin-left: 10px;">
@@ -4234,6 +4263,12 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                     config.github?.organization || '';
                 document.getElementById('setting-github-repos').value = 
                     (config.github?.repositories || []).join(', ');
+                
+                // Load ServiceNow config
+                document.getElementById('setting-snow-url').value = 
+                    config.servicenow?.url || '';
+                document.getElementById('setting-snow-jira-project').value = 
+                    config.servicenow?.jira_project || '';
                     
             } catch (error) {
                 showStatus('Failed to load settings: ' + error.message, 'error');
@@ -4283,6 +4318,122 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             }
             
             await initializeBrowser();
+        }
+
+        // ServiceNow configuration
+        async function saveSnowConfig() {
+            const snowUrl = document.getElementById('setting-snow-url').value;
+            const jiraProject = document.getElementById('setting-snow-jira-project').value;
+            
+            if (!snowUrl || !jiraProject) {
+                showStatus('Please enter both ServiceNow URL and Jira Project Key', 'error');
+                return;
+            }
+            
+            showStatus('Saving ServiceNow configuration...', 'info');
+            
+            try {
+                const response = await fetch('/api/snow-jira/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        url: snowUrl,
+                        jira_project: jiraProject
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('✅ ServiceNow configuration saved!', 'success');
+                    addLog('success', 'ServiceNow configured');
+                } else {
+                    showStatus('❌ Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Failed to save: ' + error.message, 'error');
+            }
+        }
+
+        async function testSnowConnection() {
+            const snowUrl = document.getElementById('setting-snow-url').value;
+            if (!snowUrl) {
+                showStatus('Please configure ServiceNow URL first', 'error');
+                return;
+            }
+            
+            showStatus('Testing ServiceNow connection...', 'info');
+            addLog('info', 'Testing ServiceNow connection...');
+            
+            try {
+                const response = await fetch('/api/snow-jira/test-connection', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('✅ ServiceNow connection successful!', 'success');
+                    addLog('success', 'ServiceNow connection test passed');
+                } else {
+                    showStatus('❌ Connection failed: ' + data.error, 'error');
+                    addLog('error', `ServiceNow test failed: ${data.error}`);
+                }
+            } catch (error) {
+                showStatus('❌ Test failed: ' + error.message, 'error');
+                addLog('error', `ServiceNow test error: ${error.message}`);
+            }
+        }
+
+        async function validateTestPRB() {
+            const prbNumber = document.getElementById('test-prb-number').value.trim();
+            const resultDiv = document.getElementById('prb-validation-result');
+            
+            if (!prbNumber) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '<div style="background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px; border-radius: 4px;">Please enter a PRB number</div>';
+                return;
+            }
+            
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div style="background: #DEEBFF; border-left: 4px solid #0052CC; padding: 10px; border-radius: 4px;">⏳ Validating PRB ' + prbNumber + '... (browser will auto-launch if needed)</div>';
+            addLog('info', `Validating PRB ${prbNumber}...`);
+            
+            try {
+                const response = await fetch('/api/snow-jira/validate-prb', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        prb_number: prbNumber
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const prbData = data.data || {};
+                    const incidents = data.incidents || [];
+                    
+                    let html = '<div style="background: #E3FCEF; border-left: 4px solid #00875A; padding: 10px; border-radius: 4px;">';
+                    html += '<strong>✅ PRB Validation Successful</strong><br>';
+                    html += '<div style="margin-top: 10px;">';
+                    html += `<strong>Number:</strong> ${prbData.number || prbNumber}<br>`;
+                    html += `<strong>Short Description:</strong> ${prbData.short_description || 'N/A'}<br>`;
+                    html += `<strong>State:</strong> ${prbData.state || 'N/A'}<br>`;
+                    html += `<strong>Priority:</strong> ${prbData.priority || 'N/A'}<br>`;
+                    if (incidents.length > 0) {
+                        html += `<strong>Related Incidents:</strong> ${incidents.join(', ')}<br>`;
+                    }
+                    html += '</div></div>';
+                    
+                    resultDiv.innerHTML = html;
+                    addLog('success', `PRB ${prbNumber} validated successfully`);
+                } else {
+                    resultDiv.innerHTML = '<div style="background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px; border-radius: 4px;"><strong>❌ Validation Failed</strong><br>' + data.error + '</div>';
+                    addLog('error', `PRB validation failed: ${data.error}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div style="background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px; border-radius: 4px;"><strong>❌ Error</strong><br>' + error.message + '</div>';
+                addLog('error', `PRB validation error: ${error.message}`);
+            }
         }
 
         // Log management
