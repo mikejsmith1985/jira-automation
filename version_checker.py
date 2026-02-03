@@ -30,6 +30,21 @@ class VersionChecker:
             self.current_exe = sys.executable
         else:
             self.current_exe = os.path.abspath(__file__)
+        
+        # Check if running from temp directory
+        self.running_from_temp = self._is_running_from_temp()
+    
+    def _is_running_from_temp(self):
+        """Check if executable is running from a temporary directory"""
+        temp_paths = [
+            tempfile.gettempdir().lower(),
+            os.path.join(os.path.expanduser('~'), 'appdata', 'local', 'temp').lower(),
+            'temp\\',
+            '\\temp\\'
+        ]
+        
+        exe_path_lower = self.current_exe.lower()
+        return any(temp_path in exe_path_lower for temp_path in temp_paths)
     
     def check_for_update(self, use_cache=True):
         """
@@ -245,6 +260,13 @@ class VersionChecker:
             }
         """
         try:
+            # Check if running from temp directory
+            if self.running_from_temp:
+                return {
+                    'success': False,
+                    'error': 'Cannot update: Application is running from a temporary directory. Please SAVE the executable to a permanent location (e.g., Desktop or Program Files) and run it from there. Then try updating again.'
+                }
+            
             # Create temp directory for download
             temp_dir = tempfile.gettempdir()
             temp_exe = os.path.join(temp_dir, 'waypoint_update.exe')

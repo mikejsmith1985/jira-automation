@@ -922,6 +922,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             # Check for updates (no cache for manual checks)
             result = checker.check_for_update(use_cache=False)
             
+            # Add warning if running from temp directory
+            if checker.running_from_temp:
+                result['warning'] = '⚠️ Running from temporary directory. Updates will not persist. Please SAVE the executable to a permanent location (Desktop, Program Files, etc.) before updating.'
+            
             # Always return success=True, errors are in update_info
             return {'success': True, 'update_info': result}
             
