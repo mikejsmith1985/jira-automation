@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.4.9"  # Fixed: PAT persistence - token syncs from server config on load
+APP_VERSION = "1.5.0"  # Fixed: PAT persistence + PRB validation debugging
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -4389,15 +4389,25 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
         }
 
         async function validateTestPRB() {
-            const prbNumber = document.getElementById('test-prb-number').value.trim();
+            console.log('[DEBUG] validateTestPRB called');
+            
+            const prbNumber = document.getElementById('test-prb-number')?.value?.trim();
             const resultDiv = document.getElementById('prb-validation-result');
+            
+            console.log('[DEBUG] PRB number:', prbNumber);
+            console.log('[DEBUG] resultDiv:', resultDiv);
+            
+            if (!resultDiv) {
+                console.error('[DEBUG] prb-validation-result element not found!');
+                return;
+            }
             
             if (!prbNumber) {
                 resultDiv.style.display = 'block';
                 resultDiv.innerHTML = '<div style="background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px; border-radius: 4px;">Please enter a PRB number</div>';
                 return;
             }
-            
+                
             resultDiv.style.display = 'block';
             resultDiv.innerHTML = '<div style="background: #DEEBFF; border-left: 4px solid #0052CC; padding: 10px; border-radius: 4px;">⏳ Validating PRB ' + prbNumber + '... (browser will auto-launch if needed)</div>';
             addLog('info', `Validating PRB ${prbNumber}...`);
@@ -4435,6 +4445,7 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                     addLog('error', `PRB validation failed: ${data.error}`);
                 }
             } catch (error) {
+                console.error('[DEBUG] validateTestPRB fetch error:', error);
                 resultDiv.innerHTML = '<div style="background: #FFEBE6; border-left: 4px solid #DE350B; padding: 10px; border-radius: 4px;"><strong>❌ Error</strong><br>' + error.message + '</div>';
                 addLog('error', `PRB validation error: ${error.message}`);
             }
