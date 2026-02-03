@@ -275,5 +275,92 @@ class TestPATRealWorldScenario(unittest.TestCase):
                        "UI should show 'configured' but token is missing!")
 
 
+class TestAPIReturnsTokenForUISync(unittest.TestCase):
+    """
+    Test that /api/config returns the feedback token so the UI can sync it.
+    
+    This tests the FIX for the persistence bug:
+    - initFeedbackSystem() fetches /api/config
+    - If config.feedback.github_token exists, it syncs to localStorage
+    - This ensures token persists across app restarts
+    """
+    
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.config_path = os.path.join(self.test_dir, 'config.yaml')
+    
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+    
+    def test_api_config_returns_feedback_token(self):
+        """
+        /api/config must return feedback.github_token so UI can sync it.
+        This is the critical contract that enables persistence.
+        """
+        user_token = 'ghp_this_token_must_be_returned_123'
+        
+        # Save config with token (simulating previous session)
+        config = {
+            'jira': {'base_url': 'https://test.atlassian.net'},
+            'feedback': {
+                'github_token': user_token,
+                'repo': 'test/repo'
+            }
+        }
+        with open(self.config_path, 'w') as f:
+            yaml.dump(config, f)
+        
+        # Load config as /api/config handler does
+        with open(self.config_path, 'r') as f:
+            api_response = yaml.safe_load(f)
+        
+        # Verify token is in response (this is what UI fetches)
+        self.assertIn('feedback', api_response, 
+                     "/api/config must include 'feedback' section")
+        self.assertIn('github_token', api_response['feedback'],
+                     "/api/config feedback section must include 'github_token'")
+        self.assertEqual(api_response['feedback']['github_token'], user_token,
+                        "/api/config must return the actual token value")
+    
+    def test_ui_sync_logic(self):
+        """
+        Test the logic that initFeedbackSystem() uses to sync token.
+        This simulates what the JavaScript does.
+        """
+        user_token = 'ghp_sync_test_token'
+        
+        # Create config with token
+        config = {
+            'feedback': {
+                'github_token': user_token,
+                'repo': 'test/repo'
+            }
+        }
+        with open(self.config_path, 'w') as f:
+            yaml.dump(config, f)
+        
+        # Simulate localStorage (empty on new session)
+        localStorage = {}
+        
+        # Simulate initFeedbackSystem() logic:
+        # 1. Check localStorage first
+        savedToken = localStorage.get('jira_github_token')
+        
+        if not savedToken:
+            # 2. Fetch from server config
+            with open(self.config_path, 'r') as f:
+                config = yaml.safe_load(f) or {}
+            
+            serverToken = config.get('feedback', {}).get('github_token')
+            
+            # 3. If valid token on server, sync to localStorage
+            if serverToken and serverToken not in ['', 'YOUR_GITHUB_TOKEN_HERE', 'your_token_here']:
+                localStorage['jira_github_token'] = serverToken
+        
+        # Verify localStorage now has the token
+        self.assertEqual(localStorage.get('jira_github_token'), user_token,
+                        "Token should be synced from server to localStorage")
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

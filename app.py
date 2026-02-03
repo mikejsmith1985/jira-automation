@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.4.8"  # Fixed: Update script now visible with diagnostic logging
+APP_VERSION = "1.4.9"  # Fixed: PAT persistence - token syncs from server config on load
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -5276,16 +5276,39 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
             }).catch(() => {});  // Silent fail
         }
 
-        function initFeedbackSystem() {
-            // Check if token exists in localStorage (like forge-terminal)
+        async function initFeedbackSystem() {
+            // First check localStorage (fastest path)
             const savedToken = localStorage.getItem('jira_github_token');
             if (savedToken) {
                 hasGitHubToken = true;
                 console.log('GitHub token found in localStorage');
-            } else {
-                hasGitHubToken = false;
-                console.log('No GitHub token - feedback will save locally only');
+                return;
             }
+            
+            // No token in localStorage - check if saved in server config (persisted across restarts)
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    const serverToken = config?.feedback?.github_token;
+                    
+                    // If server has a valid token, sync it to localStorage
+                    if (serverToken && 
+                        serverToken !== '' && 
+                        serverToken !== 'YOUR_GITHUB_TOKEN_HERE' &&
+                        serverToken !== 'your_token_here') {
+                        localStorage.setItem('jira_github_token', serverToken);
+                        hasGitHubToken = true;
+                        console.log('GitHub token loaded from server config and synced to localStorage');
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to check server for feedback token:', error);
+            }
+            
+            hasGitHubToken = false;
+            console.log('No GitHub token - feedback will save locally only');
         }
 
         function openFeedbackModal() {
@@ -5398,8 +5421,29 @@ Status: "todo", "inprogress", "review", "blocked", "done"</pre>
                 
                 if (response.ok) {
                     const userData = await response.json();
-                    // Save to localStorage (like forge-terminal does)
+                    
+                    // Save to localStorage (for current session)
                     localStorage.setItem('jira_github_token', token);
+                    
+                    // Also save to server config (for persistence across app restarts)
+                    try {
+                        const saveResponse = await fetch('/api/feedback/save-token', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                token: token,
+                                repo: 'mikejsmith1985/jira-automation'
+                            })
+                        });
+                        if (!saveResponse.ok) {
+                            console.warn('Failed to save token to server config');
+                        } else {
+                            console.log('Token saved to server config for persistence');
+                        }
+                    } catch (saveError) {
+                        console.warn('Error saving token to server:', saveError);
+                    }
+                    
                     showTokenStatus(`✅ Token validated for user: ${userData.login}`, 'success');
                     hasGitHubToken = true;
                     setTimeout(() => {
