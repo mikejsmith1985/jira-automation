@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.5.0"  # Fixed: PAT persistence + PRB validation debugging
+APP_VERSION = "1.5.1"  # Fixed: Update process cleans up old PyInstaller temp folders
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
