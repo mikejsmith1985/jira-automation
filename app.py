@@ -23,8 +23,9 @@ from csv_importer import JiraCSVImporter
 
 # Extension system imports
 from extensions import get_extension_manager, ExtensionCapability
-from extensions.jira import JiraExtension
-from extensions.github import GitHubExtension
+# TODO: Re-enable after migrating to Playwright
+# from extensions.jira import JiraExtension
+# from extensions.github import GitHubExtension
 from extensions.reporting import EnhancedInsightsEngine, ReportGenerator
 from storage import get_data_store, get_config_manager
 
@@ -66,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.4.1"  # Hotfix: Fixed 'driver' undefined error in PRB validation
+APP_VERSION = "1.4.2"  # Fixed: Disabled Selenium extensions causing startup crash
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -2152,25 +2153,26 @@ class SyncHandler(BaseHTTPRequestHandler):
         """Initialize the extension system"""
         global extension_manager, data_store, config_manager, driver
         
-        if not extension_manager:
-            extension_manager = get_extension_manager()
-            data_store = get_data_store()
-            config_manager = get_config_manager()
-            
-            jira_ext = JiraExtension()
-            github_ext = GitHubExtension()
-            
-            extension_manager.register_extension(jira_ext)
-            extension_manager.register_extension(github_ext)
-            
-            if driver:
-                jira_config = config_manager.get_extension_config('jira')
-                if not jira_config:
-                    jira_config = {
-                        'base_url': config_manager.get('jira.base_url', ''),
-                        'project_key': config_manager.get('jira.project_key', '')
-                    }
-                jira_ext.initialize(jira_config, driver=driver)
+        # TODO: Re-enable extensions after Playwright migration
+        # if not extension_manager:
+        #     extension_manager = get_extension_manager()
+        #     data_store = get_data_store()
+        #     config_manager = get_config_manager()
+        #     
+        #     jira_ext = JiraExtension()
+        #     github_ext = GitHubExtension()
+        #     
+        #     extension_manager.register_extension(jira_ext)
+        #     extension_manager.register_extension(github_ext)
+        #     
+        #     if driver:
+        #         jira_config = config_manager.get_extension_config('jira')
+        #         if not jira_config:
+        #             jira_config = {
+        #                 'base_url': config_manager.get('jira.base_url', ''),
+        #                 'project_key': config_manager.get('jira.project_key', '')
+        #             }
+        #         jira_ext.initialize(jira_config, driver=driver)
 
     # ========== ServiceNow Integration Handlers ==========
     
