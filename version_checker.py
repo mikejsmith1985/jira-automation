@@ -341,32 +341,54 @@ class VersionChecker:
             
             # Create update script (batch file on Windows)
             update_script = os.path.join(temp_dir, 'update_waypoint.bat')
+            update_log = os.path.join(temp_dir, 'waypoint_update.log')
             
             with open(update_script, 'w') as f:
                 f.write('@echo off\n')
+                f.write(f':: Waypoint Auto-Updater\n')
+                f.write(f':: Log file: {update_log}\n')
+                f.write(f'echo [{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] Update started > "{update_log}"\n')
+                f.write(f'echo Source: {temp_exe} >> "{update_log}"\n')
+                f.write(f'echo Target: {self.current_exe} >> "{update_log}"\n')
+                f.write(f'\n')
                 f.write(f'echo Waiting for Waypoint to close...\n')
-                f.write(f'timeout /t 2 /nobreak >nul\n')
+                f.write(f'echo Waiting 3 seconds... >> "{update_log}"\n')
+                f.write(f'timeout /t 3 /nobreak >nul\n')
+                f.write(f'\n')
                 f.write(f'echo Applying update...\n')
-                f.write(f'copy /Y "{temp_exe}" "{self.current_exe}"\n')
-                f.write(f'if errorlevel 1 (\n')
-                f.write(f'    echo Update failed! Press any key to exit.\n')
+                f.write(f'echo Copying new executable... >> "{update_log}"\n')
+                f.write(f'copy /Y "{temp_exe}" "{self.current_exe}" >> "{update_log}" 2>&1\n')
+                f.write(f'set COPY_ERROR=%errorlevel%\n')
+                f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
+                f.write(f'\n')
+                f.write(f'if %COPY_ERROR% neq 0 (\n')
+                f.write(f'    echo ERROR: Update failed! Exit code: %COPY_ERROR% >> "{update_log}"\n')
+                f.write(f'    echo Update failed! Check {update_log} for details.\n')
+                f.write(f'    echo Press any key to exit...\n')
                 f.write(f'    pause >nul\n')
-                f.write(f'    exit\n')
+                f.write(f'    exit /b %COPY_ERROR%\n')
                 f.write(f')\n')
+                f.write(f'\n')
+                f.write(f'echo Update successful! >> "{update_log}"\n')
                 f.write(f'echo Update complete! Restarting Waypoint...\n')
                 f.write(f'timeout /t 1 /nobreak >nul\n')
                 f.write(f'start "" "{self.current_exe}"\n')
-                f.write(f'del "{temp_exe}"\n')
-                f.write(f'del "%~f0"\n')  # Delete the batch file itself
+                f.write(f'echo Application restarted >> "{update_log}"\n')
+                f.write(f'\n')
+                f.write(f':: Cleanup\n')
+                f.write(f'del "{temp_exe}" 2>nul\n')
+                f.write(f'echo [{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] Update complete >> "{update_log}"\n')
+                f.write(f'del "%~f0" 2>nul\n')  # Delete the batch file itself
             
-            # Start the update script and exit
+            # Start the update script - SHOW WINDOW for debugging
+            # User can see what's happening
             subprocess.Popen(['cmd', '/c', update_script], 
-                           creationflags=subprocess.CREATE_NO_WINDOW,
+                           creationflags=0,  # Show window!
                            close_fds=True)
             
             return {
                 'success': True,
-                'message': 'Update downloaded. Application will restart...',
+                'message': f'Update downloaded. Watch the console window that appears.\n\nIf update fails, check: {update_log}',
                 'restart_required': True
             }
             

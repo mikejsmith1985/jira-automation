@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.4.2"  # Fixed: Disabled Selenium extensions causing startup crash
+APP_VERSION = "1.4.8"  # Fixed: Update script now visible with diagnostic logging
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
