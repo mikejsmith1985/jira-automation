@@ -2492,10 +2492,14 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def handle_validate_prb(self, data):
         """Validate a PRB and extract data"""
+        # Ensure diagnostics directory exists early (before any errors)
+        diagnostics_dir = os.path.join(DATA_DIR, 'diagnostics')
+        os.makedirs(diagnostics_dir, exist_ok=True)
+        
         # Auto-launch browser if not initialized
         success, error = self._ensure_browser_initialized()
         if not success:
-            return {'success': False, 'error': error}
+            return {'success': False, 'error': error, 'diagnostics_path': diagnostics_dir}
         
         global page
         
@@ -2514,7 +2518,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             result = snow_sync.validate_prb(prb_number)
             return result
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            return {'success': False, 'error': str(e), 'diagnostics_path': diagnostics_dir}
     
     def handle_snow_jira_sync(self, data):
         """Execute ServiceNow to Jira sync workflow"""

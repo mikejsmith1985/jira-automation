@@ -169,6 +169,13 @@ async function validatePRB() {
             createBtn: !!createBtn
         });
         
+        // Null checks for DOM elements
+        if (!resultEl) {
+            console.error('[Waypoint] prb-validation-result element not found!');
+            showNotification('UI error: validation result element not found', 'error');
+            return;
+        }
+        
         if (!prbNumber) {
             showNotification('Please enter a PRB number', 'error');
             return;
@@ -231,16 +238,20 @@ async function validatePRB() {
             
         } else {
             console.error('[Waypoint] PRB validation failed:', result.error);
-            resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">${result.error}</div>`;
-            createBtn.disabled = true;
+            if (resultEl) {
+                resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">${result.error}</div>`;
+            }
+            if (createBtn) createBtn.disabled = true;
             showNotification(result.error, 'error');
         }
     } catch (error) {
         console.error('[Waypoint] validatePRB() exception:', error);
         console.error('[Waypoint] Error stack:', error.stack);
-        resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">Failed to validate PRB: ${error.message}</div>`;
-        createBtn.disabled = true;
-        showNotification('Failed to validate PRB', 'error');
+        if (resultEl) {
+            resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">Failed to validate PRB: ${error.message}</div>`;
+        }
+        if (createBtn) createBtn.disabled = true;
+        showNotification('Failed to validate PRB: ' + error.message, 'error');
     }
     } catch (error) {
         console.error('[Waypoint] validatePRB() outer exception:', error);
