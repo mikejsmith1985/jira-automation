@@ -647,6 +647,27 @@ class SyncHandler(BaseHTTPRequestHandler):
         except Exception as e:
             safe_print(f"⚠️ Failed to save session: {e}")
     
+    def _ensure_browser_initialized(self):
+        """Ensure browser is initialized, launch if needed. Returns (success, error_message)"""
+        global page
+        
+        if page is not None:
+            # Browser already initialized
+            return (True, None)
+        
+        try:
+            safe_print("🚀 Auto-launching browser...")
+            storage_state_path = self._init_playwright_browser()
+            
+            # Navigate to blank page
+            page.goto('about:blank')
+            
+            safe_print("✅ Browser initialized successfully")
+            return (True, None)
+        except Exception as e:
+            safe_print(f"❌ Failed to initialize browser: {e}")
+            return (False, f"Failed to initialize browser: {str(e)}")
+    
     def handle_sync_now(self):
         """Run sync immediately"""
         global sync_engine, is_syncing
@@ -2237,14 +2258,12 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def handle_test_snow_connection(self):
         """Test ServiceNow connection with comprehensive error handling"""
-        global page
+        # Auto-launch browser if not initialized
+        success, error = self._ensure_browser_initialized()
+        if not success:
+            return {'success': False, 'error': error}
         
-        # Check 1: Browser initialized
-        if page is None or page.is_closed():
-            return {
-                'success': False,
-                'error': 'Browser not open. Please open Jira browser first to initialize Playwright.'
-            }
+        global page
         
         try:
             # Check 2: Load config
@@ -2467,10 +2486,12 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def handle_validate_prb(self, data):
         """Validate a PRB and extract data"""
-        global page
+        # Auto-launch browser if not initialized
+        success, error = self._ensure_browser_initialized()
+        if not success:
+            return {'success': False, 'error': error}
         
-        if page is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first.'}
+        global page
         
         try:
             prb_number = data.get('prb_number', '').strip()
@@ -2491,10 +2512,12 @@ class SyncHandler(BaseHTTPRequestHandler):
     
     def handle_snow_jira_sync(self, data):
         """Execute ServiceNow to Jira sync workflow"""
-        global page
+        # Auto-launch browser if not initialized
+        success, error = self._ensure_browser_initialized()
+        if not success:
+            return {'success': False, 'error': error}
         
-        if page is None:
-            return {'success': False, 'error': 'Browser not open. Please open Jira browser first.'}
+        global page
         
         try:
             prb_number = data.get('prb_number', '').strip()
