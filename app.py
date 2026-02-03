@@ -66,7 +66,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.4.0"  # Phase 5: Playwright migration complete - cleanup done
+APP_VERSION = "1.4.1"  # Hotfix: Fixed 'driver' undefined error in PRB validation
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
