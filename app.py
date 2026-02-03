@@ -2453,7 +2453,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             diagnostics.append("--- RECENT LOGS (last 500 lines) ---")
             if os.path.exists(log_file):
                 try:
-                    with open(log_file, 'r', encoding='utf-8') as f:
+                    with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
                         lines = f.readlines()
                     
                     # Get last 500 lines

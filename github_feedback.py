@@ -251,7 +251,7 @@ class LogCapture:
             cutoff_time = datetime.now() - timedelta(minutes=minutes)
             
             recent_logs = []
-            with open(self.log_file, 'r', encoding='utf-8') as f:
+            with open(self.log_file, 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     # Try to parse timestamp from log line
                     try:
