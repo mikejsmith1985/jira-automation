@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.9"  # Fix: Container-based SNOW field extraction (read-only + edit modes)
+APP_VERSION = "2.1.0"  # Fix: Null checks in validatePRB + container-based extraction
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""

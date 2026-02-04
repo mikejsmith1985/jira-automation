@@ -188,40 +188,45 @@ async function validatePRB() {
             currentPRBData = result.data;
             
             // Display PRB details
-            const detailsHTML = `
-                <p><strong>PRB:</strong> ${result.data.prb_number || 'N/A'}</p>
-                <p><strong>Summary:</strong> ${result.data.short_description || 'N/A'}</p>
-                <p><strong>Priority:</strong> ${result.data.priority || 'N/A'}</p>
-            `;
-            document.getElementById('prb-details').innerHTML = detailsHTML;
+            const prbDetails = document.getElementById('prb-details');
+            if (prbDetails) {
+                const detailsHTML = `
+                    <p><strong>PRB:</strong> ${result.data.prb_number || 'N/A'}</p>
+                    <p><strong>Summary:</strong> ${result.data.short_description || 'N/A'}</p>
+                    <p><strong>Priority:</strong> ${result.data.priority || 'N/A'}</p>
+                `;
+                prbDetails.innerHTML = detailsHTML;
+            }
             
             // Handle incident selection
             const incSelection = document.getElementById('inc-selection');
             const incList = document.getElementById('inc-list');
             
-            if (result.incidents && result.incidents.length > 0) {
-                incSelection.style.display = 'block';
-                incList.innerHTML = '';
-                
-                result.incidents.forEach((inc, idx) => {
-                    const radio = document.createElement('label');
-                    radio.style.cssText = 'display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: var(--bg-primary); border-radius: 4px;';
-                    radio.innerHTML = `
-                        <input type="radio" name="incident-select" value="${inc.number}" ${idx === 0 ? 'checked' : ''} onchange="selectIncident('${inc.number}')">
-                        <span style="font-weight: 600;">${inc.number}</span>
-                        <span style="color: var(--text-secondary); font-size: 12px;">${inc.summary || 'No summary'}</span>
-                    `;
-                    incList.appendChild(radio);
-                });
-                
-                // Auto-select first one
-                selectedIncident = result.incidents[0].number;
-                if (createBtn) createBtn.disabled = false;
-                
-            } else {
-                incSelection.style.display = 'block';
-                incList.innerHTML = '<span style="color: #FF991F;">⚠️ No incidents found in Incidents tab</span>';
-                if (createBtn) createBtn.disabled = true;
+            if (incSelection && incList) {
+                if (result.incidents && result.incidents.length > 0) {
+                    incSelection.style.display = 'block';
+                    incList.innerHTML = '';
+                    
+                    result.incidents.forEach((inc, idx) => {
+                        const radio = document.createElement('label');
+                        radio.style.cssText = 'display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: var(--bg-primary); border-radius: 4px;';
+                        radio.innerHTML = `
+                            <input type="radio" name="incident-select" value="${inc.number}" ${idx === 0 ? 'checked' : ''} onchange="selectIncident('${inc.number}')">
+                            <span style="font-weight: 600;">${inc.number}</span>
+                            <span style="color: var(--text-secondary); font-size: 12px;">${inc.summary || 'No summary'}</span>
+                        `;
+                        incList.appendChild(radio);
+                    });
+                    
+                    // Auto-select first one
+                    selectedIncident = result.incidents[0].number;
+                    if (createBtn) createBtn.disabled = false;
+                    
+                } else {
+                    incSelection.style.display = 'block';
+                    incList.innerHTML = '<span style="color: #FF991F;">⚠️ No incidents found in Incidents tab</span>';
+                    if (createBtn) createBtn.disabled = true;
+                }
             }
             
             showNotification('PRB validated successfully!');
