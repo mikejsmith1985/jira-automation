@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.4"  # Fix: Snow page link no longer reopens Waypoint when URL not set
+APP_VERSION = "2.0.5"  # Fix: Replicate Forge-Terminal update pattern (simple & reliable)
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""

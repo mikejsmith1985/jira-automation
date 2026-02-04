@@ -256,7 +256,7 @@ class VersionChecker:
     
     def download_and_apply_update(self, download_url, progress_callback=None):
         """
-        Download and apply an update
+        Download and apply an update using Forge-Terminal pattern (simple & reliable)
         
         Args:
             download_url: URL to download .exe from
@@ -278,25 +278,19 @@ class VersionChecker:
                     'error': 'Cannot update: Application is running from a temporary directory. Please SAVE the executable to a permanent location (e.g., Desktop or Program Files) and run it from there. Then try updating again.'
                 }
             
-            # Create temp directory for download
+            # Download to temp file
             temp_dir = tempfile.gettempdir()
             temp_exe = os.path.join(temp_dir, 'waypoint_update.exe')
             
-            if progress_callback:
-                progress_callback(0, 0, 'Downloading update...')
-            
-            # Download the file with progress tracking
+            # Build request headers
             headers = {
-                'User-Agent': 'Jira-Automation-Updater'
+                'Accept': 'application/octet-stream',
+                'User-Agent': 'Waypoint-Updater'
             }
             
             if self.token:
-                # Always use token if available (private repo requirement)
-                headers['Authorization'] = f'token {self.token}'
-                
-                # If using API URL (contains api.github.com), we MUST use Accept header
-                if 'api.github.com' in download_url:
-                    headers['Accept'] = 'application/octet-stream'
+                if download_url.startswith('https://api.github.com'):
+                    headers['Authorization'] = f'token {self.token}'
                     self.logger.info("Using API endpoint for private repo download")
 
             self.logger.info(f"Downloading from: {download_url}")
@@ -348,174 +342,15 @@ class VersionChecker:
                             progress_callback(downloaded, total_size, f'Downloading... {downloaded // 1024}KB / {total_size // 1024}KB')
             
             if progress_callback:
-                progress_callback(total_size, total_size, 'Download complete. Preparing to restart...')
+                progress_callback(total_size, total_size, 'Download complete. Applying update...')
             
-            # Determine if this is a ZIP (folder-based) or EXE (legacy) update
-            is_zip_update = download_url.lower().endswith('.zip') or 'Waypoint.zip' in download_url
+            # Apply update using Forge-Terminal pattern (simple file operations)
+            result = self.apply_update_forge_pattern(temp_exe)
             
-            # Create update script (batch file on Windows)
-            update_script = os.path.join(temp_dir, 'update_waypoint.bat')
-            update_log = os.path.join(temp_dir, 'waypoint_update.log')
+            if result['success'] and progress_callback:
+                progress_callback(total_size, total_size, 'Update applied! Please restart Waypoint.')
             
-            with open(update_script, 'w') as f:
-                f.write('@echo off\n')
-                f.write(f':: Waypoint Auto-Updater\n')
-                f.write(f':: Log file: {update_log}\n')
-                f.write(f'echo [{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] Update started > "{update_log}"\n')
-                f.write(f'echo Source: {temp_exe} >> "{update_log}"\n')
-                f.write(f'echo Target: {self.current_exe} >> "{update_log}"\n')
-                f.write(f'echo Update type: {"ZIP (folder)" if is_zip_update else "EXE (legacy)"} >> "{update_log}"\n')
-                f.write(f'\n')
-                
-                f.write(f'echo Waiting for Waypoint to close...\n')
-                f.write(f'echo Waiting 5 seconds for app to fully exit... >> "{update_log}"\n')
-                f.write(f'timeout /t 5 /nobreak >nul\n')
-                f.write(f'\n')
-                # Kill any remaining waypoint processes to avoid conflicts
-                f.write(f'echo Checking for orphan processes... >> "{update_log}"\n')
-                f.write(f'taskkill /F /IM waypoint.exe >nul 2>&1\n')
-                f.write(f'timeout /t 2 /nobreak >nul\n')
-                f.write(f'\n')
-                
-                if is_zip_update:
-                    # ZIP/folder-based update (v2.0+)
-                    # Get the folder containing waypoint.exe
-                    app_folder = os.path.dirname(self.current_exe)
-                    extract_folder = os.path.join(temp_dir, 'waypoint_update_extract')
-                    
-                    f.write(f'echo === ZIP-based update (v2.0+) === >> "{update_log}"\n')
-                    f.write(f'echo Extracting ZIP to temp folder... >> "{update_log}"\n')
-                    f.write(f'echo Extracting update...\n')
-                    
-                    # Use PowerShell to extract (more reliable than tar)
-                    f.write(f'powershell -Command "Expand-Archive -Path \\"{temp_exe}\\" -DestinationPath \\"{extract_folder}\\" -Force" >> "{update_log}" 2>&1\n')
-                    f.write(f'if %errorlevel% neq 0 (\n')
-                    f.write(f'    echo ERROR: Failed to extract ZIP >> "{update_log}"\n')
-                    f.write(f'    echo Extraction failed! Check {update_log}\n')
-                    f.write(f'    pause\n')
-                    f.write(f'    exit /b 1\n')
-                    f.write(f')\n')
-                    f.write(f'\n')
-                    
-                    f.write(f'echo Applying update...\n')
-                    f.write(f'echo Copying new files to: {app_folder} >> "{update_log}"\n')
-                    
-                    # Copy the extracted waypoint folder contents to app folder
-                    # The ZIP contains a 'waypoint' folder, so we copy its contents
-                    f.write(f'xcopy /E /Y /Q "{extract_folder}\\waypoint\\*" "{app_folder}\\" >> "{update_log}" 2>&1\n')
-                    f.write(f'set COPY_ERROR=%errorlevel%\n')
-                    f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
-                    f.write(f'\n')
-                    f.write(f'if %COPY_ERROR% neq 0 (\n')
-                    f.write(f'    echo ERROR: Update failed! Exit code: %COPY_ERROR% >> "{update_log}"\n')
-                    f.write(f'    echo Update failed! Check {update_log} for details.\n')
-                    f.write(f'    pause\n')
-                    f.write(f'    exit /b %COPY_ERROR%\n')
-                    f.write(f')\n')
-                    f.write(f'\n')
-                    
-                    # Cleanup extracted folder
-                    f.write(f'echo Cleaning up temp files... >> "{update_log}"\n')
-                    f.write(f'rd /s /q "{extract_folder}" 2>nul\n')
-                else:
-                    # Legacy single-EXE update (v1.x and v2.0.1+)
-                    temp_path = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Windows\\Temp'))
-                    
-                    f.write(f'echo === Single EXE update === >> "{update_log}"\n')
-                    
-                    # AGGRESSIVE CLEANUP: Kill all waypoint processes first
-                    f.write(f'echo Killing any remaining waypoint processes... >> "{update_log}"\n')
-                    f.write(f'taskkill /F /IM waypoint.exe >nul 2>&1\n')
-                    f.write(f'timeout /t 3 /nobreak >nul\n')
-                    f.write(f'\n')
-                    
-                    # Clean up ALL _MEI* folders BEFORE copy
-                    f.write(f'echo Cleaning up ALL PyInstaller temp folders... >> "{update_log}"\n')
-                    f.write(f'echo This may take a moment...\n')
-                    
-                    # Use PowerShell for more reliable cleanup with retries
-                    cleanup_script = f'''
-$tempPath = "{temp_path}"
-$meiDirs = Get-ChildItem -Path $tempPath -Directory -Filter "_MEI*" -ErrorAction SilentlyContinue
-$count = ($meiDirs | Measure-Object).Count
-Write-Output "Found $count _MEI* folders to clean"
-foreach ($dir in $meiDirs) {{
-    $attempts = 0
-    $success = $false
-    while (-not $success -and $attempts -lt 3) {{
-        try {{
-            Remove-Item -Path $dir.FullName -Recurse -Force -ErrorAction Stop
-            Write-Output "Removed: $($dir.Name)"
-            $success = $true
-        }} catch {{
-            $attempts++
-            Start-Sleep -Seconds 1
-        }}
-    }}
-    if (-not $success) {{ Write-Output "WARN: Could not remove $($dir.Name)" }}
-}}
-'''
-                    # Write cleanup as single line for batch execution
-                    f.write(f'powershell -Command "{cleanup_script.replace(chr(10), " ").replace(chr(13), "")}" >> "{update_log}" 2>&1\n')
-                    f.write(f'timeout /t 2 /nobreak >nul\n')
-                    f.write(f'\n')
-                    
-                    # Copy new EXE with retries
-                    f.write(f'echo Applying update (attempt 1)...\n')
-                    f.write(f'echo Copying new executable... >> "{update_log}"\n')
-                    f.write(f'copy /Y "{temp_exe}" "{self.current_exe}" >> "{update_log}" 2>&1\n')
-                    f.write(f'set COPY_ERROR=%errorlevel%\n')
-                    f.write(f'\n')
-                    
-                    # Retry on failure
-                    f.write(f'if %COPY_ERROR% neq 0 (\n')
-                    f.write(f'    echo First copy failed, retrying after cleanup... >> "{update_log}"\n')
-                    f.write(f'    timeout /t 3 /nobreak >nul\n')
-                    f.write(f'    taskkill /F /IM waypoint.exe >nul 2>&1\n')
-                    f.write(f'    timeout /t 2 /nobreak >nul\n')
-                    f.write(f'    echo Retry copy... >> "{update_log}"\n')
-                    f.write(f'    copy /Y "{temp_exe}" "{self.current_exe}" >> "{update_log}" 2>&1\n')
-                    f.write(f'    set COPY_ERROR=%errorlevel%\n')
-                    f.write(f')\n')
-                    f.write(f'\n')
-                    f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
-                    f.write(f'if %COPY_ERROR% neq 0 (\n')
-                    f.write(f'    echo ERROR: Update failed after retry! Exit code: %COPY_ERROR% >> "{update_log}"\n')
-                    f.write(f'    echo Update failed! Check {update_log} for details.\n')
-                    f.write(f'    pause\n')
-                    f.write(f'    exit /b %COPY_ERROR%\n')
-                    f.write(f')\n')
-                    f.write(f'\n')
-                    
-                    # Post-copy cleanup
-                    f.write(f'echo Post-update cleanup... >> "{update_log}"\n')
-                    f.write(f'for /d %%i in ("{temp_path}\\_MEI*") do rd /s /q "%%i" 2>nul\n')
-                
-                f.write(f'\n')
-                f.write(f'echo Update successful! >> "{update_log}"\n')
-                f.write(f'echo Update complete! Restarting Waypoint...\n')
-                f.write(f'timeout /t 2 /nobreak >nul\n')
-                f.write(f'\n')
-                f.write(f'echo Starting new version... >> "{update_log}"\n')
-                f.write(f'start "" "{self.current_exe}"\n')
-                f.write(f'echo Application restarted >> "{update_log}"\n')
-                f.write(f'\n')
-                f.write(f':: Cleanup downloaded update\n')
-                f.write(f'del "{temp_exe}" 2>nul\n')
-                f.write(f'echo [{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] Update complete >> "{update_log}"\n')
-                f.write(f'del "%~f0" 2>nul\n')  # Delete the batch file itself
-            
-            # Start the update script - SHOW WINDOW for debugging
-            # User can see what's happening
-            subprocess.Popen(['cmd', '/c', update_script], 
-                           creationflags=0,  # Show window!
-                           close_fds=True)
-            
-            return {
-                'success': True,
-                'message': f'Update downloaded. Watch the console window that appears.\n\nIf update fails, check: {update_log}',
-                'restart_required': True
-            }
+            return result
             
         except Exception as e:
             self.logger.error(f"Error downloading/applying update: {e}")
@@ -524,6 +359,75 @@ foreach ($dir in $meiDirs) {{
                 'error': str(e)
             }
     
+    def apply_update_forge_pattern(self, temp_exe):
+        """
+        Apply update using Forge-Terminal pattern (simple & reliable)
+        
+        Forge-Terminal approach (Go):
+            oldPath := currentPath + ".old"
+            os.Remove(oldPath)                     // Remove old backup
+            os.Rename(currentPath, oldPath)         // Backup current
+            copyFile(newBinaryPath, currentPath)    // Install new
+            os.Remove(newBinaryPath)                // Cleanup temp
+        
+        This is MUCH simpler than batch scripts and works reliably.
+        """
+        try:
+            current_exe = self.current_exe
+            backup_exe = current_exe + '.old'
+            
+            self.logger.info(f"[Forge Pattern] Applying update...")
+            self.logger.info(f"  Current: {current_exe}")
+            self.logger.info(f"  Backup:  {backup_exe}")
+            self.logger.info(f"  New:     {temp_exe}")
+            
+            # Step 1: Remove old backup if exists
+            if os.path.exists(backup_exe):
+                self.logger.info(f"[Forge Pattern] Removing old backup...")
+                try:
+                    os.remove(backup_exe)
+                except Exception as e:
+                    self.logger.warning(f"Could not remove old backup: {e}")
+                    # Not critical, continue
+            
+            # Step 2: Rename current to backup
+            self.logger.info(f"[Forge Pattern] Backing up current executable...")
+            os.rename(current_exe, backup_exe)
+            
+            # Step 3: Copy new binary to current location
+            self.logger.info(f"[Forge Pattern] Installing new version...")
+            import shutil
+            shutil.copy2(temp_exe, current_exe)
+            
+            # Step 4: Cleanup temp file
+            self.logger.info(f"[Forge Pattern] Cleaning up temp file...")
+            os.remove(temp_exe)
+            
+            self.logger.info(f"[Forge Pattern] ✅ Update applied successfully!")
+            
+            return {
+                'success': True,
+                'message': 'Update applied successfully! Please close and restart Waypoint to use the new version.',
+                'restart_required': True,
+                'backup_location': backup_exe
+            }
+            
+        except Exception as e:
+            self.logger.error(f"[Forge Pattern] ❌ Update failed: {e}")
+            
+            # Try to restore backup if we renamed but failed to copy
+            if not os.path.exists(current_exe) and os.path.exists(backup_exe):
+                try:
+                    self.logger.info(f"[Forge Pattern] Restoring backup...")
+                    os.rename(backup_exe, current_exe)
+                    self.logger.info(f"[Forge Pattern] Backup restored")
+                except Exception as restore_err:
+                    self.logger.error(f"[Forge Pattern] Failed to restore backup: {restore_err}")
+            
+            return {
+                'success': False,
+                'error': f'Update failed: {str(e)}. If Waypoint won\'t start, rename {backup_exe} to {current_exe}'
+            }
     def get_current_version(self):
         """Get the current version string"""
         return self.current_version
