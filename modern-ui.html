@@ -686,6 +686,49 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Bookmarklet Hub -->
+                    <div class="card" style="margin-top: 20px;">
+                        <div class="card-header">
+                            <h3>🔖 Bookmarklet Hub</h3>
+                        </div>
+                        <div style="padding: 20px;">
+                            <p style="margin-bottom: 15px; color: var(--text-secondary);">
+                                Use this bookmarklet to extract data from web pages. Works with ServiceNow, Jira, and more.
+                            </p>
+                            
+                            <div class="form-group">
+                                <label>Current Mode</label>
+                                <select id="bookmarklet-mode" class="input-field" onchange="changeBookmarkletMode()">
+                                    <option value="prb-extract">PRB Extract (ServiceNow)</option>
+                                    <option value="jira-scrape">Jira Issue Scrape</option>
+                                </select>
+                                <small class="text-secondary">Select what the bookmarklet should do when clicked</small>
+                            </div>
+                            
+                            <div style="margin-top: 20px;">
+                                <label style="font-weight: 600; display: block; margin-bottom: 10px;">📥 Install Bookmarklet</label>
+                                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">
+                                    Drag this link to your bookmarks bar:
+                                </p>
+                                <div style="background: var(--background); border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center;">
+                                    <a id="bookmarklet-link" href="#" style="font-size: 16px; font-weight: 600; color: var(--primary); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--surface); border-radius: 6px; border: 1px solid var(--primary);">
+                                        🚀 Waypoint
+                                    </a>
+                                </div>
+                                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
+                                    Or copy the bookmarklet code: <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="copyBookmarkletCode()">📋 Copy Code</button>
+                                </p>
+                            </div>
+                            
+                            <div style="margin-top: 20px; padding: 15px; background: var(--background); border-radius: 8px;">
+                                <label style="font-weight: 600; display: block; margin-bottom: 10px;">📊 Last Received Data</label>
+                                <div id="bookmarklet-last-data" style="font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 150px; overflow-y: auto; color: var(--text-secondary);">
+                                    No data received yet. Use the bookmarklet on a ServiceNow or Jira page.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </div>
         </main>

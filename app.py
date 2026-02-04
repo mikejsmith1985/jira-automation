@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.1"  # Reverted to single EXE with improved update cleanup
+APP_VERSION = "2.0.2"  # Added Bookmarklet Hub for reliable SNOW data extraction
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -95,6 +95,10 @@ log_capture = LogCapture(LOG_FILE)
 version_checker = None  # Version update checker
 browser_opened = False  # Flag to prevent double-opening
 
+# Bookmarklet Hub state
+bookmarklet_mode = 'prb-extract'  # Current action mode: prb-extract, jira-scrape, custom
+bookmarklet_last_data = None  # Last data received from bookmarklet
+
 # Extension system globals
 extension_manager = None
 data_store = None
@@ -108,6 +112,18 @@ class SyncHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         """Suppress default logging"""
         pass
+    
+    def _send_cors_headers(self):
+        """Send CORS headers for bookmarklet cross-origin requests"""
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+    
+    def do_OPTIONS(self):
+        """Handle preflight CORS requests from bookmarklet"""
+        self.send_response(200)
+        self._send_cors_headers()
+        self.end_headers()
     
     def do_GET(self):
         """Handle GET requests"""
@@ -152,6 +168,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             self._handle_list_releases()
         elif self.path == '/api/snow-jira/config':
             self._handle_get_snow_config()
+        elif self.path == '/api/bookmarklet/action':
+            self._handle_bookmarklet_action()
+        elif self.path == '/api/bookmarklet/script':
+            self._handle_bookmarklet_script()
         else:
             self.send_response(404)
             self.end_headers()
@@ -379,11 +399,16 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self.handle_validate_prb(data)
             elif self.path == '/api/snow-jira/sync':
                 response = self.handle_snow_jira_sync(data)
+            elif self.path == '/api/bookmarklet/data':
+                response = self.handle_bookmarklet_data(data)
+            elif self.path == '/api/bookmarklet/mode':
+                response = self.handle_bookmarklet_mode(data)
             else:
                 response = {'success': False, 'error': 'Unknown endpoint'}
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self._send_cors_headers()  # Add CORS for bookmarklet
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         except Exception as e:
@@ -2549,6 +2574,186 @@ class SyncHandler(BaseHTTPRequestHandler):
             return result
         except Exception as e:
             return {'success': False, 'error': str(e)}
+    
+    # ========== Bookmarklet Hub Endpoints ==========
+    
+    def _handle_bookmarklet_action(self):
+        """Return current bookmarklet mode/action (called by bookmarklet)"""
+        global bookmarklet_mode
+        
+        response = {
+            'mode': bookmarklet_mode,
+            'version': APP_VERSION,
+            'actions': {
+                'prb-extract': {
+                    'name': 'Extract PRB',
+                    'description': 'Extract PRB data from ServiceNow',
+                    'target': 'ServiceNow Problem Record page'
+                },
+                'jira-scrape': {
+                    'name': 'Scrape Jira Issue',
+                    'description': 'Extract issue data from Jira',
+                    'target': 'Jira Issue page'
+                }
+            }
+        }
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode())
+    
+    def _handle_bookmarklet_script(self):
+        """Return the universal bookmarklet JavaScript"""
+        
+        # Universal bookmarklet that fetches action from Waypoint
+        script = '''javascript:(async function(){
+    const WAYPOINT='http://localhost:8500';
+    try{
+        /* Get current action from Waypoint */
+        const actionResp=await fetch(WAYPOINT+'/api/bookmarklet/action');
+        if(!actionResp.ok)throw new Error('Waypoint not running');
+        const action=await actionResp.json();
+        
+        let data={mode:action.mode,url:location.href,timestamp:new Date().toISOString()};
+        
+        /* Execute mode-specific extraction */
+        if(action.mode==='prb-extract'){
+            /* ServiceNow PRB extraction */
+            const frame=document.querySelector('iframe[name="gsft_main"]');
+            const doc=frame?frame.contentDocument:document;
+            
+            const getVal=(id)=>{
+                const el=doc.querySelector('#'+id.replace(/\\./g,'\\\\.'));
+                return el?(el.value||el.textContent||'').trim():'';
+            };
+            const getText=(id)=>{
+                const el=doc.querySelector('#'+id.replace(/\\./g,'\\\\.'));
+                return el?(el.textContent||'').trim():'';
+            };
+            
+            data.prb={
+                number:getVal('sys_readonly.problem.number')||getText('problem.number'),
+                short_description:getVal('problem.short_description'),
+                description:getVal('problem.description'),
+                state:getText('sys_display.problem.state'),
+                priority:getText('sys_display.problem.priority'),
+                assigned_to:getText('sys_display.problem.assigned_to'),
+                assignment_group:getText('sys_display.problem.assignment_group'),
+                category:getText('sys_display.problem.category'),
+                opened_at:getVal('sys_readonly.problem.opened_at')||getText('problem.opened_at'),
+                resolved_at:getVal('sys_readonly.problem.resolved_at'),
+                close_notes:getVal('problem.close_notes')
+            };
+            
+            /* Extract related incidents table */
+            data.incidents=[];
+            const table=doc.querySelector('[id*="related_incidents"]')||doc.querySelector('.list2_body');
+            if(table){
+                const rows=table.querySelectorAll('tr');
+                rows.forEach(r=>{
+                    const link=r.querySelector('a[href*="incident.do"]');
+                    if(link){
+                        data.incidents.push({
+                            number:link.textContent.trim(),
+                            short_description:(r.cells[2]||{}).textContent||''
+                        });
+                    }
+                });
+            }
+        }
+        else if(action.mode==='jira-scrape'){
+            /* Jira issue extraction */
+            data.jira={
+                key:document.querySelector('[data-testid="issue.views.issue-base.foundation.breadcrumbs.current-issue.item"]')?.textContent||
+                    location.pathname.match(/[A-Z]+-\\d+/)?.[0]||'',
+                summary:document.querySelector('[data-testid="issue.views.issue-base.foundation.summary.heading"]')?.textContent||
+                    document.querySelector('#summary-val')?.textContent||'',
+                status:document.querySelector('[data-testid="issue.views.issue-base.foundation.status.status-field-wrapper"]')?.textContent||
+                    document.querySelector('#status-val')?.textContent||''
+            };
+        }
+        
+        /* Send data to Waypoint */
+        const resp=await fetch(WAYPOINT+'/api/bookmarklet/data',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(data)
+        });
+        const result=await resp.json();
+        
+        if(result.success){
+            alert('✅ Data sent to Waypoint!\\n\\n'+
+                (data.prb?'PRB: '+data.prb.number:'Issue: '+(data.jira?.key||'Unknown'))+'\\n'+
+                'Mode: '+action.mode);
+        }else{
+            alert('❌ Error: '+result.error);
+        }
+    }catch(e){
+        alert('❌ Waypoint Error\\n\\n'+e.message+'\\n\\nMake sure Waypoint is running on localhost:8500');
+    }
+})();'''
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/javascript')
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(script.encode())
+    
+    def handle_bookmarklet_data(self, data):
+        """Receive data from bookmarklet"""
+        global bookmarklet_last_data
+        
+        safe_print(f"[Bookmarklet] Received data: mode={data.get('mode')}, url={data.get('url')}")
+        
+        bookmarklet_last_data = data
+        
+        # Process based on mode
+        mode = data.get('mode', 'unknown')
+        
+        if mode == 'prb-extract':
+            prb = data.get('prb', {})
+            if prb.get('number'):
+                safe_print(f"[Bookmarklet] PRB extracted: {prb.get('number')}")
+                safe_print(f"[Bookmarklet] Description: {prb.get('short_description', '')[:50]}...")
+                safe_print(f"[Bookmarklet] Incidents: {len(data.get('incidents', []))}")
+                return {
+                    'success': True,
+                    'message': f"PRB {prb.get('number')} received with {len(data.get('incidents', []))} incidents",
+                    'data': data
+                }
+            else:
+                return {'success': False, 'error': 'No PRB number found on page'}
+        
+        elif mode == 'jira-scrape':
+            jira = data.get('jira', {})
+            if jira.get('key'):
+                safe_print(f"[Bookmarklet] Jira issue extracted: {jira.get('key')}")
+                return {
+                    'success': True,
+                    'message': f"Issue {jira.get('key')} received",
+                    'data': data
+                }
+            else:
+                return {'success': False, 'error': 'No Jira issue key found on page'}
+        
+        return {'success': True, 'message': 'Data received', 'data': data}
+    
+    def handle_bookmarklet_mode(self, data):
+        """Set the current bookmarklet mode"""
+        global bookmarklet_mode
+        
+        new_mode = data.get('mode', 'prb-extract')
+        valid_modes = ['prb-extract', 'jira-scrape', 'custom']
+        
+        if new_mode not in valid_modes:
+            return {'success': False, 'error': f'Invalid mode. Valid modes: {valid_modes}'}
+        
+        bookmarklet_mode = new_mode
+        safe_print(f"[Bookmarklet] Mode changed to: {bookmarklet_mode}")
+        
+        return {'success': True, 'mode': bookmarklet_mode}
 
 
 # HTML Template (embedded)

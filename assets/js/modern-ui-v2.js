@@ -1974,3 +1974,98 @@ window.openMappingModal = openMappingModal;
 window.closeMappingModal = closeMappingModal;
 window.applyMapping = applyMapping;
 window.processCSV = processCSV;
+
+/* ============================================================================
+   Bookmarklet Hub
+   ============================================================================ */
+
+let bookmarkletCode = null;
+
+async function initBookmarklet() {
+    try {
+        // Fetch the bookmarklet script from server
+        const response = await fetch('/api/bookmarklet/script');
+        if (response.ok) {
+            bookmarkletCode = await response.text();
+            
+            // Set the bookmarklet link href
+            const link = document.getElementById('bookmarklet-link');
+            if (link) {
+                link.href = bookmarkletCode;
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showNotification('Drag this link to your bookmarks bar!', 'info');
+                });
+            }
+            console.log('[Waypoint] Bookmarklet initialized');
+        }
+    } catch (error) {
+        console.error('[Waypoint] Failed to load bookmarklet:', error);
+    }
+}
+
+async function changeBookmarkletMode() {
+    const mode = document.getElementById('bookmarklet-mode')?.value || 'prb-extract';
+    
+    try {
+        const response = await fetch('/api/bookmarklet/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: mode })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Bookmarklet mode changed to: ${mode}`, 'success');
+        } else {
+            showNotification(`Failed to change mode: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('[Waypoint] Mode change error:', error);
+        showNotification('Failed to change bookmarklet mode', 'error');
+    }
+}
+
+function copyBookmarkletCode() {
+    if (bookmarkletCode) {
+        navigator.clipboard.writeText(bookmarkletCode).then(() => {
+            showNotification('Bookmarklet code copied to clipboard!', 'success');
+        }).catch(() => {
+            // Fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = bookmarkletCode;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showNotification('Bookmarklet code copied!', 'success');
+        });
+    } else {
+        showNotification('Bookmarklet not loaded yet', 'error');
+    }
+}
+
+// Poll for bookmarklet data updates
+let lastBookmarkletTimestamp = null;
+
+async function checkBookmarkletData() {
+    try {
+        const response = await fetch('/api/bookmarklet/action');
+        if (!response.ok) return;
+        
+        // The action endpoint doesn't return last data, but we can use the data endpoint
+        // For now, we'll update on tab switch - this is just a placeholder
+    } catch (error) {
+        // Silently fail - Waypoint might not be running
+    }
+}
+
+// Initialize bookmarklet on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initBookmarklet, 500); // Delay to let other init complete
+});
+
+// Export functions
+window.changeBookmarkletMode = changeBookmarkletMode;
+window.copyBookmarkletCode = copyBookmarkletCode;
