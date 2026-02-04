@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.7"  # Fix: Auto-restart after update (replicate Forge-Terminal restart logic)
+APP_VERSION = "2.0.8"  # Fix: Improved PRB number extraction + added diagnostics
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -2670,8 +2670,17 @@ class SyncHandler(BaseHTTPRequestHandler):
                 return el?(el.textContent||'').trim():'';
             };
             
+            /* Try multiple ID patterns for PRB number */
+            const prbNumber=
+                getVal('sys_readonly.problem.number')||
+                getText('problem.number')||
+                getVal('problem.number')||
+                getText('sys_readonly.problem.number')||
+                /* Try from URL if form fields fail */
+                (location.href.match(/PRB\\d+/)?.[0])||'';
+            
             data.prb={
-                number:getVal('sys_readonly.problem.number')||getText('problem.number'),
+                number:prbNumber,
                 short_description:getVal('problem.short_description'),
                 description:getVal('problem.description'),
                 state:getText('sys_display.problem.state'),
@@ -2683,6 +2692,15 @@ class SyncHandler(BaseHTTPRequestHandler):
                 resolved_at:getVal('sys_readonly.problem.resolved_at'),
                 close_notes:getVal('problem.close_notes')
             };
+            
+            /* Add diagnostic info if PRB number not found */
+            if(!prbNumber){
+                data.prb._debug={
+                    iframe_found:!!frame,
+                    url:location.href,
+                    all_inputs:Array.from(doc.querySelectorAll('input[id*="number"],input[id*="problem"]')).map(e=>e.id).slice(0,10)
+                };
+            }
             
             /* Extract related incidents table */
             data.incidents=[];
@@ -2721,9 +2739,22 @@ class SyncHandler(BaseHTTPRequestHandler):
         const result=await resp.json();
         
         if(result.success){
-            alert('✅ Data sent to Waypoint!\\n\\n'+
-                (data.prb?'PRB: '+data.prb.number:'Issue: '+(data.jira?.key||'Unknown'))+'\\n'+
-                'Mode: '+action.mode);
+            let msg='✅ Data sent to Waypoint!\\n\\n';
+            if(data.prb){
+                msg+='PRB: '+(data.prb.number||'(not found)')+'\\n';
+                if(!data.prb.number&&data.prb._debug){
+                    msg+='\\nDEBUG INFO:\\n';
+                    msg+='URL: '+data.prb._debug.url+'\\n';
+                    msg+='IFrame found: '+data.prb._debug.iframe_found+'\\n';
+                    if(data.prb._debug.all_inputs.length>0){
+                        msg+='Found inputs: '+data.prb._debug.all_inputs.join(', ')+'\\n';
+                    }
+                }
+            }else{
+                msg+='Issue: '+(data.jira?.key||'Unknown')+'\\n';
+            }
+            msg+='Mode: '+action.mode;
+            alert(msg);
         }else{
             alert('❌ Error: '+result.error);
         }
