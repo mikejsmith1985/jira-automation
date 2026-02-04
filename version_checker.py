@@ -418,33 +418,77 @@ class VersionChecker:
                     f.write(f'echo Cleaning up temp files... >> "{update_log}"\n')
                     f.write(f'rd /s /q "{extract_folder}" 2>nul\n')
                 else:
-                    # Legacy single-EXE update (v1.x)
+                    # Legacy single-EXE update (v1.x and v2.0.1+)
                     temp_path = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Windows\\Temp'))
                     
-                    f.write(f'echo === Legacy EXE update (v1.x) === >> "{update_log}"\n')
-                    # Clean up PyInstaller temp folders BEFORE copy
-                    f.write(f'echo Cleaning up PyInstaller temp folders... >> "{update_log}"\n')
-                    f.write(f'for /d %%i in ("{temp_path}\\_MEI*") do (\n')
-                    f.write(f'    echo Removing: %%i >> "{update_log}"\n')
-                    f.write(f'    rd /s /q "%%i" 2>>"{update_log}"\n')
-                    f.write(f')\n')
+                    f.write(f'echo === Single EXE update === >> "{update_log}"\n')
+                    
+                    # AGGRESSIVE CLEANUP: Kill all waypoint processes first
+                    f.write(f'echo Killing any remaining waypoint processes... >> "{update_log}"\n')
+                    f.write(f'taskkill /F /IM waypoint.exe >nul 2>&1\n')
+                    f.write(f'timeout /t 3 /nobreak >nul\n')
+                    f.write(f'\n')
+                    
+                    # Clean up ALL _MEI* folders BEFORE copy
+                    f.write(f'echo Cleaning up ALL PyInstaller temp folders... >> "{update_log}"\n')
+                    f.write(f'echo This may take a moment...\n')
+                    
+                    # Use PowerShell for more reliable cleanup with retries
+                    cleanup_script = f'''
+$tempPath = "{temp_path}"
+$meiDirs = Get-ChildItem -Path $tempPath -Directory -Filter "_MEI*" -ErrorAction SilentlyContinue
+$count = ($meiDirs | Measure-Object).Count
+Write-Output "Found $count _MEI* folders to clean"
+foreach ($dir in $meiDirs) {{
+    $attempts = 0
+    $success = $false
+    while (-not $success -and $attempts -lt 3) {{
+        try {{
+            Remove-Item -Path $dir.FullName -Recurse -Force -ErrorAction Stop
+            Write-Output "Removed: $($dir.Name)"
+            $success = $true
+        }} catch {{
+            $attempts++
+            Start-Sleep -Seconds 1
+        }}
+    }}
+    if (-not $success) {{ Write-Output "WARN: Could not remove $($dir.Name)" }}
+}}
+'''
+                    # Write cleanup as single line for batch execution
+                    f.write(f'powershell -Command "{cleanup_script.replace(chr(10), " ").replace(chr(13), "")}" >> "{update_log}" 2>&1\n')
                     f.write(f'timeout /t 2 /nobreak >nul\n')
                     f.write(f'\n')
                     
-                    f.write(f'echo Applying update...\n')
+                    # Copy new EXE with retries
+                    f.write(f'echo Applying update (attempt 1)...\n')
                     f.write(f'echo Copying new executable... >> "{update_log}"\n')
                     f.write(f'copy /Y "{temp_exe}" "{self.current_exe}" >> "{update_log}" 2>&1\n')
                     f.write(f'set COPY_ERROR=%errorlevel%\n')
-                    f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
                     f.write(f'\n')
+                    
+                    # Retry on failure
                     f.write(f'if %COPY_ERROR% neq 0 (\n')
-                    f.write(f'    echo ERROR: Update failed! Exit code: %COPY_ERROR% >> "{update_log}"\n')
+                    f.write(f'    echo First copy failed, retrying after cleanup... >> "{update_log}"\n')
+                    f.write(f'    timeout /t 3 /nobreak >nul\n')
+                    f.write(f'    taskkill /F /IM waypoint.exe >nul 2>&1\n')
+                    f.write(f'    timeout /t 2 /nobreak >nul\n')
+                    f.write(f'    echo Retry copy... >> "{update_log}"\n')
+                    f.write(f'    copy /Y "{temp_exe}" "{self.current_exe}" >> "{update_log}" 2>&1\n')
+                    f.write(f'    set COPY_ERROR=%errorlevel%\n')
+                    f.write(f')\n')
+                    f.write(f'\n')
+                    f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
+                    f.write(f'if %COPY_ERROR% neq 0 (\n')
+                    f.write(f'    echo ERROR: Update failed after retry! Exit code: %COPY_ERROR% >> "{update_log}"\n')
                     f.write(f'    echo Update failed! Check {update_log} for details.\n')
                     f.write(f'    pause\n')
                     f.write(f'    exit /b %COPY_ERROR%\n')
                     f.write(f')\n')
                     f.write(f'\n')
-                    # Final cleanup
+                    
+                    # Post-copy cleanup
+                    f.write(f'echo Post-update cleanup... >> "{update_log}"\n')
                     f.write(f'for /d %%i in ("{temp_path}\\_MEI*") do rd /s /q "%%i" 2>nul\n')
                 
                 f.write(f'\n')

@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.0"  # New folder-based distribution - no more _MEI* update failures!
+APP_VERSION = "2.0.1"  # Reverted to single EXE with improved update cleanup
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
