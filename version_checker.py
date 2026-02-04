@@ -137,24 +137,35 @@ class VersionChecker:
                 self._update_cache(result)
                 return result
             
-            # Find Windows executable asset
+            # Find downloadable asset (prefer ZIP for v2.0+, fallback to EXE for v1.x)
             download_url = None
             asset_name = None
             asset_size = 0
             asset_url = None  # API URL for private repo downloads
             
+            # First, look for ZIP file (v2.0+ folder-based distribution)
             for asset in release.get('assets', []):
-                if asset['name'].endswith('.exe') or 'windows' in asset['name'].lower():
-                    # For private repos, use API URL (asset['url']) not browser_download_url
-                    # API URL works with Authorization header, browser URL doesn't
-                    asset_url = asset['url']  # API endpoint
-                    download_url = asset['browser_download_url']  # Fallback for public repos
+                if asset['name'].lower().endswith('.zip'):
+                    asset_url = asset['url']
+                    download_url = asset['browser_download_url']
                     asset_name = asset['name']
                     asset_size = asset['size']
+                    self.logger.info(f"Found ZIP asset: {asset_name} (v2.0+ folder-based)")
                     break
             
+            # Fallback to EXE (legacy v1.x)
             if not download_url:
-                # No Windows binary found, just provide release page URL
+                for asset in release.get('assets', []):
+                    if asset['name'].endswith('.exe') or 'windows' in asset['name'].lower():
+                        asset_url = asset['url']
+                        download_url = asset['browser_download_url']
+                        asset_name = asset['name']
+                        asset_size = asset['size']
+                        self.logger.info(f"Found EXE asset: {asset_name} (v1.x legacy)")
+                        break
+            
+            if not download_url:
+                # No binary found, just provide release page URL
                 download_url = release['html_url']
                 asset_name = 'Release Page'
             
@@ -339,6 +350,9 @@ class VersionChecker:
             if progress_callback:
                 progress_callback(total_size, total_size, 'Download complete. Preparing to restart...')
             
+            # Determine if this is a ZIP (folder-based) or EXE (legacy) update
+            is_zip_update = download_url.lower().endswith('.zip') or 'Waypoint.zip' in download_url
+            
             # Create update script (batch file on Windows)
             update_script = os.path.join(temp_dir, 'update_waypoint.bat')
             update_log = os.path.join(temp_dir, 'waypoint_update.log')
@@ -350,9 +364,8 @@ class VersionChecker:
                 f.write(f'echo [{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] Update started > "{update_log}"\n')
                 f.write(f'echo Source: {temp_exe} >> "{update_log}"\n')
                 f.write(f'echo Target: {self.current_exe} >> "{update_log}"\n')
+                f.write(f'echo Update type: {"ZIP (folder)" if is_zip_update else "EXE (legacy)"} >> "{update_log}"\n')
                 f.write(f'\n')
-                # Get resolved TEMP path (avoid %TEMP% issues in batch)
-                temp_path = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Windows\\Temp'))
                 
                 f.write(f'echo Waiting for Waypoint to close...\n')
                 f.write(f'echo Waiting 5 seconds for app to fully exit... >> "{update_log}"\n')
@@ -363,35 +376,81 @@ class VersionChecker:
                 f.write(f'taskkill /F /IM waypoint.exe >nul 2>&1\n')
                 f.write(f'timeout /t 2 /nobreak >nul\n')
                 f.write(f'\n')
-                # Clean up PyInstaller temp folders BEFORE copy (while old exe is definitely dead)
-                f.write(f'echo Cleaning up PyInstaller temp folders... >> "{update_log}"\n')
-                f.write(f'echo Cleaning _MEI folders from: {temp_path} >> "{update_log}"\n')
-                f.write(f'for /d %%i in ("{temp_path}\\_MEI*") do (\n')
-                f.write(f'    echo Removing: %%i >> "{update_log}"\n')
-                f.write(f'    rd /s /q "%%i" 2>>"{update_log}"\n')
-                f.write(f')\n')
-                f.write(f'timeout /t 2 /nobreak >nul\n')
-                f.write(f'\n')
-                f.write(f'echo Applying update...\n')
-                f.write(f'echo Copying new executable... >> "{update_log}"\n')
-                f.write(f'copy /Y "{temp_exe}" "{self.current_exe}" >> "{update_log}" 2>&1\n')
-                f.write(f'set COPY_ERROR=%errorlevel%\n')
-                f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
-                f.write(f'\n')
-                f.write(f'if %COPY_ERROR% neq 0 (\n')
-                f.write(f'    echo ERROR: Update failed! Exit code: %COPY_ERROR% >> "{update_log}"\n')
-                f.write(f'    echo Update failed! Check {update_log} for details.\n')
-                f.write(f'    echo Press any key to exit...\n')
-                f.write(f'    pause >nul\n')
-                f.write(f'    exit /b %COPY_ERROR%\n')
-                f.write(f')\n')
+                
+                if is_zip_update:
+                    # ZIP/folder-based update (v2.0+)
+                    # Get the folder containing waypoint.exe
+                    app_folder = os.path.dirname(self.current_exe)
+                    extract_folder = os.path.join(temp_dir, 'waypoint_update_extract')
+                    
+                    f.write(f'echo === ZIP-based update (v2.0+) === >> "{update_log}"\n')
+                    f.write(f'echo Extracting ZIP to temp folder... >> "{update_log}"\n')
+                    f.write(f'echo Extracting update...\n')
+                    
+                    # Use PowerShell to extract (more reliable than tar)
+                    f.write(f'powershell -Command "Expand-Archive -Path \\"{temp_exe}\\" -DestinationPath \\"{extract_folder}\\" -Force" >> "{update_log}" 2>&1\n')
+                    f.write(f'if %errorlevel% neq 0 (\n')
+                    f.write(f'    echo ERROR: Failed to extract ZIP >> "{update_log}"\n')
+                    f.write(f'    echo Extraction failed! Check {update_log}\n')
+                    f.write(f'    pause\n')
+                    f.write(f'    exit /b 1\n')
+                    f.write(f')\n')
+                    f.write(f'\n')
+                    
+                    f.write(f'echo Applying update...\n')
+                    f.write(f'echo Copying new files to: {app_folder} >> "{update_log}"\n')
+                    
+                    # Copy the extracted waypoint folder contents to app folder
+                    # The ZIP contains a 'waypoint' folder, so we copy its contents
+                    f.write(f'xcopy /E /Y /Q "{extract_folder}\\waypoint\\*" "{app_folder}\\" >> "{update_log}" 2>&1\n')
+                    f.write(f'set COPY_ERROR=%errorlevel%\n')
+                    f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
+                    f.write(f'\n')
+                    f.write(f'if %COPY_ERROR% neq 0 (\n')
+                    f.write(f'    echo ERROR: Update failed! Exit code: %COPY_ERROR% >> "{update_log}"\n')
+                    f.write(f'    echo Update failed! Check {update_log} for details.\n')
+                    f.write(f'    pause\n')
+                    f.write(f'    exit /b %COPY_ERROR%\n')
+                    f.write(f')\n')
+                    f.write(f'\n')
+                    
+                    # Cleanup extracted folder
+                    f.write(f'echo Cleaning up temp files... >> "{update_log}"\n')
+                    f.write(f'rd /s /q "{extract_folder}" 2>nul\n')
+                else:
+                    # Legacy single-EXE update (v1.x)
+                    temp_path = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Windows\\Temp'))
+                    
+                    f.write(f'echo === Legacy EXE update (v1.x) === >> "{update_log}"\n')
+                    # Clean up PyInstaller temp folders BEFORE copy
+                    f.write(f'echo Cleaning up PyInstaller temp folders... >> "{update_log}"\n')
+                    f.write(f'for /d %%i in ("{temp_path}\\_MEI*") do (\n')
+                    f.write(f'    echo Removing: %%i >> "{update_log}"\n')
+                    f.write(f'    rd /s /q "%%i" 2>>"{update_log}"\n')
+                    f.write(f')\n')
+                    f.write(f'timeout /t 2 /nobreak >nul\n')
+                    f.write(f'\n')
+                    
+                    f.write(f'echo Applying update...\n')
+                    f.write(f'echo Copying new executable... >> "{update_log}"\n')
+                    f.write(f'copy /Y "{temp_exe}" "{self.current_exe}" >> "{update_log}" 2>&1\n')
+                    f.write(f'set COPY_ERROR=%errorlevel%\n')
+                    f.write(f'echo Copy exit code: %COPY_ERROR% >> "{update_log}"\n')
+                    f.write(f'\n')
+                    f.write(f'if %COPY_ERROR% neq 0 (\n')
+                    f.write(f'    echo ERROR: Update failed! Exit code: %COPY_ERROR% >> "{update_log}"\n')
+                    f.write(f'    echo Update failed! Check {update_log} for details.\n')
+                    f.write(f'    pause\n')
+                    f.write(f'    exit /b %COPY_ERROR%\n')
+                    f.write(f')\n')
+                    f.write(f'\n')
+                    # Final cleanup
+                    f.write(f'for /d %%i in ("{temp_path}\\_MEI*") do rd /s /q "%%i" 2>nul\n')
+                
                 f.write(f'\n')
                 f.write(f'echo Update successful! >> "{update_log}"\n')
                 f.write(f'echo Update complete! Restarting Waypoint...\n')
-                # Clean up again just before start (in case any were recreated)
-                f.write(f'echo Final cleanup of _MEI folders... >> "{update_log}"\n')
-                f.write(f'for /d %%i in ("{temp_path}\\_MEI*") do rd /s /q "%%i" 2>nul\n')
-                f.write(f'timeout /t 3 /nobreak >nul\n')
+                f.write(f'timeout /t 2 /nobreak >nul\n')
                 f.write(f'\n')
                 f.write(f'echo Starting new version... >> "{update_log}"\n')
                 f.write(f'start "" "{self.current_exe}"\n')

@@ -67,7 +67,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "1.5.2"  # Comprehensive SNOW diagnostics - screenshots, timing, SAML handling
+APP_VERSION = "2.0.0"  # New folder-based distribution - no more _MEI* update failures!
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""

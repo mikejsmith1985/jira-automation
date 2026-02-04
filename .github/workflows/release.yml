@@ -69,50 +69,40 @@ jobs:
               print(f"Version already in sync: {version}")
         shell: python
       
-      - name: Build with PyInstaller using waypoint.spec
+      - name: Build with PyInstaller (onedir mode)
         run: |
-          Write-Host "Building with waypoint.spec..." -ForegroundColor Cyan
-          python -m PyInstaller waypoint.spec --clean
+          Write-Host "Building with waypoint-onedir.spec (folder mode)..." -ForegroundColor Cyan
+          Write-Host "This eliminates _MEI* temp folder issues!" -ForegroundColor Yellow
+          python -m PyInstaller waypoint-onedir.spec --clean
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Build failed" -ForegroundColor Red
             exit 1
           }
-          if (Test-Path "dist\waypoint.exe") {
-            $size = [math]::Round((Get-Item "dist\waypoint.exe").Length / 1MB, 1)
-            Write-Host "Build successful! ($size MB)" -ForegroundColor Green
+          if (Test-Path "dist\waypoint\waypoint.exe") {
+            $files = (Get-ChildItem "dist\waypoint" -Recurse -File).Count
+            $size = [math]::Round((Get-ChildItem "dist\waypoint" -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
+            Write-Host "Build successful! ($files files, $size MB total)" -ForegroundColor Green
           } else {
-            Write-Host "ERROR: waypoint.exe not found" -ForegroundColor Red
+            Write-Host "ERROR: dist\waypoint\waypoint.exe not found" -ForegroundColor Red
             exit 1
           }
         shell: powershell
       
-      - name: Prepare release folder
+      - name: Create distribution ZIP
         run: |
-          Write-Host "Creating release folder..." -ForegroundColor Cyan
-          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Write-Host "Creating distribution ZIP..." -ForegroundColor Cyan
           
-          if (Test-Path "dist\waypoint.exe") {
-            Copy-Item "dist\waypoint.exe" -Destination "release\waypoint.exe" -Force
-            Write-Host "Copied waypoint.exe to release folder" -ForegroundColor Green
-          } else {
-            Write-Host "ERROR: dist\waypoint.exe not found" -ForegroundColor Red
-            exit 1
-          }
+          # Add README and config to the distribution folder
+          if (Test-Path "README.md") { Copy-Item "README.md" -Destination "dist\waypoint\" -Force }
           
-          # Copy additional files for portable version
-          if (Test-Path "config.yaml") { Copy-Item "config.yaml" -Destination "release\" -Force }
-          if (Test-Path "README.md") { Copy-Item "README.md" -Destination "release\" -Force }
-        shell: powershell
-      
-      - name: Create portable ZIP
-        run: |
-          if (Test-Path "release\waypoint.exe") {
-            Compress-Archive -Path "release\*" -DestinationPath "release\waypoint-portable.zip" -Force
-            Write-Host "ZIP created successfully" -ForegroundColor Green
-            $zipSize = [math]::Round((Get-Item "release\waypoint-portable.zip").Length / 1MB, 1)
-            Write-Host "ZIP size: $zipSize MB" -ForegroundColor Cyan
+          # Create the ZIP
+          Compress-Archive -Path "dist\waypoint" -DestinationPath "dist\Waypoint.zip" -Force
+          
+          if (Test-Path "dist\Waypoint.zip") {
+            $zipSize = [math]::Round((Get-Item "dist\Waypoint.zip").Length / 1MB, 1)
+            Write-Host "ZIP created: Waypoint.zip ($zipSize MB)" -ForegroundColor Green
           } else {
-            Write-Host "ERROR: waypoint.exe not in release folder" -ForegroundColor Red
+            Write-Host "ERROR: Failed to create ZIP" -ForegroundColor Red
             exit 1
           }
         shell: powershell
@@ -131,18 +121,11 @@ jobs:
       - name: Verify release assets
         run: |
           Write-Host "Verifying release assets..." -ForegroundColor Cyan
-          if (Test-Path "release\waypoint.exe") {
-            $exeSize = [math]::Round((Get-Item "release\waypoint.exe").Length / 1MB, 1)
-            Write-Host "[OK] waypoint.exe ($exeSize MB)" -ForegroundColor Green
+          if (Test-Path "dist\Waypoint.zip") {
+            $zipSize = [math]::Round((Get-Item "dist\Waypoint.zip").Length / 1MB, 1)
+            Write-Host "[OK] Waypoint.zip ($zipSize MB)" -ForegroundColor Green
           } else {
-            Write-Host "[FAIL] waypoint.exe missing" -ForegroundColor Red
-            exit 1
-          }
-          if (Test-Path "release\waypoint-portable.zip") {
-            $zipSize = [math]::Round((Get-Item "release\waypoint-portable.zip").Length / 1MB, 1)
-            Write-Host "[OK] waypoint-portable.zip ($zipSize MB)" -ForegroundColor Green
-          } else {
-            Write-Host "[FAIL] waypoint-portable.zip missing" -ForegroundColor Red
+            Write-Host "[FAIL] Waypoint.zip missing" -ForegroundColor Red
             exit 1
           }
         shell: powershell
@@ -153,20 +136,32 @@ jobs:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           name: Release ${{ github.event.inputs.tag || github.ref_name }}
           body: |
-            ## 🎉 Jira Automation Assistant ${{ github.event.inputs.tag || github.ref_name }}
+            ## 🎉 Waypoint ${{ github.event.inputs.tag || github.ref_name }}
             
             ### 📦 Download & Installation
             
-            **RECOMMENDED:** Download `waypoint-portable.zip`
-            - ✅ Includes all required dependencies
-            - ✅ Extract and run - no installation needed
-            - ✅ No admin rights needed
+            **Download `Waypoint.zip`** and extract anywhere.
             
-            **Standalone EXE:** Download `waypoint.exe` for direct use
-            - Run directly without extraction
+            #### First Time Setup:
+            1. Download `Waypoint.zip`
+            2. Extract to a folder (e.g., `C:\Waypoint\`)
+            3. Run `waypoint.exe`
+            
+            #### Updating:
+            The app auto-updates! Just click "Update" when prompted.
+            
+            ---
+            
+            ### ⚡ What's New in v2.0
+            
+            **Architecture Change: Folder-based distribution**
+            - ✅ **No more update failures!** Eliminates _MEI* temp folder DLL conflicts
+            - ✅ Faster startup (no temp extraction)
+            - ✅ More reliable updates
+            
+            This is a one-time migration. Future updates will be seamless.
           files: |
-            ./release/waypoint.exe
-            ./release/waypoint-portable.zip
+            ./dist/Waypoint.zip
           draft: false
           prerelease: false
         env:
