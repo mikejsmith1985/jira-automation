@@ -467,13 +467,19 @@ async function startPRBWorkflow() {
         document.getElementById('prb-number-display').textContent = prbNumber;
         
         // Set up the "open again" link
+        const link = document.getElementById('snow-page-link');
         if (result.prb_url) {
-            const link = document.getElementById('snow-page-link');
             link.href = result.prb_url;
+            link.style.display = 'inline';
+            link.onclick = null;  // Clear any override
             
             // Open SNOW page in new tab
             window.open(result.prb_url, '_blank');
         } else {
+            // No URL - disable link and show error
+            link.href = 'javascript:void(0)';
+            link.style.display = 'none';
+            link.onclick = (e) => { e.preventDefault(); showNotification('No ServiceNow URL configured', 'error'); };
             showNotification('No ServiceNow URL configured. Please configure it in Integrations tab.', 'error');
         }
         
