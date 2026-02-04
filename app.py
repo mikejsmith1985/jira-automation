@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.8"  # Fix: Improved PRB number extraction + added diagnostics
+APP_VERSION = "2.0.9"  # Fix: Set working directory when restarting (fixes 'modern-ui.html not found')
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -1053,14 +1053,19 @@ class SyncHandler(BaseHTTPRequestHandler):
                     else:
                         exe_path = os.path.abspath(__file__)
                     
-                    # Start new instance (detached process)
+                    # Get directory containing the exe (important for PyInstaller)
+                    exe_dir = os.path.dirname(exe_path)
+                    
+                    # Start new instance (detached process with correct working directory)
                     try:
                         if getattr(sys, 'frozen', False):
                             subprocess.Popen([exe_path],
+                                           cwd=exe_dir,  # Set working directory to exe location
                                            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                                            close_fds=True)
                         else:
                             subprocess.Popen([sys.executable, exe_path],
+                                           cwd=exe_dir,
                                            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                                            close_fds=True)
                         
@@ -1089,17 +1094,22 @@ class SyncHandler(BaseHTTPRequestHandler):
                 # Running as script
                 exe_path = os.path.abspath(__file__)
             
+            # Get directory containing the exe (important for PyInstaller)
+            exe_dir = os.path.dirname(exe_path)
+            
             safe_print("[RESTART] Restarting application...")
             
-            # Start new instance
+            # Start new instance with correct working directory
             if getattr(sys, 'frozen', False):
                 # Frozen exe - just run it
-                subprocess.Popen([exe_path], 
+                subprocess.Popen([exe_path],
+                               cwd=exe_dir,  # Set working directory to exe location
                                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                                close_fds=True)
             else:
                 # Running as script - restart with python
                 subprocess.Popen([sys.executable, exe_path],
+                               cwd=exe_dir,
                                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                                close_fds=True)
             
