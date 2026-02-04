@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.6"  # Fix: Bookmarklet URL corrected to 127.0.0.1:5000 (was localhost:8500)
+APP_VERSION = "2.0.7"  # Fix: Auto-restart after update (replicate Forge-Terminal restart logic)
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -1036,13 +1036,42 @@ class SyncHandler(BaseHTTPRequestHandler):
             result = checker.download_and_apply_update(download_url)
             
             if result.get('success'):
-                # Trigger application exit after sending response
+                # Trigger application restart after sending response (Forge-Terminal pattern)
+                # Wait a bit to ensure response is sent, then start new process and exit
                 import threading
-                def shutdown():
+                def restart_after_update():
                     import time
-                    time.sleep(2)
-                    os._exit(0)
-                threading.Thread(target=shutdown, daemon=True).start()
+                    import subprocess
+                    
+                    time.sleep(3)  # Give time for response to reach client
+                    
+                    safe_print("[UPDATE] Starting new version...")
+                    
+                    # Get current exe path
+                    if getattr(sys, 'frozen', False):
+                        exe_path = sys.executable
+                    else:
+                        exe_path = os.path.abspath(__file__)
+                    
+                    # Start new instance (detached process)
+                    try:
+                        if getattr(sys, 'frozen', False):
+                            subprocess.Popen([exe_path],
+                                           creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                                           close_fds=True)
+                        else:
+                            subprocess.Popen([sys.executable, exe_path],
+                                           creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                                           close_fds=True)
+                        
+                        safe_print("[UPDATE] New instance started, exiting current...")
+                        time.sleep(1)  # Give new instance time to start
+                        os._exit(0)  # Exit current process
+                    except Exception as e:
+                        safe_print(f"[UPDATE] Failed to restart: {e}")
+                        os._exit(1)
+                
+                threading.Thread(target=restart_after_update, daemon=True).start()
             
             return result
         except Exception as e:
