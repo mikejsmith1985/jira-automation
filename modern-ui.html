@@ -184,14 +184,14 @@
                         </div>
                     </div>
                     
-                    <!-- ServiceNow -> Jira Automation (Guided Workflow) -->
+                    <!-- ServiceNow -> Jira Automation (Direct Scraping) -->
                     <div class="card">
                         <div class="card-header">
                             <h3>🔄 ServiceNow → Jira Automation</h3>
                             <p class="text-secondary">Create Jira Defect + Story from ServiceNow PRB</p>
                         </div>
                         <div style="padding: 20px;">
-                            <!-- Step 1: Enter PRB Number -->
+                            <!-- Step 1: Enter PRB Number and Validate -->
                             <div id="workflow-step-1" class="workflow-step">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                                     <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">1</span>
@@ -200,41 +200,17 @@
                                 <div class="form-group" style="margin-left: 34px;">
                                     <input type="text" id="prb-number-input" class="input-field" placeholder="PRB0123456" style="max-width: 300px;">
                                     <div style="margin-top: 10px;">
-                                        <button class="btn btn-primary" onclick="startPRBWorkflow()">🔍 Validate PRB</button>
+                                        <button class="btn btn-primary" onclick="validatePRB()">🔍 Validate PRB</button>
                                         <button class="btn btn-secondary" onclick="document.querySelector('.nav-item[data-tab=&quot;integrations&quot;]').click()" style="margin-left: 10px;">⚙️ Configure</button>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Step 2: Waiting for Bookmarklet Data -->
+                            <!-- Step 2: PRB Validation Results -->
                             <div id="workflow-step-2" class="workflow-step" style="display: none;">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                    <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">2</span>
-                                    <span style="font-weight: 600;">Extract PRB Data</span>
-                                </div>
-                                <div style="margin-left: 34px; padding: 15px; background: #deebff; border: 1px solid #0052cc; border-radius: 8px;">
-                                    <p style="margin: 0 0 10px 0; color: #0052cc; font-weight: 600;">
-                                        📋 Click your Waypoint bookmarklet on the ServiceNow page
-                                    </p>
-                                    <p style="margin: 0; font-size: 13px; color: #172b4d;">
-                                        A new tab has opened with <strong id="prb-number-display">PRB0123456</strong>.
-                                        <br>Once logged in, click the <strong>🚀 Waypoint</strong> bookmarklet in your bookmarks bar.
-                                    </p>
-                                    <div id="bookmarklet-status" style="margin-top: 15px; padding: 10px; background: #fff; border-radius: 4px;">
-                                        <span style="color: #6b778c;">⏳ Waiting for data...</span>
-                                    </div>
-                                    <div style="margin-top: 10px;">
-                                        <button class="btn btn-secondary" onclick="cancelPRBWorkflow()">✕ Cancel</button>
-                                        <a id="snow-page-link" href="javascript:void(0)" target="_blank" style="margin-left: 10px; font-size: 13px; display: none;">Open ServiceNow page again →</a>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Step 3: PRB Data Received - Select Incident -->
-                            <div id="workflow-step-3" class="workflow-step" style="display: none;">
-                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                                     <span style="background: #00875a; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>
-                                    <span style="font-weight: 600; color: #00875a;">PRB Data Received</span>
+                                    <span style="font-weight: 600; color: #00875a;">PRB Data Retrieved</span>
                                 </div>
                                 <div id="prb-validation-result" style="margin-left: 34px; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
                                     <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">PRB Details</h4>
@@ -252,10 +228,10 @@
                                 </div>
                             </div>
                             
-                            <!-- Step 4: Jira Creation -->
-                            <div id="workflow-step-4" class="workflow-step" style="display: none;">
+                            <!-- Step 3: Jira Creation -->
+                            <div id="workflow-step-3" class="workflow-step" style="display: none;">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                    <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">4</span>
+                                    <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">3</span>
                                     <span style="font-weight: 600;">Create Jira Issues</span>
                                 </div>
                                 <div style="margin-left: 34px; padding: 15px; background: #e3fcef; border: 1px solid #00875a; border-radius: 8px;">

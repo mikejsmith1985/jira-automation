@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.9"  # Fix: Set working directory when restarting (fixes 'modern-ui.html not found')
+APP_VERSION = "2.0.9"  # Fix: Container-based SNOW field extraction (read-only + edit modes)
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""

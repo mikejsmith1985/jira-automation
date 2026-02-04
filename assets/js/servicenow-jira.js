@@ -157,34 +157,24 @@ let selectedIncident = null;
 
 async function validatePRB() {
     console.log('[Waypoint] validatePRB() called');
-    try {
-        const prbNumber = document.getElementById('prb-number-input').value.trim();
-        const resultEl = document.getElementById('prb-validation-result');
-        const createBtn = document.getElementById('create-jira-btn');
-        
-        console.log('[Waypoint] PRB Number:', prbNumber);
-        console.log('[Waypoint] Elements found:', {
-            prbInput: !!document.getElementById('prb-number-input'),
-            resultEl: !!resultEl,
-            createBtn: !!createBtn
-        });
-        
-        // Null checks for DOM elements
-        if (!resultEl) {
-            console.error('[Waypoint] prb-validation-result element not found!');
-            showNotification('UI error: validation result element not found', 'error');
-            return;
-        }
-        
-        if (!prbNumber) {
-            showNotification('Please enter a PRB number', 'error');
-            return;
-        }
-        
-        // Show loading
-        resultEl.style.display = 'block';
-        resultEl.innerHTML = '<div style="text-align: center; padding: 20px;"><span>Validating PRB...</span></div>';
-        if (createBtn) createBtn.disabled = true;
+    
+    const prbNumber = document.getElementById('prb-number-input').value.trim();
+    const step1 = document.getElementById('workflow-step-1');
+    const step2 = document.getElementById('workflow-step-2');
+    const createBtn = document.getElementById('create-jira-btn');
+    
+    if (!prbNumber) {
+        showNotification('Please enter a PRB number', 'error');
+        return;
+    }
+    
+    // Show step 2 with loading state
+    step1.style.display = 'none';
+    step2.style.display = 'block';
+    
+    const resultEl = document.getElementById('prb-validation-result');
+    resultEl.innerHTML = '<div style="text-align: center; padding: 20px;"><span>Validating PRB...</span></div>';
+    if (createBtn) createBtn.disabled = true;
     
     try {
         const response = await fetch('/api/snow-jira/validate-prb', {
@@ -226,43 +216,48 @@ async function validatePRB() {
                 
                 // Auto-select first one
                 selectedIncident = result.incidents[0].number;
-                createBtn.disabled = false;
+                if (createBtn) createBtn.disabled = false;
                 
             } else {
                 incSelection.style.display = 'block';
                 incList.innerHTML = '<span style="color: #FF991F;">⚠️ No incidents found in Incidents tab</span>';
-                createBtn.disabled = true;
+                if (createBtn) createBtn.disabled = true;
             }
             
             showNotification('PRB validated successfully!');
             
         } else {
             console.error('[Waypoint] PRB validation failed:', result.error);
-            if (resultEl) {
-                resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">${result.error}</div>`;
-            }
+            resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">${result.error}</div>`;
             if (createBtn) createBtn.disabled = true;
             showNotification(result.error, 'error');
         }
     } catch (error) {
         console.error('[Waypoint] validatePRB() exception:', error);
-        console.error('[Waypoint] Error stack:', error.stack);
-        if (resultEl) {
-            resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">Failed to validate PRB: ${error.message}</div>`;
-        }
+        resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">Failed to validate PRB: ${error.message}</div>`;
         if (createBtn) createBtn.disabled = true;
         showNotification('Failed to validate PRB: ' + error.message, 'error');
-    }
-    } catch (error) {
-        console.error('[Waypoint] validatePRB() outer exception:', error);
-        console.error('[Waypoint] Error stack:', error.stack);
-        showNotification('Critical error in validatePRB: ' + error.message, 'error');
     }
 }
 
 function selectIncident(incNumber) {
     selectedIncident = incNumber;
     document.getElementById('create-jira-btn').disabled = false;
+}
+
+function resetPRBWorkflow() {
+    // Reset state
+    currentPRBData = null;
+    selectedIncident = null;
+    
+    // Reset UI
+    document.getElementById('workflow-step-1').style.display = 'block';
+    document.getElementById('workflow-step-2').style.display = 'none';
+    document.getElementById('workflow-step-3').style.display = 'none';
+    
+    // Clear input
+    document.getElementById('prb-number-input').value = '';
+    document.getElementById('prb-number-input').focus();
 }
 
 async function createJiraIssues() {

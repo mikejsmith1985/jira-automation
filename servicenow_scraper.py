@@ -369,10 +369,7 @@ class ServiceNowScraper:
         """
         Get value from a ServiceNow form field using Playwright
         
-        Playwright advantages over Selenium:
-        - Automatically pierces Shadow DOM
-        - Smart auto-waiting
-        - Better handling of modern web apps
+        Works in BOTH read-only and edit modes by checking containers first.
         
         Args:
             field_id: Field ID (e.g., 'problem.short_description')
@@ -383,7 +380,6 @@ class ServiceNowScraper:
         # If GlideForm API is available, use it as primary method
         if hasattr(self, 'use_glide_form') and self.use_glide_form:
             try:
-                # Extract field name from ID (remove 'problem.' prefix if present)
                 field_name = field_id.replace('problem.', '').replace('sys_display.problem.', '')
                 
                 value = self.page.evaluate(f"""
@@ -401,54 +397,81 @@ class ServiceNowScraper:
             except Exception as e:
                 self.logger.debug(f"[SNOW] GlideForm failed for {field_id}: {e}")
         
-        # Try multiple variations of the field ID
-        field_variations = [
-            field_id,  # Original (e.g., "problem.short_description")
-        ]
+        # APPROACH 1: Container-based extraction (works in read-only view)
+        container_id = f"element.{field_id}"
+        try:
+            container = self.frame.locator(f"[id='{container_id}']").first
+            container.wait_for(state='attached', timeout=2000)
+            
+            # Try read-only value spans first
+            readonly_selectors = [
+                '.readonly-value',
+                '[id*="readonly"]',
+                'span[id*="sys_readonly"]'
+            ]
+            
+            for selector in readonly_selectors:
+                try:
+                    readonly_el = container.locator(selector).first
+                    readonly_el.wait_for(state='attached', timeout=1000)
+                    value = readonly_el.text_content().strip()
+                    if value:
+                        self.logger.debug(f"[SNOW] Got value for {field_id} from read-only container")
+                        return value
+                except:
+                    continue
+            
+            # If no read-only value, try input within container (edit mode)
+            try:
+                input_el = container.locator('input, textarea, select').first
+                input_el.wait_for(state='attached', timeout=1000)
+                
+                tag_name = input_el.evaluate('el => el.tagName.toLowerCase()')
+                if tag_name == 'select':
+                    value = input_el.evaluate('el => el.options[el.selectedIndex]?.text || ""')
+                else:
+                    value = input_el.input_value()
+                
+                if value:
+                    self.logger.debug(f"[SNOW] Got value for {field_id} from input in container")
+                    return value
+            except:
+                pass
+                
+        except Exception as e:
+            self.logger.debug(f"[SNOW] Container approach failed for {field_id}: {e}")
         
-        # If field has "problem." prefix, also try without it
+        # APPROACH 2: Direct field lookup (legacy, works in edit mode only)
+        field_variations = [field_id]
+        
         if field_id.startswith('problem.'):
             short_id = field_id.replace('problem.', '', 1)
-            field_variations.append(short_id)  # e.g., "short_description"
+            field_variations.append(short_id)
         
-        # If field has dots, also try with underscores
         if '.' in field_id:
             underscore_id = field_id.replace('.', '_')
             field_variations.append(underscore_id)
         
-        self.logger.debug(f"[SNOW] Looking for field: {field_id} (variations: {field_variations})")
-        
         for variation in field_variations:
             try:
-                # Use Playwright's locator (auto-waits, pierces Shadow DOM)
                 locator = self.frame.locator(f"[id='{variation}']").first
+                locator.wait_for(state='attached', timeout=2000)
                 
-                # Check if element exists (with short timeout)
-                try:
-                    locator.wait_for(state='attached', timeout=2000)
-                except:
-                    continue  # Element doesn't exist, try next variation
-                
-                # Get the element's tag name to determine how to extract value
                 tag_name = locator.evaluate('el => el.tagName.toLowerCase()')
                 
                 if tag_name == 'select':
-                    # For select elements, get selected option text
                     value = locator.evaluate('el => el.options[el.selectedIndex]?.text || ""')
                     return value
                 elif tag_name == 'textarea':
-                    # For textarea, use input_value()
                     return locator.input_value()
-                else:
-                    # For input fields, use input_value()
+                elif tag_name == 'input':
                     return locator.input_value()
                     
             except Exception as e:
-                self.logger.debug(f"[SNOW] Error reading field {variation}: {e}")
+                self.logger.debug(f"[SNOW] Direct lookup failed for {variation}: {e}")
                 continue
         
-        # None of the variations worked
-        self.logger.warning(f"[SNOW] Field not found: {field_id} (tried: {', '.join(field_variations)})")
+        self.logger.warning(f"[SNOW] Field not found: {field_id}")
         return ''
     
     def extract_incident_numbers(self):
