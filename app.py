@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.5"  # Fix: Replicate Forge-Terminal update pattern (simple & reliable)
+APP_VERSION = "2.0.6"  # Fix: Bookmarklet URL corrected to 127.0.0.1:5000 (was localhost:8500)
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -2617,7 +2617,7 @@ class SyncHandler(BaseHTTPRequestHandler):
         
         # Universal bookmarklet that fetches action from Waypoint
         script = '''javascript:(async function(){
-    const WAYPOINT='http://localhost:8500';
+    const WAYPOINT='http://127.0.0.1:5000';
     try{
         /* Get current action from Waypoint */
         const actionResp=await fetch(WAYPOINT+'/api/bookmarklet/action');
@@ -2699,7 +2699,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             alert('❌ Error: '+result.error);
         }
     }catch(e){
-        alert('❌ Waypoint Error\\n\\n'+e.message+'\\n\\nMake sure Waypoint is running on localhost:8500');
+        alert('❌ Waypoint Error\\n\\n'+e.message+'\\n\\nMake sure Waypoint is running on http://127.0.0.1:5000');
     }
 })();'''
         
