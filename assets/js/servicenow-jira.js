@@ -425,3 +425,224 @@ window.exportLogs = async function exportLogs() {
         console.error('[ServiceNow] Export error:', error);
     }
 };
+
+/* ============================================================================
+   Bookmarklet Workflow Functions
+   ============================================================================ */
+
+let workflowPollingInterval = null;
+let workflowPRBNumber = null;
+
+// Start PRB workflow - opens SNOW page and waits for bookmarklet data
+async function startPRBWorkflow() {
+    const prbNumber = document.getElementById('prb-number-input').value.trim();
+    
+    if (!prbNumber) {
+        showNotification('Please enter a PRB number', 'error');
+        return;
+    }
+    
+    workflowPRBNumber = prbNumber;
+    
+    console.log('[Workflow] Starting PRB workflow for:', prbNumber);
+    
+    try {
+        // Start the workflow on backend
+        const response = await fetch('/api/bookmarklet/start-workflow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'prb-extract', prb_number: prbNumber })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            showNotification('Failed to start workflow: ' + result.error, 'error');
+            return;
+        }
+        
+        // Show step 2 (waiting for bookmarklet)
+        document.getElementById('workflow-step-1').style.display = 'none';
+        document.getElementById('workflow-step-2').style.display = 'block';
+        document.getElementById('prb-number-display').textContent = prbNumber;
+        
+        // Set up the "open again" link
+        if (result.prb_url) {
+            const link = document.getElementById('snow-page-link');
+            link.href = result.prb_url;
+            
+            // Open SNOW page in new tab
+            window.open(result.prb_url, '_blank');
+        } else {
+            showNotification('No ServiceNow URL configured. Please configure it in Integrations tab.', 'error');
+        }
+        
+        // Start polling for bookmarklet data
+        startBookmarkletPolling();
+        
+    } catch (error) {
+        console.error('[Workflow] Error starting workflow:', error);
+        showNotification('Error starting workflow: ' + error.message, 'error');
+    }
+}
+
+function startBookmarkletPolling() {
+    // Clear any existing polling
+    if (workflowPollingInterval) {
+        clearInterval(workflowPollingInterval);
+    }
+    
+    const statusEl = document.getElementById('bookmarklet-status');
+    let dots = 0;
+    
+    workflowPollingInterval = setInterval(async () => {
+        dots = (dots + 1) % 4;
+        const dotStr = '.'.repeat(dots);
+        
+        try {
+            const response = await fetch('/api/bookmarklet/status');
+            const result = await response.json();
+            
+            if (result.has_data && result.data) {
+                // Data received! Stop polling and advance workflow
+                clearInterval(workflowPollingInterval);
+                workflowPollingInterval = null;
+                
+                console.log('[Workflow] Data received from bookmarklet:', result.data);
+                
+                // Process the received data
+                handleBookmarkletData(result.data);
+            } else {
+                // Still waiting
+                statusEl.innerHTML = `<span style="color: #6b778c;">⏳ Waiting for data${dotStr}</span>`;
+            }
+        } catch (error) {
+            console.error('[Workflow] Polling error:', error);
+        }
+    }, 1500);
+}
+
+function handleBookmarkletData(data) {
+    console.log('[Workflow] Processing bookmarklet data');
+    
+    // Store as current PRB data
+    currentPRBData = data.prb || {};
+    
+    // Populate Step 3
+    const prbDetails = document.getElementById('prb-details');
+    if (prbDetails) {
+        prbDetails.innerHTML = `
+            <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px;">
+                <strong>Number:</strong> <span>${currentPRBData.number || 'N/A'}</span>
+                <strong>Description:</strong> <span>${currentPRBData.short_description || 'N/A'}</span>
+                <strong>State:</strong> <span>${currentPRBData.state || 'N/A'}</span>
+                <strong>Priority:</strong> <span>${currentPRBData.priority || 'N/A'}</span>
+                <strong>Assigned To:</strong> <span>${currentPRBData.assigned_to || 'N/A'}</span>
+            </div>
+        `;
+    }
+    
+    // Populate incidents list
+    const incList = document.getElementById('inc-list');
+    const incidents = data.incidents || [];
+    
+    if (incList) {
+        if (incidents.length > 0) {
+            incList.innerHTML = incidents.map((inc, i) => `
+                <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--surface); border-radius: 4px; cursor: pointer;">
+                    <input type="radio" name="incident-select" value="${inc.number}" onchange="selectIncident('${inc.number}')" ${i === 0 ? 'checked' : ''}>
+                    <span><strong>${inc.number}</strong> - ${inc.short_description || 'No description'}</span>
+                </label>
+            `).join('');
+            
+            // Auto-select first incident
+            if (incidents.length > 0) {
+                selectedIncident = incidents[0].number;
+                document.getElementById('create-jira-btn').disabled = false;
+            }
+        } else {
+            incList.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No related incidents found</p>';
+        }
+    }
+    
+    // Show Step 3, hide Step 2
+    document.getElementById('workflow-step-2').style.display = 'none';
+    document.getElementById('workflow-step-3').style.display = 'block';
+    
+    showNotification('PRB data received successfully!');
+}
+
+function cancelPRBWorkflow() {
+    // Stop polling
+    if (workflowPollingInterval) {
+        clearInterval(workflowPollingInterval);
+        workflowPollingInterval = null;
+    }
+    
+    // Reset to step 1
+    document.getElementById('workflow-step-1').style.display = 'block';
+    document.getElementById('workflow-step-2').style.display = 'none';
+    document.getElementById('workflow-step-3').style.display = 'none';
+    document.getElementById('workflow-step-4').style.display = 'none';
+    
+    workflowPRBNumber = null;
+    currentPRBData = null;
+    selectedIncident = null;
+}
+
+function resetPRBWorkflow() {
+    cancelPRBWorkflow();
+    document.getElementById('prb-number-input').value = '';
+}
+
+async function createJiraFromPRB() {
+    console.log('[Workflow] Creating Jira issues from PRB data');
+    
+    if (!currentPRBData || !selectedIncident) {
+        showNotification('Missing PRB data or incident selection', 'error');
+        return;
+    }
+    
+    const createBtn = document.getElementById('create-jira-btn');
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating...';
+    
+    try {
+        // For now, show success with mock data since Jira creation via bookmarklet is Phase 2
+        // In Phase 2, this would open Jira and use bookmarklet to fill the form
+        
+        // Show Step 4 with instructions
+        document.getElementById('workflow-step-3').style.display = 'none';
+        document.getElementById('workflow-step-4').style.display = 'block';
+        
+        const jiraStatus = document.getElementById('jira-creation-status');
+        jiraStatus.innerHTML = `
+            <p style="margin: 0 0 15px 0; color: #006644; font-weight: 600;">
+                ✅ PRB data ready for Jira!
+            </p>
+            <p style="margin: 0 0 10px 0;">
+                <strong>PRB:</strong> ${currentPRBData.number}<br>
+                <strong>Incident:</strong> ${selectedIncident}
+            </p>
+            <p style="margin: 0 0 15px 0; font-size: 13px; color: var(--text-secondary);">
+                The Jira issue creation via bookmarklet is coming soon.
+                For now, manually create issues with the extracted data above.
+            </p>
+            <button class="btn btn-secondary" onclick="resetPRBWorkflow()">↩ Start Over</button>
+        `;
+        
+        showNotification('PRB data extracted! Manual Jira creation required.', 'info');
+        
+    } catch (error) {
+        console.error('[Workflow] Jira creation error:', error);
+        showNotification('Error: ' + error.message, 'error');
+        createBtn.disabled = false;
+        createBtn.textContent = '✨ Create Jira Issues';
+    }
+}
+
+// Export new workflow functions
+window.startPRBWorkflow = startPRBWorkflow;
+window.cancelPRBWorkflow = cancelPRBWorkflow;
+window.resetPRBWorkflow = resetPRBWorkflow;
+window.createJiraFromPRB = createJiraFromPRB;

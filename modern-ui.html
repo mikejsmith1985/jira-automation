@@ -184,41 +184,86 @@
                         </div>
                     </div>
                     
-                    <!-- ServiceNow -> Jira Automation -->
+                    <!-- ServiceNow -> Jira Automation (Guided Workflow) -->
                     <div class="card">
                         <div class="card-header">
                             <h3>🔄 ServiceNow → Jira Automation</h3>
                             <p class="text-secondary">Create Jira Defect + Story from ServiceNow PRB</p>
                         </div>
                         <div style="padding: 20px;">
-                            <div class="form-group">
-                                <label>PRB Number</label>
-                                <input type="text" id="prb-number-input" class="input-field" placeholder="PRB0123456">
-                                <small class="text-secondary">Enter the ServiceNow Problem ticket number</small>
+                            <!-- Step 1: Enter PRB Number -->
+                            <div id="workflow-step-1" class="workflow-step">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">1</span>
+                                    <span style="font-weight: 600;">Enter PRB Number</span>
+                                </div>
+                                <div class="form-group" style="margin-left: 34px;">
+                                    <input type="text" id="prb-number-input" class="input-field" placeholder="PRB0123456" style="max-width: 300px;">
+                                    <div style="margin-top: 10px;">
+                                        <button class="btn btn-primary" onclick="startPRBWorkflow()">🔍 Validate PRB</button>
+                                        <button class="btn btn-secondary" onclick="document.querySelector('.nav-item[data-tab=&quot;integrations&quot;]').click()" style="margin-left: 10px;">⚙️ Configure</button>
+                                    </div>
+                                </div>
                             </div>
                             
-                            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                <button class="btn btn-secondary" onclick="validatePRB()">🔍 Validate PRB</button>
-                                <button class="btn btn-primary" onclick="createJiraIssues()" id="create-jira-btn" disabled>✨ Create Jira Issues</button>
-                                <button class="btn btn-secondary" onclick="document.querySelector('.nav-item[data-tab=&quot;integrations&quot;]').click()" style="margin-left: auto;">⚙️ Configure</button>
+                            <!-- Step 2: Waiting for Bookmarklet Data -->
+                            <div id="workflow-step-2" class="workflow-step" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">2</span>
+                                    <span style="font-weight: 600;">Extract PRB Data</span>
+                                </div>
+                                <div style="margin-left: 34px; padding: 15px; background: #deebff; border: 1px solid #0052cc; border-radius: 8px;">
+                                    <p style="margin: 0 0 10px 0; color: #0052cc; font-weight: 600;">
+                                        📋 Click your Waypoint bookmarklet on the ServiceNow page
+                                    </p>
+                                    <p style="margin: 0; font-size: 13px; color: #172b4d;">
+                                        A new tab has opened with <strong id="prb-number-display">PRB0123456</strong>.
+                                        <br>Once logged in, click the <strong>🚀 Waypoint</strong> bookmarklet in your bookmarks bar.
+                                    </p>
+                                    <div id="bookmarklet-status" style="margin-top: 15px; padding: 10px; background: #fff; border-radius: 4px;">
+                                        <span style="color: #6b778c;">⏳ Waiting for data...</span>
+                                    </div>
+                                    <div style="margin-top: 10px;">
+                                        <button class="btn btn-secondary" onclick="cancelPRBWorkflow()">✕ Cancel</button>
+                                        <a id="snow-page-link" href="#" target="_blank" style="margin-left: 10px; font-size: 13px;">Open ServiceNow page again →</a>
+                                    </div>
+                                </div>
                             </div>
                             
-                            <div id="prb-validation-result" style="display: none; padding: 15px; background: var(--bg-secondary); border-radius: 8px; margin-top: 15px;">
-                                <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">PRB Details</h4>
-                                <div id="prb-details" style="font-size: 13px; color: var(--text-secondary);"></div>
-                                
-                                <div id="inc-selection" style="display: none; margin-top: 15px;">
-                                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 13px;">Select Incident Number:</label>
-                                    <div id="inc-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                            <!-- Step 3: PRB Data Received - Select Incident -->
+                            <div id="workflow-step-3" class="workflow-step" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <span style="background: #00875a; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>
+                                    <span style="font-weight: 600; color: #00875a;">PRB Data Received</span>
+                                </div>
+                                <div id="prb-validation-result" style="margin-left: 34px; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+                                    <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">PRB Details</h4>
+                                    <div id="prb-details" style="font-size: 13px; color: var(--text-secondary);"></div>
+                                    
+                                    <div id="inc-selection" style="margin-top: 15px;">
+                                        <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 13px;">Select Incident Number:</label>
+                                        <div id="inc-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                                    </div>
+                                    
+                                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                                        <button class="btn btn-primary" onclick="createJiraFromPRB()" id="create-jira-btn" disabled>✨ Create Jira Issues</button>
+                                        <button class="btn btn-secondary" onclick="resetPRBWorkflow()">↩ Start Over</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Step 4: Jira Creation -->
+                            <div id="workflow-step-4" class="workflow-step" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">4</span>
+                                    <span style="font-weight: 600;">Create Jira Issues</span>
+                                </div>
+                                <div style="margin-left: 34px; padding: 15px; background: #e3fcef; border: 1px solid #00875a; border-radius: 8px;">
+                                    <div id="jira-creation-status" style="font-size: 13px;"></div>
                                 </div>
                             </div>
                             
                             <div id="snow-sync-status" style="margin-top: 15px;"></div>
-                            
-                            <div id="snow-sync-result" style="display: none; padding: 15px; background: var(--bg-secondary); border-radius: 8px; margin-top: 15px;">
-                                <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: var(--accent);">✅ Success!</h4>
-                                <div id="created-issues" style="font-size: 13px;"></div>
-                            </div>
                         </div>
                     </div>
 
@@ -687,46 +732,35 @@
                         </div>
                     </div>
                     
-                    <!-- Bookmarklet Hub -->
+                    <!-- Bookmarklet Setup (One-Time) -->
                     <div class="card" style="margin-top: 20px;">
                         <div class="card-header">
-                            <h3>🔖 Bookmarklet Hub</h3>
+                            <h3>🔖 Waypoint Bookmarklet</h3>
                         </div>
                         <div style="padding: 20px;">
                             <p style="margin-bottom: 15px; color: var(--text-secondary);">
-                                Use this bookmarklet to extract data from web pages. Works with ServiceNow, Jira, and more.
+                                Install this bookmarklet once. It's used by workflows in the <strong>PO</strong> tab to extract data from ServiceNow and Jira pages.
                             </p>
                             
-                            <div class="form-group">
-                                <label>Current Mode</label>
-                                <select id="bookmarklet-mode" class="input-field" onchange="changeBookmarkletMode()">
-                                    <option value="prb-extract">PRB Extract (ServiceNow)</option>
-                                    <option value="jira-scrape">Jira Issue Scrape</option>
-                                </select>
-                                <small class="text-secondary">Select what the bookmarklet should do when clicked</small>
-                            </div>
-                            
-                            <div style="margin-top: 20px;">
-                                <label style="font-weight: 600; display: block; margin-bottom: 10px;">📥 Install Bookmarklet</label>
-                                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">
+                            <div style="background: var(--background); border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center;">
+                                <p style="margin: 0 0 15px 0; font-size: 13px; color: var(--text-secondary);">
                                     Drag this link to your bookmarks bar:
                                 </p>
-                                <div style="background: var(--background); border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center;">
-                                    <a id="bookmarklet-link" href="#" style="font-size: 16px; font-weight: 600; color: var(--primary); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--surface); border-radius: 6px; border: 1px solid var(--primary);">
-                                        🚀 Waypoint
-                                    </a>
-                                </div>
-                                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
-                                    Or copy the bookmarklet code: <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="copyBookmarkletCode()">📋 Copy Code</button>
+                                <a id="bookmarklet-link" href="#" style="font-size: 16px; font-weight: 600; color: var(--primary); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--surface); border-radius: 6px; border: 1px solid var(--primary);">
+                                    🚀 Waypoint
+                                </a>
+                            </div>
+                            
+                            <div style="margin-top: 15px; padding: 12px; background: #e3fcef; border-radius: 6px; border: 1px solid #00875a;">
+                                <p style="margin: 0; font-size: 13px; color: #006644;">
+                                    <strong>How it works:</strong> When you start a workflow (like PRB validation), Waypoint will open the page for you. 
+                                    Just click the 🚀 Waypoint bookmarklet and the data flows back automatically.
                                 </p>
                             </div>
                             
-                            <div style="margin-top: 20px; padding: 15px; background: var(--background); border-radius: 8px;">
-                                <label style="font-weight: 600; display: block; margin-bottom: 10px;">📊 Last Received Data</label>
-                                <div id="bookmarklet-last-data" style="font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 150px; overflow-y: auto; color: var(--text-secondary);">
-                                    No data received yet. Use the bookmarklet on a ServiceNow or Jira page.
-                                </div>
-                            </div>
+                            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
+                                Can't drag? <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="copyBookmarkletCode()">📋 Copy Code</button> and create bookmark manually
+                            </p>
                         </div>
                     </div>
                 </section>

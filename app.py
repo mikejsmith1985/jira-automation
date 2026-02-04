@@ -11,6 +11,7 @@ import time
 import json
 import yaml
 import base64
+from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from playwright.sync_api import sync_playwright, Playwright, Browser, BrowserContext, Page
 from sync_engine import SyncEngine
@@ -67,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.0.2"  # Added Bookmarklet Hub for reliable SNOW data extraction
+APP_VERSION = "2.0.3"  # Guided bookmarklet workflow with auto-open
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -96,8 +97,9 @@ version_checker = None  # Version update checker
 browser_opened = False  # Flag to prevent double-opening
 
 # Bookmarklet Hub state
-bookmarklet_mode = 'prb-extract'  # Current action mode: prb-extract, jira-scrape, custom
+bookmarklet_mode = 'prb-extract'  # Current action mode: prb-extract, jira-scrape, jira-fill
 bookmarklet_last_data = None  # Last data received from bookmarklet
+bookmarklet_pending = None  # Pending workflow context: {prb_number, mode, timestamp, jira_data}
 
 # Extension system globals
 extension_manager = None
@@ -172,6 +174,10 @@ class SyncHandler(BaseHTTPRequestHandler):
             self._handle_bookmarklet_action()
         elif self.path == '/api/bookmarklet/script':
             self._handle_bookmarklet_script()
+        elif self.path == '/api/bookmarklet/pending':
+            self._handle_bookmarklet_pending()
+        elif self.path == '/api/bookmarklet/status':
+            self._handle_bookmarklet_status()
         else:
             self.send_response(404)
             self.end_headers()
@@ -403,6 +409,8 @@ class SyncHandler(BaseHTTPRequestHandler):
                 response = self.handle_bookmarklet_data(data)
             elif self.path == '/api/bookmarklet/mode':
                 response = self.handle_bookmarklet_mode(data)
+            elif self.path == '/api/bookmarklet/start-workflow':
+                response = self.handle_start_bookmarklet_workflow(data)
             else:
                 response = {'success': False, 'error': 'Unknown endpoint'}
             
@@ -2745,7 +2753,7 @@ class SyncHandler(BaseHTTPRequestHandler):
         global bookmarklet_mode
         
         new_mode = data.get('mode', 'prb-extract')
-        valid_modes = ['prb-extract', 'jira-scrape', 'custom']
+        valid_modes = ['prb-extract', 'jira-scrape', 'jira-fill', 'custom']
         
         if new_mode not in valid_modes:
             return {'success': False, 'error': f'Invalid mode. Valid modes: {valid_modes}'}
@@ -2754,6 +2762,84 @@ class SyncHandler(BaseHTTPRequestHandler):
         safe_print(f"[Bookmarklet] Mode changed to: {bookmarklet_mode}")
         
         return {'success': True, 'mode': bookmarklet_mode}
+    
+    def handle_start_bookmarklet_workflow(self, data):
+        """Start a bookmarklet workflow (sets pending context)"""
+        global bookmarklet_pending, bookmarklet_mode, bookmarklet_last_data
+        
+        workflow_type = data.get('type', 'prb-extract')
+        prb_number = data.get('prb_number', '')
+        
+        # Clear previous data
+        bookmarklet_last_data = None
+        
+        # Set pending context
+        bookmarklet_pending = {
+            'type': workflow_type,
+            'prb_number': prb_number,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'waiting'
+        }
+        
+        # Set mode based on workflow
+        bookmarklet_mode = workflow_type
+        
+        safe_print(f"[Bookmarklet] Workflow started: {workflow_type}, PRB: {prb_number}")
+        
+        # Get SNOW config for URL
+        config_path = os.path.join(DATA_DIR, 'config.yaml')
+        snow_url = ''
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+                snow_url = config.get('servicenow', {}).get('base_url', '')
+        except:
+            pass
+        
+        # Build PRB URL if we have base URL
+        prb_url = ''
+        if snow_url and prb_number:
+            # ServiceNow URL format for problem records
+            prb_url = f"{snow_url.rstrip('/')}/nav_to.do?uri=problem.do?sysparm_query=number={prb_number}"
+        
+        return {
+            'success': True,
+            'pending': bookmarklet_pending,
+            'prb_url': prb_url
+        }
+    
+    def _handle_bookmarklet_pending(self):
+        """Return current pending workflow context"""
+        global bookmarklet_pending
+        
+        response = {
+            'pending': bookmarklet_pending,
+            'has_data': bookmarklet_last_data is not None
+        }
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode())
+    
+    def _handle_bookmarklet_status(self):
+        """Check if bookmarklet data has arrived (for polling)"""
+        global bookmarklet_pending, bookmarklet_last_data
+        
+        has_data = bookmarklet_last_data is not None
+        
+        response = {
+            'has_data': has_data,
+            'pending': bookmarklet_pending,
+            'data': bookmarklet_last_data if has_data else None
+        }
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode())
 
 
 # HTML Template (embedded)
