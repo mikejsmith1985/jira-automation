@@ -184,7 +184,7 @@ async function validatePRB() {
         // Show loading
         resultEl.style.display = 'block';
         resultEl.innerHTML = '<div style="text-align: center; padding: 20px;"><span>Validating PRB...</span></div>';
-        createBtn.disabled = true;
+        if (createBtn) createBtn.disabled = true;
     
     try {
         const response = await fetch('/api/snow-jira/validate-prb', {
