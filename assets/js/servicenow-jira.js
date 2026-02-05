@@ -185,17 +185,32 @@ async function validatePRB() {
         const result = await response.json();
         
         if (result.success) {
+            console.log('[Waypoint] ✅ PRB validation SUCCESS');
+            console.log('[Waypoint] Result data:', JSON.stringify(result.data, null, 2));
+            console.log('[Waypoint] Incidents found:', result.incidents ? result.incidents.length : 0);
+            
             currentPRBData = result.data;
             
             // Display PRB details
             const prbDetails = document.getElementById('prb-details');
             if (prbDetails) {
                 const detailsHTML = `
-                    <p><strong>PRB:</strong> ${result.data.prb_number || 'N/A'}</p>
-                    <p><strong>Summary:</strong> ${result.data.short_description || 'N/A'}</p>
-                    <p><strong>Priority:</strong> ${result.data.priority || 'N/A'}</p>
+                    <div style="background: var(--bg-primary); padding: 15px; border-radius: 8px; border-left: 4px solid var(--accent-green);">
+                        <h4 style="margin: 0 0 10px 0; color: var(--accent-green);">✅ PRB Data Retrieved</h4>
+                        <p><strong>PRB:</strong> ${result.data.prb_number || 'N/A'}</p>
+                        <p><strong>Summary:</strong> ${result.data.short_description || 'N/A'}</p>
+                        <p><strong>Priority:</strong> ${result.data.priority || 'N/A'}</p>
+                        ${result.data.category ? `<p><strong>Category:</strong> ${result.data.category}</p>` : ''}
+                        ${result.data.problem_owner ? `<p><strong>Owner:</strong> ${result.data.problem_owner}</p>` : ''}
+                        <p style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px;">
+                            <strong>Fields extracted:</strong> ${Object.keys(result.data).length} fields
+                        </p>
+                    </div>
                 `;
                 prbDetails.innerHTML = detailsHTML;
+                console.log('[Waypoint] ✓ PRB details displayed');
+            } else {
+                console.error('[Waypoint] ✗ prb-details element not found!');
             }
             
             // Handle incident selection
@@ -204,6 +219,7 @@ async function validatePRB() {
             
             if (incSelection && incList) {
                 if (result.incidents && result.incidents.length > 0) {
+                    console.log('[Waypoint] Displaying', result.incidents.length, 'incidents');
                     incSelection.style.display = 'block';
                     incList.innerHTML = '';
                     
@@ -220,16 +236,24 @@ async function validatePRB() {
                     
                     // Auto-select first one
                     selectedIncident = result.incidents[0].number;
-                    if (createBtn) createBtn.disabled = false;
+                    if (createBtn) {
+                        createBtn.disabled = false;
+                        console.log('[Waypoint] ✓ Create button enabled');
+                    }
                     
                 } else {
+                    console.log('[Waypoint] ⚠️ No incidents found');
                     incSelection.style.display = 'block';
                     incList.innerHTML = '<span style="color: #FF991F;">⚠️ No incidents found in Incidents tab</span>';
                     if (createBtn) createBtn.disabled = true;
                 }
+            } else {
+                console.error('[Waypoint] ✗ inc-selection or inc-list elements not found!');
             }
             
-            showNotification('PRB validated successfully!');
+            // Clear loading message and show success
+            resultEl.innerHTML = `<div style="color: var(--accent-green); text-align: center; padding: 10px;">✅ PRB validated successfully! ${Object.keys(result.data).length} fields extracted.</div>`;
+            showNotification(`✅ PRB validated! ${Object.keys(result.data).length} fields extracted, ${result.incidents ? result.incidents.length : 0} incidents found.`);
             
         } else {
             console.error('[Waypoint] PRB validation failed:', result.error);

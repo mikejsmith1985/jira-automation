@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.1.5"  # Fix: PAT persistence + Auto-install Chromium
+APP_VERSION = "2.1.9"  # Automatic frontend logging + enhanced feedback system
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -291,7 +291,10 @@ class SyncHandler(BaseHTTPRequestHandler):
         """Handle POST requests (API endpoints)"""
         try:
             # Special handlers that manage their own response
-            if self.path == '/api/feedback/console-log':
+            if self.path == '/log_frontend':
+                self._handle_frontend_logs()
+                return
+            elif self.path == '/api/feedback/console-log':
                 self._handle_console_log()
                 return
             elif self.path == '/api/feedback/network-error':
@@ -638,6 +641,8 @@ class SyncHandler(BaseHTTPRequestHandler):
         """Initialize Playwright browser with session persistence"""
         global playwright_instance, browser, context, page
         
+        safe_print("[PLAYWRIGHT] Initializing browser...")
+        
         # CRITICAL: Ensure Playwright browsers are installed
         self._ensure_playwright_browsers()
         
@@ -647,18 +652,28 @@ class SyncHandler(BaseHTTPRequestHandler):
         storage_state_path = os.path.join(storage_dir, 'state.json')
         
         # Start Playwright
+        safe_print("[PLAYWRIGHT] Starting Playwright instance...")
         playwright_instance = sync_playwright().start()
+        safe_print("[PLAYWRIGHT] ✓ Playwright instance started")
         
         # Launch browser with Playwright's Chromium (NOT system Chrome)
         # Headless mode: user doesn't see browser, can't accidentally close it
-        browser = playwright_instance.chromium.launch(
-            headless=True,  # Run in background - user never sees it
-            args=[
-                '--disable-blink-features=AutomationControlled',  # Hide automation
-                '--disable-dev-shm-usage',  # Prevent crashes in restricted environments
-                '--no-sandbox'  # Required for some corporate environments
-            ]
-        )
+        safe_print("[PLAYWRIGHT] Launching Chromium (headless mode)...")
+        try:
+            browser = playwright_instance.chromium.launch(
+                headless=True,  # Run in background - user never sees it
+                args=[
+                    '--disable-blink-features=AutomationControlled',  # Hide automation
+                    '--disable-dev-shm-usage',  # Prevent crashes in restricted environments
+                    '--no-sandbox'  # Required for some corporate environments
+                ]
+            )
+            safe_print(f"[PLAYWRIGHT] ✓ Chromium launched successfully")
+        except Exception as e:
+            safe_print(f"[PLAYWRIGHT] ✗ Failed to launch Chromium: {e}")
+            import traceback
+            safe_print(f"[PLAYWRIGHT] Stack trace:\n{traceback.format_exc()}")
+            raise
         
         # Create context with session persistence
         context_options = {
@@ -669,24 +684,50 @@ class SyncHandler(BaseHTTPRequestHandler):
         # Load saved session if exists
         if os.path.exists(storage_state_path):
             context_options['storage_state'] = storage_state_path
-            safe_print(f"📂 Loading saved session from {storage_state_path}")
+            safe_print(f"[PLAYWRIGHT] 📂 Loading saved session from {storage_state_path}")
+        else:
+            safe_print(f"[PLAYWRIGHT] 📂 No saved session found, starting fresh")
         
+        safe_print("[PLAYWRIGHT] Creating browser context...")
         context = browser.new_context(**context_options)
+        safe_print("[PLAYWRIGHT] ✓ Browser context created")
         
-        # Create page
+        # Create page with console logging
+        safe_print("[PLAYWRIGHT] Creating page...")
         page = context.new_page()
+        
+        # CRITICAL: Capture browser console logs and errors
+        def log_console(msg):
+            """Log browser console messages to Python logs"""
+            log_level = msg.type
+            text = msg.text
+            safe_print(f"[BROWSER-CONSOLE:{log_level.upper()}] {text}")
+        
+        def log_page_error(error):
+            """Log browser page errors to Python logs"""
+            safe_print(f"[BROWSER-ERROR] {error}")
+        
+        page.on("console", log_console)
+        page.on("pageerror", log_page_error)
+        
+        safe_print("[PLAYWRIGHT] ✓ Page created with console logging enabled")
+        safe_print(f"[PLAYWRIGHT] ✓ Browser initialization complete")
         
         return storage_state_path
     
     def _ensure_playwright_browsers(self):
         """Ensure Playwright browsers are installed - auto-install if missing"""
         try:
+            safe_print("[PLAYWRIGHT] Checking if Chromium is installed...")
+            
             # Check if chromium is installed by trying to get executable path
             from playwright._impl._driver import compute_driver_executable
             driver_executable = compute_driver_executable()
+            safe_print(f"[PLAYWRIGHT] Driver executable: {driver_executable}")
             
             # Try to check if browsers are installed
             import subprocess
+            safe_print("[PLAYWRIGHT] Running 'playwright install --dry-run chromium'...")
             result = subprocess.run(
                 [sys.executable, '-m', 'playwright', 'install', '--dry-run', 'chromium'],
                 capture_output=True,
@@ -694,10 +735,16 @@ class SyncHandler(BaseHTTPRequestHandler):
                 timeout=10
             )
             
+            safe_print(f"[PLAYWRIGHT] Dry-run return code: {result.returncode}")
+            safe_print(f"[PLAYWRIGHT] Dry-run stdout: {result.stdout[:200]}")
+            if result.stderr:
+                safe_print(f"[PLAYWRIGHT] Dry-run stderr: {result.stderr[:200]}")
+            
             # If dry-run shows browsers need installation, install them
             if 'chromium' in result.stdout.lower() or result.returncode != 0:
-                safe_print("[PLAYWRIGHT] Chromium not installed. Installing...")
-                safe_print("[PLAYWRIGHT] This is a one-time setup, please wait...")
+                safe_print("[PLAYWRIGHT] ⚠️ Chromium not installed. Installing...")
+                safe_print("[PLAYWRIGHT] This is a one-time setup (~100MB download), please wait...")
+                safe_print("[PLAYWRIGHT] Installation may take 30-60 seconds...")
                 
                 # Install chromium only (faster than all browsers)
                 install_result = subprocess.run(
@@ -707,16 +754,25 @@ class SyncHandler(BaseHTTPRequestHandler):
                     timeout=300  # 5 minutes max
                 )
                 
-                if install_result.returncode == 0:
-                    safe_print("[PLAYWRIGHT] ✓ Chromium installed successfully!")
-                else:
-                    safe_print(f"[PLAYWRIGHT] ⚠️ Installation warning: {install_result.stderr}")
-                    # Continue anyway - might still work
-            else:
-                safe_print("[PLAYWRIGHT] ✓ Chromium already installed")
+                safe_print(f"[PLAYWRIGHT] Install return code: {install_result.returncode}")
+                safe_print(f"[PLAYWRIGHT] Install stdout: {install_result.stdout[:500]}")
                 
+                if install_result.returncode == 0:
+                    safe_print("[PLAYWRIGHT] ✅ Chromium installed successfully!")
+                else:
+                    safe_print(f"[PLAYWRIGHT] ⚠️ Installation warning - return code {install_result.returncode}")
+                    safe_print(f"[PLAYWRIGHT] stderr: {install_result.stderr}")
+                    safe_print("[PLAYWRIGHT] Attempting to continue anyway...")
+            else:
+                safe_print("[PLAYWRIGHT] ✅ Chromium already installed")
+                
+        except subprocess.TimeoutExpired as e:
+            safe_print(f"[PLAYWRIGHT] ⚠️ Installation timeout after {e.timeout}s")
+            safe_print("[PLAYWRIGHT] This may indicate network issues. Attempting to continue...")
         except Exception as e:
-            safe_print(f"[PLAYWRIGHT] Warning: Could not verify browser installation: {e}")
+            safe_print(f"[PLAYWRIGHT] ⚠️ Error checking browser installation: {e}")
+            import traceback
+            safe_print(f"[PLAYWRIGHT] Stack trace:\n{traceback.format_exc()}")
             safe_print("[PLAYWRIGHT] Attempting to continue anyway...")
             # Don't fail - let chromium.launch() handle it
         
@@ -808,100 +864,122 @@ class SyncHandler(BaseHTTPRequestHandler):
         try:
             # Use DATA_DIR for writable config
             config_path = os.path.join(DATA_DIR, 'config.yaml')
-            safe_print(f"[DEBUG] Saving integrations to: {config_path}")
+            safe_print(f"[CONFIG] Saving integrations to: {config_path}")
+            safe_print(f"[CONFIG] Received data sections: {list(data.keys())}")
             
             # CRITICAL: Always load existing config first to preserve feedback tokens
             if not os.path.exists(config_path):
-                safe_print(f"[DEBUG] Config file not found, creating new one")
+                safe_print(f"[CONFIG] Config file not found, creating new one")
                 config = {}
             else:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = yaml.safe_load(f) or {}
-                    safe_print(f"[DEBUG] Loaded existing config with keys: {list(config.keys())}")
+                    safe_print(f"[CONFIG] Loaded existing config with sections: {list(config.keys())}")
             
             # IMPORTANT: Only update fields that are provided in data
             # DO NOT overwrite/delete sections not included in data
             
             if 'github' in data:
+                safe_print(f"[CONFIG] Updating GitHub section...")
                 if 'github' not in config:
                     config['github'] = {}
                 # Only update provided fields
                 if 'api_token' in data['github']:
                     config['github']['api_token'] = data['github']['api_token']
+                    safe_print(f"[CONFIG]   - api_token: {'<set>' if data['github']['api_token'] else '<empty>'}")
                 if 'base_url' in data['github']:
                     config['github']['base_url'] = data['github']['base_url']
+                    safe_print(f"[CONFIG]   - base_url: {data['github']['base_url']}")
                 if 'organization' in data['github']:
                     config['github']['organization'] = data['github']['organization']
+                    safe_print(f"[CONFIG]   - organization: {data['github']['organization']}")
                 if 'repositories' in data['github']:
                     config['github']['repositories'] = data['github']['repositories']
+                    safe_print(f"[CONFIG]   - repositories: {len(data['github']['repositories'])} repos")
             
             if 'jira' in data:
+                safe_print(f"[CONFIG] Updating Jira section...")
                 if 'jira' not in config:
                     config['jira'] = {}
                 # Only update provided fields
                 if 'base_url' in data['jira']:
                     config['jira']['base_url'] = data['jira']['base_url']
+                    safe_print(f"[CONFIG]   - base_url: {data['jira']['base_url']}")
                 if 'project_keys' in data['jira']:
                     config['jira']['project_keys'] = data['jira']['project_keys']
+                    safe_print(f"[CONFIG]   - project_keys: {data['jira']['project_keys']}")
             
             if 'feedback' in data:
+                safe_print(f"[CONFIG] Updating feedback section...")
                 if 'feedback' not in config:
                     config['feedback'] = {}
                 # Only update provided fields
                 if 'github_token' in data['feedback']:
                     config['feedback']['github_token'] = data['feedback']['github_token']
+                    safe_print(f"[CONFIG]   - github_token: {'<set>' if data['feedback']['github_token'] else '<empty>'}")
                 if 'repo' in data['feedback']:
                     config['feedback']['repo'] = data['feedback']['repo']
+                    safe_print(f"[CONFIG]   - repo: {data['feedback']['repo']}")
             
             # ADD: Handle ServiceNow config
             if 'servicenow' in data:
+                safe_print(f"[CONFIG] Updating ServiceNow section...")
                 if 'servicenow' not in config:
                     config['servicenow'] = {}
                 # Validate required fields
+                url = None
+                jira_project = None
                 if 'url' in data['servicenow']:
                     url = data['servicenow']['url'].strip()
                     if url:
                         config['servicenow']['url'] = url
+                        safe_print(f"[CONFIG]   - url: {url}")
                 if 'jira_project' in data['servicenow']:
                     jira_project = data['servicenow']['jira_project'].strip()
                     if jira_project:
                         config['servicenow']['jira_project'] = jira_project
+                        safe_print(f"[CONFIG]   - jira_project: {jira_project}")
                 if 'field_mapping' in data['servicenow']:
                     config['servicenow']['field_mapping'] = data['servicenow']['field_mapping']
-                
-                safe_print(f"[SNOW] ServiceNow config updated - URL: '{url}', Project: '{jira_project}'")
+                    safe_print(f"[CONFIG]   - field_mapping: {len(data['servicenow']['field_mapping'])} mappings")
             
-            safe_print(f"[DEBUG] Writing config: {config}")
+            safe_print(f"[CONFIG] Final config sections: {list(config.keys())}")
+            safe_print(f"[CONFIG] Writing config to disk...")
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, default_flow_style=False)
+            safe_print(f"[CONFIG] ✓ Config written successfully")
             
             # Re-initialize GitHub feedback client if token was updated
             global github_feedback, github_feedback_client
             if 'feedback' in data and data['feedback'].get('github_token'):
                 try:
+                    safe_print(f"[CONFIG] Re-initializing GitHub feedback system...")
                     token = data['feedback']['github_token']
                     repo = data['feedback'].get('repo', config.get('feedback', {}).get('repo', ''))
                     if token and repo:
                         github_feedback = GitHubFeedback(token=token, repo_name=repo)
                         github_feedback_client = github_feedback
-                        safe_print("[OK] GitHub feedback system re-initialized")
+                        safe_print("[CONFIG] ✓ GitHub feedback system re-initialized")
                 except Exception as e:
-                    safe_print(f"[WARN] Failed to re-initialize feedback system: {e}")
+                    safe_print(f"[CONFIG] ⚠️ Failed to re-initialize feedback system: {e}")
             
             # Reload config_manager to pick up new settings for update checker etc.
             global config_manager
             if config_manager:
                 config_manager.load()
-                safe_print("[OK] Config reloaded")
+                safe_print("[CONFIG] ✓ Config manager reloaded")
             
+            safe_print(f"[CONFIG] ✅ Integration settings saved successfully")
             return {'success': True, 'message': 'Integration settings saved'}
         except PermissionError as e:
-            safe_print(f"[ERROR] Permission denied writing config: {e}")
+            safe_print(f"[CONFIG] ❌ Permission denied writing config: {e}")
+            import traceback
+            safe_print(f"[CONFIG] Stack trace:\n{traceback.format_exc()}")
             return {'success': False, 'error': f'Permission denied: Cannot write to config file. Try running as administrator.'}
         except Exception as e:
-            safe_print(f"[ERROR] Failed to save integrations: {e}")
+            safe_print(f"[CONFIG] ❌ Failed to save integrations: {e}")
             import traceback
-            traceback.print_exc()
+            safe_print(f"[CONFIG] Stack trace:\n{traceback.format_exc()}")
             return {'success': False, 'error': f'Save failed: {str(e)}'}
     
     def handle_test_github_connection(self, data):
@@ -1546,6 +1624,42 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
     
+    def _handle_frontend_logs(self):
+        """
+        Receive batched frontend logs and write to file
+        This is the NEW automatic logging system - replaces manual console.log()
+        """
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            logs = data.get('logs', [])
+            if logs:
+                # Write to dedicated frontend log file
+                frontend_log_path = os.path.join(DATA_DIR, 'frontend.log')
+                
+                with open(frontend_log_path, 'a', encoding='utf-8') as f:
+                    for entry in logs:
+                        timestamp = entry.get('timestamp', 'NO_TIMESTAMP')
+                        level = entry.get('level', 'INFO')
+                        message = entry.get('message', '')
+                        f.write(f"{timestamp} [{level}] {message}\n")
+                
+                safe_print(f"[FRONTEND-LOG] Wrote {len(logs)} log entries to {frontend_log_path}")
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True, 'logged': len(logs)}).encode('utf-8'))
+            
+        except Exception as e:
+            safe_print(f"[FRONTEND-LOG] ERROR: {e}")
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
+    
     def _handle_console_log(self):
         """Receive and store console log from browser"""
         global log_capture
@@ -1757,9 +1871,27 @@ class SyncHandler(BaseHTTPRequestHandler):
             body = f"{description}\n\n"
             
             if include_logs:
-                body += "## Logs\n```\n"
+                body += "## Backend Logs\n```\n"
                 body += log_capture.export_all_logs()
                 body += "\n```\n\n"
+                
+                # Include frontend logs if they exist
+                frontend_log_path = os.path.join(DATA_DIR, 'frontend.log')
+                if os.path.exists(frontend_log_path):
+                    try:
+                        with open(frontend_log_path, 'r', encoding='utf-8') as f:
+                            # Get last 500 lines to avoid huge logs
+                            lines = f.readlines()
+                            if len(lines) > 500:
+                                frontend_logs = ''.join(lines[-500:])
+                                body += f"## Frontend Logs (last 500 lines)\n```\n"
+                            else:
+                                frontend_logs = ''.join(lines)
+                                body += f"## Frontend Logs\n```\n"
+                            body += frontend_logs
+                            body += "\n```\n\n"
+                    except Exception as fe_err:
+                        body += f"## Frontend Logs\n*(Failed to read: {fe_err})*\n\n"
             
             # Add system info
             import platform
