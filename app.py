@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.1.0"  # Fix: Null checks in validatePRB + container-based extraction
+APP_VERSION = "2.1.1"  # Test version for update testing
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -1042,6 +1042,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 def restart_after_update():
                     import time
                     import subprocess
+                    import signal
                     
                     time.sleep(3)  # Give time for response to reach client
                     
@@ -1053,14 +1054,17 @@ class SyncHandler(BaseHTTPRequestHandler):
                     else:
                         exe_path = os.path.abspath(__file__)
                     
-                    # Get directory containing the exe (important for PyInstaller)
+                    # Get directory containing the exe
                     exe_dir = os.path.dirname(exe_path)
                     
-                    # Start new instance (detached process with correct working directory)
+                    safe_print(f"[UPDATE] exe_path: {exe_path}")
+                    safe_print(f"[UPDATE] exe_dir: {exe_dir}")
+                    
+                    # Start new instance FIRST (it will wait for port to be free)
                     try:
                         if getattr(sys, 'frozen', False):
                             subprocess.Popen([exe_path],
-                                           cwd=exe_dir,  # Set working directory to exe location
+                                           cwd=exe_dir,
                                            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                                            close_fds=True)
                         else:
@@ -1069,12 +1073,22 @@ class SyncHandler(BaseHTTPRequestHandler):
                                            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                                            close_fds=True)
                         
-                        safe_print("[UPDATE] New instance started, exiting current...")
-                        time.sleep(1)  # Give new instance time to start
-                        os._exit(0)  # Exit current process
+                        safe_print("[UPDATE] New instance started")
+                        
+                        # Kill current process forcefully (this is a daemon thread, os._exit doesn't work reliably)
+                        safe_print("[UPDATE] Terminating current process...")
+                        time.sleep(1)
+                        
+                        # Use taskkill to forcefully terminate this specific PID
+                        import subprocess as sp
+                        pid = os.getpid()
+                        sp.Popen([f'taskkill', '/F', '/PID', str(pid)],
+                                creationflags=subprocess.CREATE_NO_WINDOW)
+                        
                     except Exception as e:
                         safe_print(f"[UPDATE] Failed to restart: {e}")
-                        os._exit(1)
+                        import traceback
+                        traceback.print_exc()
                 
                 threading.Thread(target=restart_after_update, daemon=True).start()
             
