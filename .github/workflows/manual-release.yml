@@ -90,7 +90,20 @@ jobs:
           pip install pyinstaller
       
       - name: Build executable
-        run: .\build.ps1
+        run: |
+          Write-Host "Building with waypoint.spec..." -ForegroundColor Cyan
+          python -m PyInstaller waypoint.spec --clean
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Build failed" -ForegroundColor Red
+            exit 1
+          }
+          if (Test-Path "dist\waypoint.exe") {
+            $size = [math]::Round((Get-Item "dist\waypoint.exe").Length / 1MB, 1)
+            Write-Host "Build successful! waypoint.exe ($size MB)" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: dist\waypoint.exe not found" -ForegroundColor Red
+            exit 1
+          }
         shell: pwsh
       
       - name: Prepare release assets
@@ -99,13 +112,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path release
           
           # Find executable
-          $exePath = Get-ChildItem -Path "dist" -Filter "*.exe" -Recurse | Select-Object -First 1
+          $exePath = "dist\waypoint.exe"
           
-          if ($exePath) {
-            Copy-Item $exePath.FullName -Destination "release/waypoint-$tag.exe"
+          if (Test-Path $exePath) {
+            Copy-Item $exePath -Destination "release/waypoint-$tag.exe"
             echo "Built: release/waypoint-$tag.exe"
           } else {
-            Write-Error "No executable found!"
+            Write-Error "waypoint.exe not found in dist folder!"
             exit 1
           }
         shell: pwsh

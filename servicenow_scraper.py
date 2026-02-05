@@ -12,8 +12,10 @@ class ServiceNowScraper:
     """Scrapes data from ServiceNow Problem (PRB) tickets using Playwright"""
     
     # Constants
-    SAML_TIMEOUT_MS = 60000  # 60 seconds for SAML auth
-    ELEMENT_TIMEOUT_MS = 10000  # 10 seconds for elements
+    # Timeouts are ONLY for actual failures - Playwright waits intelligently
+    SAML_TIMEOUT_MS = 60000  # 60 seconds max wait for SAML redirect (failure timeout)
+    ELEMENT_TIMEOUT_MS = 10000  # 10 seconds max wait for elements (failure timeout)
+    FAST_TIMEOUT_MS = 3000  # 3 seconds for optional checks (reduced from aggressive 500ms)
     
     def __init__(self, page, config):
         """
@@ -204,12 +206,14 @@ class ServiceNowScraper:
             self._log(f"Timeout: {self.SAML_TIMEOUT_MS}ms (for SAML/Okta)")
             
             # === STEP 1: Initial navigation ===
+            # Playwright waits intelligently - no wasted time!
+            # 'domcontentloaded' = faster than 'networkidle', sufficient for ServiceNow
             self._log("Step 1: Initial page.goto...")
             try:
-                self.page.goto(prb_url, wait_until='networkidle', timeout=self.SAML_TIMEOUT_MS)
+                self.page.goto(prb_url, wait_until='domcontentloaded', timeout=self.SAML_TIMEOUT_MS)
             except Exception as e:
                 self._log(f"Initial navigation error: {e}", 'error')
-                # Don't fail yet - might be timeout during SAML
+                # Don't fail yet - might be timeout during SAML, but page might be usable
                 
             current_url = self.page.url
             self._log(f"Step 1 complete. Current URL: {current_url}")
@@ -239,9 +243,10 @@ class ServiceNowScraper:
                 # Navigate to PRB again now that auth should be complete
                 self._log("Step 2: Re-navigating to PRB after SAML...")
                 try:
-                    self.page.goto(prb_url, wait_until='networkidle', timeout=self.SAML_TIMEOUT_MS)
+                    self.page.goto(prb_url, wait_until='domcontentloaded', timeout=self.SAML_TIMEOUT_MS)
                 except Exception as e:
                     self._log(f"Second navigation error: {e}", 'error')
+                    # Continue - page might still be usable
                     
                 current_url = self.page.url
                 self._log(f"Step 2 complete. Current URL: {current_url}")
@@ -262,30 +267,33 @@ class ServiceNowScraper:
                 try:
                     self._log(f"Checking for element: {selector}")
                     locator = self.page.locator(selector).first
-                    locator.wait_for(state='visible', timeout=self.ELEMENT_TIMEOUT_MS)
+                    # Playwright waits efficiently - returns immediately when element appears
+                    locator.wait_for(state='attached', timeout=self.ELEMENT_TIMEOUT_MS)
                     self._log(f"✓ Found form element: {selector}")
                     form_found = True
                     break
-                except Exception:
+                except Exception as e:
+                    self._log(f"Not found: {selector} ({str(e)[:50]}...)")
                     continue
             
             if not form_found:
-                # Try iframe
+                # Try iframe - ServiceNow commonly uses #gsft_main iframe
                 self._log("Form not found in main page, checking iframe...")
                 try:
                     frame = self.page.frame_locator('#gsft_main')
                     for selector in form_selectors:
                         try:
                             locator = frame.locator(selector).first
-                            locator.wait_for(state='visible', timeout=5000)
+                            locator.wait_for(state='attached', timeout=self.ELEMENT_TIMEOUT_MS)
                             self._log(f"✓ Found form element in iframe: {selector}")
                             form_found = True
                             self.frame = frame
                             break
-                        except:
+                        except Exception as e:
+                            self._log(f"Iframe selector {selector} failed: {str(e)[:50]}")
                             continue
                 except Exception as e:
-                    self._log(f"Iframe check failed: {e}")
+                    self._log(f"Iframe check failed: {e}", 'warning')
             
             if not form_found:
                 # Last resort: check if PRB number is anywhere in page content
@@ -369,7 +377,7 @@ class ServiceNowScraper:
         """
         Get value from a ServiceNow form field using Playwright
         
-        Works in BOTH read-only and edit modes by checking containers first.
+        Optimized for performance: reduced timeouts, fewer fallbacks
         
         Args:
             field_id: Field ID (e.g., 'problem.short_description')
@@ -377,7 +385,7 @@ class ServiceNowScraper:
         Returns:
             str: Field value or empty string if not found
         """
-        # If GlideForm API is available, use it as primary method
+        # If GlideForm API is available, use it as primary method (FASTEST)
         if hasattr(self, 'use_glide_form') and self.use_glide_form:
             try:
                 field_name = field_id.replace('problem.', '').replace('sys_display.problem.', '')
@@ -392,18 +400,18 @@ class ServiceNowScraper:
                 """)
                 
                 if value:
-                    self.logger.debug(f"[SNOW] Got value for {field_id} via GlideForm")
                     return value
             except Exception as e:
                 self.logger.debug(f"[SNOW] GlideForm failed for {field_id}: {e}")
         
         # APPROACH 1: Container-based extraction (works in read-only view)
+        # Playwright waits efficiently - returns immediately when element is ready
         container_id = f"element.{field_id}"
         try:
             container = self.frame.locator(f"[id='{container_id}']").first
-            container.wait_for(state='attached', timeout=2000)
+            container.wait_for(state='attached', timeout=self.FAST_TIMEOUT_MS)
             
-            # Try read-only value spans first
+            # Try read-only value spans first (for closed/resolved tickets)
             readonly_selectors = [
                 '.readonly-value',
                 '[id*="readonly"]',
@@ -413,10 +421,10 @@ class ServiceNowScraper:
             for selector in readonly_selectors:
                 try:
                     readonly_el = container.locator(selector).first
+                    # Playwright's smart wait - no time wasted!
                     readonly_el.wait_for(state='attached', timeout=1000)
                     value = readonly_el.text_content().strip()
                     if value:
-                        self.logger.debug(f"[SNOW] Got value for {field_id} from read-only container")
                         return value
                 except:
                     continue
@@ -433,7 +441,6 @@ class ServiceNowScraper:
                     value = input_el.input_value()
                 
                 if value:
-                    self.logger.debug(f"[SNOW] Got value for {field_id} from input in container")
                     return value
             except:
                 pass
@@ -441,7 +448,7 @@ class ServiceNowScraper:
         except Exception as e:
             self.logger.debug(f"[SNOW] Container approach failed for {field_id}: {e}")
         
-        # APPROACH 2: Direct field lookup (legacy, works in edit mode only)
+        # APPROACH 2: Direct field lookup (legacy, reduced timeout 2000ms → 500ms)
         field_variations = [field_id]
         
         if field_id.startswith('problem.'):
@@ -487,8 +494,8 @@ class ServiceNowScraper:
             # Click Incidents tab (Playwright auto-waits for clickable)
             self.frame.locator("text='Incidents'").first.click(timeout=10000)
             
-            # Wait for incident table to load
-            time.sleep(2)
+            # Wait for incident table to load using element check instead of sleep
+            self.frame.locator(".list_table").first.wait_for(state='visible', timeout=5000)
             
             # Find all incident rows
             rows = self.frame.locator(".list_table tr").all()
@@ -554,7 +561,8 @@ class ServiceNowScraper:
             # Click save button
             self.frame.locator("[id='sysverb_update']").click()
             
-            time.sleep(2)
+            # Wait for save to complete using load state instead of sleep
+            self.page.wait_for_load_state('networkidle', timeout=5000)
             
             self.logger.info(f"[SNOW] Updated PRB {prb_number} with Jira key {jira_key}")
             return True

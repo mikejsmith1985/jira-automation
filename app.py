@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.1.1"  # Test version for update testing
+APP_VERSION = "2.1.4"  # Playwright: Headless mode + smart waits (no wasted time)
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -646,11 +646,15 @@ class SyncHandler(BaseHTTPRequestHandler):
         # Start Playwright
         playwright_instance = sync_playwright().start()
         
-        # Launch browser (use system Chrome if available)
+        # Launch browser with Playwright's Chromium (NOT system Chrome)
+        # Headless mode: user doesn't see browser, can't accidentally close it
         browser = playwright_instance.chromium.launch(
-            headless=False,
-            channel="chrome",  # Use system Chrome
-            args=['--start-maximized']
+            headless=True,  # Run in background - user never sees it
+            args=[
+                '--disable-blink-features=AutomationControlled',  # Hide automation
+                '--disable-dev-shm-usage',  # Prevent crashes in restricted environments
+                '--no-sandbox'  # Required for some corporate environments
+            ]
         )
         
         # Create context with session persistence

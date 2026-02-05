@@ -84,12 +84,18 @@ jobs:
       
       - name: Build executable with PyInstaller
         run: |
-          if (Test-Path "GitHubJiraSync.spec") {
-            pyinstaller GitHubJiraSync.spec
-          } elseif (Test-Path "JiraAutomationAssistant.spec") {
-            pyinstaller JiraAutomationAssistant.spec
+          Write-Host "Building with waypoint.spec..." -ForegroundColor Cyan
+          python -m PyInstaller waypoint.spec --clean
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Build failed" -ForegroundColor Red
+            exit 1
+          }
+          if (Test-Path "dist\waypoint.exe") {
+            $size = [math]::Round((Get-Item "dist\waypoint.exe").Length / 1MB, 1)
+            Write-Host "Build successful! waypoint.exe ($size MB)" -ForegroundColor Green
           } else {
-            pyinstaller --name="GitHubJiraSync" --onefile --windowed --icon="assets/icon.ico" app.py
+            Write-Host "ERROR: dist\waypoint.exe not found" -ForegroundColor Red
+            exit 1
           }
         shell: pwsh
       
@@ -99,11 +105,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path release
           
           # Find the built executable
-          $exePath = Get-ChildItem -Path "dist" -Filter "*.exe" -Recurse | Select-Object -First 1
+          $exePath = "dist\waypoint.exe"
           
-          if ($exePath) {
-            $exeName = $exePath.Name
-            Copy-Item $exePath.FullName -Destination "release/GitHubJiraSync-$version.exe"
+          if (Test-Path $exePath) {
+            Copy-Item $exePath -Destination "release/waypoint-$version.exe"
             
             # Create release notes
             $releaseNotes = @"
@@ -132,9 +137,9 @@ jobs:
             
             $releaseNotes | Out-File -FilePath "release/RELEASE_NOTES.md" -Encoding utf8
             
-            echo "Executable built: release/GitHubJiraSync-$version.exe"
+            echo "Executable built: release/waypoint-$version.exe"
           } else {
-            Write-Error "No executable found in dist folder"
+            Write-Error "waypoint.exe not found in dist folder"
             exit 1
           }
         shell: pwsh
