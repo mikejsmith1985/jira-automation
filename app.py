@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.1.4"  # Playwright: Headless mode + smart waits (no wasted time)
+APP_VERSION = "2.1.5"  # Fix: PAT persistence + Auto-install Chromium
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -638,6 +638,9 @@ class SyncHandler(BaseHTTPRequestHandler):
         """Initialize Playwright browser with session persistence"""
         global playwright_instance, browser, context, page
         
+        # CRITICAL: Ensure Playwright browsers are installed
+        self._ensure_playwright_browsers()
+        
         # Storage state path for session persistence
         storage_dir = os.path.join(DATA_DIR, 'playwright_profile')
         os.makedirs(storage_dir, exist_ok=True)
@@ -672,6 +675,50 @@ class SyncHandler(BaseHTTPRequestHandler):
         
         # Create page
         page = context.new_page()
+        
+        return storage_state_path
+    
+    def _ensure_playwright_browsers(self):
+        """Ensure Playwright browsers are installed - auto-install if missing"""
+        try:
+            # Check if chromium is installed by trying to get executable path
+            from playwright._impl._driver import compute_driver_executable
+            driver_executable = compute_driver_executable()
+            
+            # Try to check if browsers are installed
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, '-m', 'playwright', 'install', '--dry-run', 'chromium'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            # If dry-run shows browsers need installation, install them
+            if 'chromium' in result.stdout.lower() or result.returncode != 0:
+                safe_print("[PLAYWRIGHT] Chromium not installed. Installing...")
+                safe_print("[PLAYWRIGHT] This is a one-time setup, please wait...")
+                
+                # Install chromium only (faster than all browsers)
+                install_result = subprocess.run(
+                    [sys.executable, '-m', 'playwright', 'install', 'chromium'],
+                    capture_output=True,
+                    text=True,
+                    timeout=300  # 5 minutes max
+                )
+                
+                if install_result.returncode == 0:
+                    safe_print("[PLAYWRIGHT] ✓ Chromium installed successfully!")
+                else:
+                    safe_print(f"[PLAYWRIGHT] ⚠️ Installation warning: {install_result.stderr}")
+                    # Continue anyway - might still work
+            else:
+                safe_print("[PLAYWRIGHT] ✓ Chromium already installed")
+                
+        except Exception as e:
+            safe_print(f"[PLAYWRIGHT] Warning: Could not verify browser installation: {e}")
+            safe_print("[PLAYWRIGHT] Attempting to continue anyway...")
+            # Don't fail - let chromium.launch() handle it
         
         return storage_state_path
     
@@ -757,54 +804,68 @@ class SyncHandler(BaseHTTPRequestHandler):
             return {'success': False, 'error': str(e)}
     
     def handle_save_integrations(self, data):
-        """Save integration settings to config"""
+        """Save integration settings to config - PRESERVES all existing config"""
         try:
             # Use DATA_DIR for writable config
             config_path = os.path.join(DATA_DIR, 'config.yaml')
             safe_print(f"[DEBUG] Saving integrations to: {config_path}")
             
-            # Create config file if it doesn't exist
+            # CRITICAL: Always load existing config first to preserve feedback tokens
             if not os.path.exists(config_path):
                 safe_print(f"[DEBUG] Config file not found, creating new one")
                 config = {}
             else:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = yaml.safe_load(f) or {}
+                    safe_print(f"[DEBUG] Loaded existing config with keys: {list(config.keys())}")
+            
+            # IMPORTANT: Only update fields that are provided in data
+            # DO NOT overwrite/delete sections not included in data
             
             if 'github' in data:
                 if 'github' not in config:
                     config['github'] = {}
-                config['github']['api_token'] = data['github'].get('api_token', config['github'].get('api_token', ''))
-                config['github']['base_url'] = data['github'].get('base_url', config['github'].get('base_url', ''))
-                config['github']['organization'] = data['github'].get('organization', config['github'].get('organization', ''))
+                # Only update provided fields
+                if 'api_token' in data['github']:
+                    config['github']['api_token'] = data['github']['api_token']
+                if 'base_url' in data['github']:
+                    config['github']['base_url'] = data['github']['base_url']
+                if 'organization' in data['github']:
+                    config['github']['organization'] = data['github']['organization']
                 if 'repositories' in data['github']:
                     config['github']['repositories'] = data['github']['repositories']
             
             if 'jira' in data:
                 if 'jira' not in config:
                     config['jira'] = {}
-                config['jira']['base_url'] = data['jira'].get('base_url', config['jira'].get('base_url', ''))
+                # Only update provided fields
+                if 'base_url' in data['jira']:
+                    config['jira']['base_url'] = data['jira']['base_url']
                 if 'project_keys' in data['jira']:
                     config['jira']['project_keys'] = data['jira']['project_keys']
             
             if 'feedback' in data:
                 if 'feedback' not in config:
                     config['feedback'] = {}
-                config['feedback']['github_token'] = data['feedback'].get('github_token', config.get('feedback', {}).get('github_token', ''))
-                config['feedback']['repo'] = data['feedback'].get('repo', config.get('feedback', {}).get('repo', ''))
+                # Only update provided fields
+                if 'github_token' in data['feedback']:
+                    config['feedback']['github_token'] = data['feedback']['github_token']
+                if 'repo' in data['feedback']:
+                    config['feedback']['repo'] = data['feedback']['repo']
             
             # ADD: Handle ServiceNow config
             if 'servicenow' in data:
                 if 'servicenow' not in config:
                     config['servicenow'] = {}
                 # Validate required fields
-                url = data['servicenow'].get('url', '').strip()
-                jira_project = data['servicenow'].get('jira_project', '').strip()
-                
-                if url:  # Only update if URL is provided
-                    config['servicenow']['url'] = url
-                if jira_project:  # Only update if project is provided
-                    config['servicenow']['jira_project'] = jira_project
+                if 'url' in data['servicenow']:
+                    url = data['servicenow']['url'].strip()
+                    if url:
+                        config['servicenow']['url'] = url
+                if 'jira_project' in data['servicenow']:
+                    jira_project = data['servicenow']['jira_project'].strip()
+                    if jira_project:
+                        config['servicenow']['jira_project'] = jira_project
                 if 'field_mapping' in data['servicenow']:
                     config['servicenow']['field_mapping'] = data['servicenow']['field_mapping']
                 
