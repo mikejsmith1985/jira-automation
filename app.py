@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.1.10"  # Fixed PRB validation error handling + recoverable UI
+APP_VERSION = "2.1.11"  # CRITICAL: Fixed PAT persistence + traceback cascade (Issue #45)
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -219,8 +219,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.wfile.write(f"File not found: {filepath}".encode())
         except Exception as e:
             safe_print(f"[ERROR] Failed to serve {filepath}: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logging.error(f"Failed to serve {filepath}", exc_info=True)
             self.send_response(500)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
@@ -261,8 +260,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.wfile.write(f"File not found: {filepath}".encode())
         except Exception as e:
             safe_print(f"[ERROR] Failed to serve HTML with cache busting: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logging.error("Failed to serve HTML with cache busting", exc_info=True)
             self.send_response(500)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
@@ -424,8 +422,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode())
         except Exception as e:
             safe_print(f"ERROR in do_POST: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logging.error("Error in do_POST", exc_info=True)
             try:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -523,7 +520,8 @@ class SyncHandler(BaseHTTPRequestHandler):
                 },
                 'feedback': {
                     'configured': feedback_configured,
-                    'repo': feedback_config.get('repo', '')
+                    'repo': feedback_config.get('repo', ''),
+                    'github_token': feedback_token if feedback_configured else ''  # Return actual token so UI can populate field
                 }
             }
             
@@ -1230,8 +1228,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                         
                     except Exception as e:
                         safe_print(f"[UPDATE] Failed to restart: {e}")
-                        import traceback
-                        traceback.print_exc()
+                        logging.error("Failed to restart after update", exc_info=True)
                 
                 threading.Thread(target=restart_after_update, daemon=True).start()
             
@@ -1382,8 +1379,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 'url': jira_url
             }
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logging.error("Error opening Jira browser", exc_info=True)
             return {'success': False, 'error': str(e)}
     
     def handle_check_jira_login(self):
@@ -1972,8 +1968,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                 
         except Exception as e:
             print(f"[ERROR] Feedback submission exception: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.error("CRITICAL: Feedback submission failed", exc_info=True)
             
             error_detail = str(e)
             # Check for common errors
@@ -2045,8 +2040,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             
         except Exception as e:
             safe_print(f"ERROR in handle_submit_feedback: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logging.error("Error in handle_submit_feedback", exc_info=True)
             return {'success': False, 'error': str(e)}
     
     def handle_save_feedback_token(self, data):
@@ -2827,8 +2821,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             
         except Exception as e:
             safe_print(f"[PRB-VALIDATE] EXCEPTION: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.error("[PRB-VALIDATE] Exception in validate_prb", exc_info=True)
             return {
                 'success': False,
                 'error': f'Unexpected error: {str(e)}',

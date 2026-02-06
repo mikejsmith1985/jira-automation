@@ -935,6 +935,7 @@ function prefillIntegrationForms(status) {
     const jiraUrlInput = document.getElementById('jira-url-input');
     const jiraProjectsInput = document.getElementById('jira-projects-input');
     const feedbackRepoInput = document.getElementById('feedback-repo-input');
+    const feedbackTokenInput = document.getElementById('feedback-token-input');  // ← ADD THIS
     
     if (githubOrgInput && status.github.organization) {
         githubOrgInput.value = status.github.organization;
@@ -947,6 +948,11 @@ function prefillIntegrationForms(status) {
     }
     if (feedbackRepoInput && status.feedback.repo && !status.feedback.repo.includes('owner/repository')) {
         feedbackRepoInput.value = status.feedback.repo;
+    }
+    // ← ADD THIS: Populate feedback token input
+    if (feedbackTokenInput && status.feedback.github_token) {
+        feedbackTokenInput.value = status.feedback.github_token;
+        console.log('[Waypoint] ✓ Feedback token loaded from config');
     }
     
     // Show indicator if feedback is configured
