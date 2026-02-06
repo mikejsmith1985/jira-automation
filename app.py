@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.1.9"  # Automatic frontend logging + enhanced feedback system
+APP_VERSION = "2.1.10"  # Fixed PRB validation error handling + recoverable UI
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
@@ -2779,29 +2779,62 @@ class SyncHandler(BaseHTTPRequestHandler):
         diagnostics_dir = os.path.join(DATA_DIR, 'diagnostics')
         os.makedirs(diagnostics_dir, exist_ok=True)
         
-        # Auto-launch browser if not initialized
-        success, error = self._ensure_browser_initialized()
-        if not success:
-            return {'success': False, 'error': error, 'diagnostics_path': diagnostics_dir}
-        
-        global page
-        
         try:
+            # Auto-launch browser if not initialized
+            success, error = self._ensure_browser_initialized()
+            if not success:
+                safe_print(f"[PRB-VALIDATE] Browser initialization failed: {error}")
+                return {
+                    'success': False,
+                    'error': f'Browser initialization failed: {error}',
+                    'diagnostics_path': diagnostics_dir
+                }
+            
+            global page
+            
             prb_number = data.get('prb_number', '').strip()
             if not prb_number:
                 return {'success': False, 'error': 'PRB number is required'}
             
+            safe_print(f"[PRB-VALIDATE] Starting validation for PRB: {prb_number}")
+            
             config_path = os.path.join(DATA_DIR, 'config.yaml')
+            if not os.path.exists(config_path):
+                return {
+                    'success': False,
+                    'error': 'Configuration not found. Please configure ServiceNow settings first.',
+                    'diagnostics_path': diagnostics_dir
+                }
+            
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
+            
+            if not config or 'servicenow' not in config:
+                return {
+                    'success': False,
+                    'error': 'ServiceNow not configured. Please configure ServiceNow settings first.',
+                    'diagnostics_path': diagnostics_dir
+                }
             
             from snow_jira_sync import SnowJiraSync
             snow_sync = SnowJiraSync(page, config)
             
+            safe_print(f"[PRB-VALIDATE] Calling snow_sync.validate_prb()")
             result = snow_sync.validate_prb(prb_number)
+            safe_print(f"[PRB-VALIDATE] Result: success={result.get('success')}")
+            
             return result
+            
         except Exception as e:
-            return {'success': False, 'error': str(e), 'diagnostics_path': diagnostics_dir}
+            safe_print(f"[PRB-VALIDATE] EXCEPTION: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': f'Unexpected error: {str(e)}',
+                'diagnostics_path': diagnostics_dir,
+                'exception_type': type(e).__name__
+            }
     
     def handle_snow_jira_sync(self, data):
         """Execute ServiceNow to Jira sync workflow"""

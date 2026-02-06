@@ -257,13 +257,33 @@ async function validatePRB() {
             
         } else {
             console.error('[Waypoint] PRB validation failed:', result.error);
-            resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">${result.error}</div>`;
+            
+            // Show error with "Try Again" button
+            resultEl.innerHTML = `
+                <div style="color: #de350b; text-align: center; padding: 20px;">
+                    <div style="margin-bottom: 15px;">❌ ${result.error}</div>
+                    <button onclick="resetPRBWorkflow()" style="padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        ← Try Again
+                    </button>
+                </div>
+            `;
+            
             if (createBtn) createBtn.disabled = true;
             showNotification(result.error, 'error');
         }
     } catch (error) {
         console.error('[Waypoint] validatePRB() exception:', error);
-        resultEl.innerHTML = `<div style="color: #de350b; text-align: center; padding: 20px;">Failed to validate PRB: ${error.message}</div>`;
+        
+        // Show error with "Try Again" button
+        resultEl.innerHTML = `
+            <div style="color: #de350b; text-align: center; padding: 20px;">
+                <div style="margin-bottom: 15px;">❌ Failed to validate PRB: ${error.message}</div>
+                <button onclick="resetPRBWorkflow()" style="padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    ← Try Again
+                </button>
+            </div>
+        `;
+        
         if (createBtn) createBtn.disabled = true;
         showNotification('Failed to validate PRB: ' + error.message, 'error');
     }
