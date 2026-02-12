@@ -348,29 +348,78 @@ class ServiceNowScraper:
     
     def extract_prb_data(self):
         """
-        Extract all relevant fields from the current PRB ticket
+        Extract data from visible text content - works regardless of field state/status
         
         Returns:
-            dict: PRB data with keys matching ServiceNow field names
+            dict: PRB data with short_description, description, and related_incidents
         """
         prb_data = {}
         
         try:
-            prb_data['prb_number'] = self._get_field_value('problem.number')
-            prb_data['short_description'] = self._get_field_value('problem.short_description')
-            prb_data['description'] = self._get_field_value('problem.description')
-            prb_data['configuration_item'] = self._get_field_value('sys_display.problem.cmdb_ci')
-            prb_data['impact'] = self._get_field_value('problem.impact')
-            prb_data['urgency'] = self._get_field_value('problem.urgency')
-            prb_data['priority'] = self._get_field_value('problem.priority')
-            prb_data['problem_category'] = self._get_field_value('problem.u_problem_category')
-            prb_data['detection'] = self._get_field_value('problem.u_dectection')
+            import re
             
-            self.logger.info(f"[SNOW] Extracted PRB data: {prb_data.get('prb_number', 'Unknown')}")
+            # Get all visible text from page body (works for read-only and editable fields)
+            self._log("Extracting visible text from page...")
+            page_text = self.page.inner_text('body')
+            
+            # Save raw text for debugging
+            try:
+                debug_path = os.path.join(self.diagnostics_dir, f"prb_text_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(page_text)
+                self._log(f"Saved page text to: {debug_path}")
+            except:
+                pass
+            
+            # 1. Extract PRB number (should be in page somewhere)
+            prb_match = re.search(r'(PRB\d{7,})', page_text)
+            prb_data['prb_number'] = prb_match.group(1) if prb_match else ''
+            self._log(f"PRB Number: {prb_data['prb_number']}")
+            
+            # 2. Extract short description (look for label + value pattern)
+            # Common patterns: "Short description\n<value>" or "Short description: <value>"
+            short_patterns = [
+                r'Short description[:\s]+(.+?)(?:\n|$)',
+                r'Problem statement[:\s]+(.+?)(?:\n|$)',
+                r'short_description[:\s]+(.+?)(?:\n|$)',
+            ]
+            prb_data['short_description'] = ''
+            for pattern in short_patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE)
+                if match:
+                    prb_data['short_description'] = match.group(1).strip()
+                    break
+            self._log(f"Short Description: {prb_data['short_description'][:100]}...")
+            
+            # 3. Extract long description (multi-line field)
+            # Look for "Description" label followed by content until next field/section
+            desc_patterns = [
+                r'Description[:\s]+(.+?)(?:\n\n|\nProblem statement|\nConfiguration item|\nRelated|$)',
+                r'problem\.description[:\s]+(.+?)(?:\n\n|\nProblem statement|\nConfiguration item|$)',
+            ]
+            prb_data['description'] = ''
+            for pattern in desc_patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE | re.DOTALL)
+                if match:
+                    prb_data['description'] = match.group(1).strip()
+                    break
+            self._log(f"Description: {prb_data['description'][:100]}...")
+            
+            # 4. Extract all related INC numbers from anywhere in the page
+            inc_matches = re.findall(r'INC\d{7,}', page_text)
+            prb_data['related_incidents'] = list(set(inc_matches))  # Dedupe
+            self._log(f"Related Incidents: {prb_data['related_incidents']}")
+            
+            if not prb_data['prb_number']:
+                self._log("WARNING: Could not extract PRB number from page text", 'warning')
+            
+            self._log(f"✓ Successfully extracted PRB data")
             return prb_data
             
         except Exception as e:
-            self.logger.error(f"[SNOW] Error extracting PRB data: {e}")
+            self._log(f"Error extracting PRB data: {e}", 'error')
+            import traceback
+            self.logger.error(traceback.format_exc())
             return None
     
     def _get_field_value(self, field_id):
