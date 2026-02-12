@@ -68,7 +68,7 @@ logging.basicConfig(
     ]
 )
 
-APP_VERSION = "2.1.11"  # CRITICAL: Fixed PAT persistence + traceback cascade (Issue #45)
+APP_VERSION = "2.1.12"  # CRITICAL: Fixed PAT persistence + traceback cascade (Issue #45)
 
 def safe_print(msg):
     """Print safely even when console is not available (PyInstaller --noconsole)"""
