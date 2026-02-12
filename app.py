@@ -228,8 +228,15 @@ class SyncHandler(BaseHTTPRequestHandler):
     def _serve_html_with_cache_busting(self, filepath, content_type):
         """Serve HTML with cache-busting query parameters injected"""
         try:
+            # CRITICAL: When running as frozen executable, BASE_DIR is sys._MEIPASS (temp dir)
+            # This is where PyInstaller extracts bundled files
             abs_filepath = os.path.join(BASE_DIR, filepath)
             safe_print(f"[SERVE] Serving HTML with cache busting: {abs_filepath}")
+            safe_print(f"[DEBUG] BASE_DIR={BASE_DIR}, frozen={getattr(sys, 'frozen', False)}")
+            safe_print(f"[DEBUG] File exists: {os.path.exists(abs_filepath)}")
+            
+            if not os.path.exists(abs_filepath):
+                raise FileNotFoundError(f"HTML file not found at {abs_filepath}")
             
             with open(abs_filepath, 'r', encoding='utf-8') as f:
                 html_content = f.read()
@@ -6565,7 +6572,20 @@ def open_browser():
         safe_print("[BROWSER] Already opened, skipping duplicate call")
         return
     browser_opened = True
-    time.sleep(1.5)
+    
+    # Wait for server to be ready before opening browser
+    max_attempts = 30  # 3 seconds total (30 * 0.1s)
+    for attempt in range(max_attempts):
+        try:
+            import urllib.request
+            urllib.request.urlopen('http://127.0.0.1:5000/api/status', timeout=0.5)
+            safe_print(f"[BROWSER] Server ready after {(attempt + 1) * 0.1:.1f}s")
+            break
+        except:
+            time.sleep(0.1)
+    else:
+        safe_print("[WARN] Server didn't respond within 3s, opening browser anyway")
+    
     safe_print("[BROWSER] Opening browser at http://127.0.0.1:5000")
     # new=2 opens in a new tab (avoids potential double-open with new=0)
     try:
