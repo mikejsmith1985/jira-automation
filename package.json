@@ -3,5 +3,5 @@
     "@playwright/test": "^1.57.0",
     "playwright": "^1.57.0"
   },
-  "version": "2.1.12"
+  "version": "2.1.13"
 }
