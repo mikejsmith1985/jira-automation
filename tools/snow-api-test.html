@@ -188,101 +188,99 @@
     </div>
   </div>
 
-  <!-- Step 1: Show bookmarks bar -->
+  <!-- Step 1: DevTools console (primary path) -->
   <div class="card">
     <div class="card-header">
       <div class="step-badge">1</div>
       <div>
-        <div class="card-title">Show your Bookmarks Bar</div>
-        <div class="card-sub">One-time setup — takes 2 seconds</div>
+        <div class="card-title">Go to ServiceNow and open DevTools Console</div>
+        <div class="card-sub">You're already logged in — that's all you need</div>
       </div>
     </div>
     <p>
-      Press <kbd>Ctrl+Shift+B</kbd> (Windows / Chrome / Edge) or <kbd>Cmd+Shift+B</kbd> (Mac).
-      You should see a bar appear below the address bar.
+      Navigate to your ServiceNow instance. Open the console with <kbd>F12</kbd> → click the
+      <strong>Console</strong> tab. If Chrome says <em>"type 'allow pasting'"</em>, do that first,
+      then press Enter.
     </p>
   </div>
 
-  <!-- Step 2: Drag bookmarklet -->
+  <!-- Step 2: Copy snippet -->
   <div class="card">
     <div class="card-header">
       <div class="step-badge">2</div>
       <div>
-        <div class="card-title">Drag this button to your Bookmarks Bar</div>
-        <div class="card-sub">One-time setup — updates automatically</div>
+        <div class="card-title">Copy one of these snippets and paste into the console</div>
+        <div class="card-sub">Try Option A first — if it fails, use Option B</div>
       </div>
     </div>
-    <p>Click and drag the button below up to your bookmarks bar. You only need to do this once.</p>
+
+    <p style="font-size:13px; color:#94a3b8; margin-bottom:6px;">
+      <strong style="color:#f1f5f9;">Option A — Short loader</strong>
+      (loads the script from GitHub, ~1 line to paste):
+    </p>
+    <div class="copy-area" id="snippet-text">var s=document.createElement('script');s.src='https://raw.githubusercontent.com/mikejsmith1985/jira-automation/main/tools/snow-api-test.js?t='+Date.now();document.head.appendChild(s);</div>
+    <button class="copy-btn" id="copy-snippet-btn">
+      📋 Copy Option A (short loader)
+      <span class="copied-badge" id="snippet-copied">Copied!</span>
+    </button>
+
+    <div class="divider" style="margin: 18px 0;"><span>if Option A is blocked by CSP</span></div>
+
+    <p style="font-size:13px; color:#94a3b8; margin-bottom:6px;">
+      <strong style="color:#f1f5f9;">Option B — Full code inline</strong>
+      (the entire script, no external load needed):
+    </p>
+    <div class="copy-area" id="full-code-preview">Loading full code…</div>
+    <button class="copy-btn" id="copy-full-btn">
+      📋 Copy Option B (full code)
+      <span class="copied-badge" id="full-copied">Copied!</span>
+    </button>
+  </div>
+
+  <!-- Step 3: Run -->
+  <div class="card">
+    <div class="card-header">
+      <div class="step-badge">3</div>
+      <div>
+        <div class="card-title">Run the test</div>
+        <div class="card-sub">A panel will appear on the ServiceNow page</div>
+      </div>
+    </div>
+    <p>
+      After pasting and pressing <kbd>Enter</kbd>, a dark panel appears in the top-right corner
+      of ServiceNow. Enter a PRB number you have access to, click <strong>▶ Run Tests</strong>,
+      and use <strong>📋 Copy results</strong> to share the output.
+    </p>
+    <div class="info-box">
+      💡 <strong>Best results:</strong> Navigate to a specific PRB form page first so that
+      <code>g_ck</code> (the CSRF token for write tests) is available. Example URL:<br>
+      <code style="word-break:break-all;">https://yourinstance.service-now.com/nav_to.do?uri=problem_form.do</code>
+    </div>
+  </div>
+
+  <!-- Step 4: Bookmarklet (optional) -->
+  <div class="card">
+    <div class="card-header">
+      <div class="step-badge" style="background:#334155;">★</div>
+      <div>
+        <div class="card-title">Optional: Save as a bookmark so you don't need to paste next time</div>
+        <div class="card-sub">One-time setup</div>
+      </div>
+    </div>
+    <p>
+      Press <kbd>Ctrl+Shift+B</kbd> to show the Bookmarks Bar, then drag this button onto it.
+      Next time just click the bookmark while on ServiceNow — no DevTools needed.
+    </p>
     <div class="center">
       <a id="loader-bookmarklet"
-         href="javascript:(function(){var s=document.createElement('script');s.src='https://raw.githubusercontent.com/mikejsmith1985/jira-automation/main/tools/snow-api-test.js?t='+Date.now();s.onerror=function(){alert('Could not load the tester script.\n\nServiceNow may be blocking external scripts (CSP).\n\nUse Step 3 below (Copy + Paste) instead.');};document.head.appendChild(s);})();"
+         href="javascript:(function(){var s=document.createElement('script');s.src='https://raw.githubusercontent.com/mikejsmith1985/jira-automation/main/tools/snow-api-test.js?t='+Date.now();s.onerror=function(){alert('Could not load the tester script.\n\nServiceNow may be blocking external scripts (CSP).\n\nUse the DevTools console with Option B (full code) instead.');};document.head.appendChild(s);})();"
          class="bookmark-btn"
          onclick="return false;">
         🔬 SNOW API Test
       </a>
       <div class="drag-hint">Drag the button above to your Bookmarks Bar</div>
     </div>
-
-    <div class="divider"><span>or if dragging doesn't work</span></div>
-
-    <p style="font-size:13px; color:#64748b; margin-bottom:8px;">
-      Right-click your Bookmarks Bar → <strong>Add page</strong> / <strong>Add bookmark</strong> →
-      paste this as the URL:
-    </p>
-    <div class="copy-area" id="bookmarklet-text">loading...</div>
-    <button class="copy-btn" id="copy-bm-btn">
-      📋 Copy bookmarklet URL
-      <span class="copied-badge" id="bm-copied">Copied!</span>
-    </button>
   </div>
-
-  <!-- Step 3: Copy-paste fallback -->
-  <div class="card">
-    <div class="card-header">
-      <div class="step-badge">3</div>
-      <div>
-        <div class="card-title">Copy-paste fallback (if bookmarklet is blocked)</div>
-        <div class="card-sub">For browsers with strict Content Security Policy</div>
-      </div>
-    </div>
-    <p>
-      If clicking the bookmarklet shows a security error, use this instead:
-    </p>
-    <p>
-      1. Click <strong>Copy Full Code</strong> below.<br>
-      2. Go to your ServiceNow tab.<br>
-      3. Open DevTools Console (<kbd>F12</kbd> → Console tab).<br>
-      4. Paste and press <kbd>Enter</kbd>.
-    </p>
-    <button class="copy-btn" id="copy-full-btn">
-      📋 Copy Full Code
-      <span class="copied-badge" id="full-copied">Copied!</span>
-    </button>
-  </div>
-
-  <!-- Step 4: Run -->
-  <div class="card">
-    <div class="card-header">
-      <div class="step-badge">4</div>
-      <div>
-        <div class="card-title">Run the test on your ServiceNow page</div>
-        <div class="card-sub">Do this every time you want to test</div>
-      </div>
-    </div>
-    <p>
-      1. Navigate to your ServiceNow instance in your browser and log in normally.<br>
-      2. Click the <strong>🔬 SNOW API Test</strong> bookmark you just added.<br>
-      3. A test panel will appear. Enter any PRB number you have access to.<br>
-      4. Click <strong>▶ Run Tests</strong> and review the results.<br>
-      5. Use the <strong>📋 Copy results</strong> button to share the output.
-    </p>
-    <div class="info-box">
-      💡 <strong>Pro tip:</strong> For best results, navigate to a specific PRB form page first
-      (<code>nav_to.do?uri=problem_form.do</code>) — this ensures <code>g_ck</code> (CSRF token)
-      is available for testing write operations.
-    </div>
-  </div>
-
   <footer>
     <p>Part of <a href="https://github.com/mikejsmith1985/jira-automation">Waypoint</a> — ServiceNow ↔ Jira automation</p>
   </footer>
@@ -290,35 +288,40 @@
 </div>
 
 <script>
-  // ── Populate bookmarklet href from the <a> tag ────────────────────────────
-  const bmEl   = document.getElementById('loader-bookmarklet');
-  const bmText = document.getElementById('bookmarklet-text');
-  bmText.textContent = bmEl.href;
+  const RAW_SCRIPT_URL = 'https://raw.githubusercontent.com/mikejsmith1985/jira-automation/main/tools/snow-api-test.js';
+  const LOADER_SNIPPET = "var s=document.createElement('script');s.src='" + RAW_SCRIPT_URL + "?t='+Date.now();document.head.appendChild(s);";
 
-  // Copy bookmarklet URL
-  document.getElementById('copy-bm-btn').addEventListener('click', () => {
-    navigator.clipboard.writeText(bmEl.href).then(() => {
-      const badge = document.getElementById('bm-copied');
+  // ── Option A: short loader snippet ────────────────────────────────────────
+  document.getElementById('snippet-text').textContent = LOADER_SNIPPET;
+  document.getElementById('copy-snippet-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(LOADER_SNIPPET).then(() => {
+      const badge = document.getElementById('snippet-copied');
       badge.style.display = 'inline';
       setTimeout(() => badge.style.display = 'none', 2500);
     });
   });
 
-  // ── Fetch full JS and put it in the copy-full button ──────────────────────
-  const SCRIPT_URL = 'snow-api-test.js';
+  // ── Option B: full code fetched from absolute GitHub raw URL ──────────────
   let fullCode = null;
-
-  fetch(SCRIPT_URL)
-    .then(r => r.text())
-    .then(code => { fullCode = code; })
+  fetch(RAW_SCRIPT_URL)
+    .then(r => r.ok ? r.text() : Promise.reject(r.status))
+    .then(code => {
+      fullCode = code;
+      const preview = document.getElementById('full-code-preview');
+      const lines = code.split('\n').length;
+      preview.textContent = '// ' + lines + ' lines loaded ✅ — click the button below to copy';
+    })
     .catch(() => {
-      // fallback: inline the loader so the page still works when offline
-      fullCode = bmEl.href.replace(/^javascript:/, '');
+      const preview = document.getElementById('full-code-preview');
+      preview.textContent = '⚠ Could not fetch — open the raw URL manually:\n' + RAW_SCRIPT_URL;
     });
 
   document.getElementById('copy-full-btn').addEventListener('click', () => {
-    const code = fullCode || bmEl.href.replace(/^javascript:/, '');
-    navigator.clipboard.writeText(code).then(() => {
+    if (!fullCode) {
+      alert('Full code not loaded yet. Check your internet connection, or open:\n' + RAW_SCRIPT_URL + '\n\nThen select all (Ctrl+A) and copy.');
+      return;
+    }
+    navigator.clipboard.writeText(fullCode).then(() => {
       const badge = document.getElementById('full-copied');
       badge.style.display = 'inline';
       setTimeout(() => badge.style.display = 'none', 2500);
