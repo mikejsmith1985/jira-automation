@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServiceNow REST API Tester — Waypoint</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a; color: #e2e8f0; margin: 0; padding: 20px;
+      min-height: 100vh;
+    }
+    .container { max-width: 740px; margin: 40px auto; }
+
+    .hero {
+      text-align: center; margin-bottom: 40px;
+    }
+    .hero-badge {
+      display: inline-block; background: #1e3a5f; color: #93c5fd;
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      letter-spacing: 0.5px; margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-size: 28px; font-weight: 800; color: #f1f5f9; margin: 0 0 12px;
+    }
+    .hero p {
+      color: #94a3b8; font-size: 15px; line-height: 1.6; max-width: 560px; margin: 0 auto;
+    }
+
+    .card {
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+      padding: 28px; margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+    }
+    .step-badge {
+      background: #3b82f6; color: white; width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 15px; flex-shrink: 0;
+    }
+    .card-title { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+    .card-sub   { font-size: 13px; color: #64748b; margin-top: 2px; }
+    .card p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 14px; }
+    .card p:last-child { margin-bottom: 0; }
+    .card kbd {
+      background: #334155; color: #e2e8f0; padding: 2px 7px; border-radius: 4px;
+      font-family: monospace; font-size: 12px;
+    }
+
+    /* The draggable bookmarklet button */
+    .bookmark-btn {
+      display: inline-block; background: #3b82f6; color: white;
+      padding: 12px 24px; font-weight: 700; font-size: 14px;
+      text-decoration: none; border-radius: 8px; cursor: move;
+      border: 2px dashed #93c5fd; user-select: none;
+      transition: background 0.15s;
+    }
+    .bookmark-btn:hover { background: #2563eb; }
+    .drag-hint {
+      font-size: 12px; color: #64748b; margin-top: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .drag-hint::before { content: "↑"; font-size: 16px; color: #3b82f6; }
+
+    .center { text-align: center; margin: 20px 0; }
+
+    /* Copy-paste fallback */
+    .copy-area {
+      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+      padding: 14px; font-family: monospace; font-size: 11px; color: #64748b;
+      white-space: pre-wrap; word-break: break-all; max-height: 100px;
+      overflow: hidden; cursor: pointer; position: relative;
+    }
+    .copy-btn {
+      background: #334155; color: #e2e8f0; border: 1px solid #475569;
+      padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; width: 100%; margin-top: 10px;
+    }
+    .copy-btn:hover { background: #475569; }
+    .copied-badge {
+      display: none; background: #14532d; color: #86efac; padding: 2px 10px;
+      border-radius: 4px; font-size: 12px; margin-left: 10px;
+    }
+
+    .how-it-works {
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+      padding: 24px; margin-bottom: 20px;
+    }
+    .how-it-works h3 { color: #f1f5f9; font-size: 15px; margin: 0 0 14px; }
+    .flow {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .flow-item {
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .flow-icon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
+    .flow-text { font-size: 13px; color: #94a3b8; line-height: 1.5; }
+    .flow-text strong { color: #e2e8f0; }
+
+    .tests-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+    }
+    .test-chip {
+      background: #0f172a; border: 1px solid #334155; border-radius: 6px;
+      padding: 8px 12px; font-size: 12px; color: #94a3b8;
+    }
+    .test-chip strong { color: #e2e8f0; display: block; margin-bottom: 2px; }
+
+    .info-box {
+      background: #1e3a5f; border: 1px solid #2563eb; border-radius: 8px;
+      padding: 14px; font-size: 13px; color: #93c5fd; line-height: 1.6;
+    }
+    .info-box strong { color: #bfdbfe; }
+
+    .divider {
+      text-align: center; color: #334155; font-size: 13px; margin: 16px 0;
+      position: relative;
+    }
+    .divider::before {
+      content: ""; position: absolute; top: 50%; left: 0; right: 0;
+      height: 1px; background: #1e293b;
+    }
+    .divider span {
+      background: #1e293b; padding: 0 12px; position: relative; color: #64748b;
+    }
+
+    footer {
+      text-align: center; color: #334155; font-size: 12px; margin-top: 40px; padding-bottom: 20px;
+    }
+    footer a { color: #475569; text-decoration: none; }
+    footer a:hover { color: #94a3b8; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">🔬 Waypoint — Diagnostic Tool</div>
+    <h1>ServiceNow REST API Tester</h1>
+    <p>
+      Tests whether Waypoint can access the ServiceNow API using your existing browser session —
+      the same technique that powers the Jira Migration Tool.
+      <strong>Nothing to install. No API key needed.</strong>
+    </p>
+  </div>
+
+  <!-- How it works -->
+  <div class="how-it-works">
+    <h3>💡 How it works</h3>
+    <div class="flow">
+      <div class="flow-item">
+        <div class="flow-icon">🌐</div>
+        <div class="flow-text">
+          <strong>You're already logged into ServiceNow</strong> — your browser holds a live session cookie.
+        </div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon">📎</div>
+        <div class="flow-text">
+          <strong>The bookmarklet runs inside your ServiceNow tab</strong> — same origin means
+          every <code>fetch()</code> call automatically includes your session cookies.
+        </div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon">🔑</div>
+        <div class="flow-text">
+          <strong>No API key required</strong> — exactly the same technique used by the Jira Migration Tool
+          to call <code>/rest/api/2/</code> without credentials.
+        </div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon">📊</div>
+        <div class="flow-text">
+          <strong>Results tell us whether to replace DOM scraping</strong> with clean, reliable
+          REST API calls in Waypoint.
+        </div>
+      </div>
+    </div>
+
+    <div class="tests-grid">
+      <div class="test-chip"><strong>✅ Table API Read</strong>GET /api/now/table/problem</div>
+      <div class="test-chip"><strong>✅ CSRF Token</strong>window.g_ck for write ops</div>
+      <div class="test-chip"><strong>✅ Table API Write</strong>PATCH (dry run, no changes)</div>
+      <div class="test-chip"><strong>✅ Related Records</strong>task_rel_task incidents</div>
+    </div>
+  </div>
+
+  <!-- Step 1: Show bookmarks bar -->
+  <div class="card">
+    <div class="card-header">
+      <div class="step-badge">1</div>
+      <div>
+        <div class="card-title">Show your Bookmarks Bar</div>
+        <div class="card-sub">One-time setup — takes 2 seconds</div>
+      </div>
+    </div>
+    <p>
+      Press <kbd>Ctrl+Shift+B</kbd> (Windows / Chrome / Edge) or <kbd>Cmd+Shift+B</kbd> (Mac).
+      You should see a bar appear below the address bar.
+    </p>
+  </div>
+
+  <!-- Step 2: Drag bookmarklet -->
+  <div class="card">
+    <div class="card-header">
+      <div class="step-badge">2</div>
+      <div>
+        <div class="card-title">Drag this button to your Bookmarks Bar</div>
+        <div class="card-sub">One-time setup — updates automatically</div>
+      </div>
+    </div>
+    <p>Click and drag the button below up to your bookmarks bar. You only need to do this once.</p>
+    <div class="center">
+      <a id="loader-bookmarklet"
+         href="javascript:(function(){var s=document.createElement('script');s.src='https://mikejsmith1985.github.io/jira-automation/snow-api-test.js?t='+Date.now();s.onerror=function(){alert('Could not load the tester script.\n\nServiceNow may be blocking external scripts (CSP).\n\nUse Step 3 below (Copy + Paste) instead.');};document.head.appendChild(s);})();"
+         class="bookmark-btn"
+         onclick="return false;">
+        🔬 SNOW API Test
+      </a>
+      <div class="drag-hint">Drag the button above to your Bookmarks Bar</div>
+    </div>
+
+    <div class="divider"><span>or if dragging doesn't work</span></div>
+
+    <p style="font-size:13px; color:#64748b; margin-bottom:8px;">
+      Right-click your Bookmarks Bar → <strong>Add page</strong> / <strong>Add bookmark</strong> →
+      paste this as the URL:
+    </p>
+    <div class="copy-area" id="bookmarklet-text">loading...</div>
+    <button class="copy-btn" id="copy-bm-btn">
+      📋 Copy bookmarklet URL
+      <span class="copied-badge" id="bm-copied">Copied!</span>
+    </button>
+  </div>
+
+  <!-- Step 3: Copy-paste fallback -->
+  <div class="card">
+    <div class="card-header">
+      <div class="step-badge">3</div>
+      <div>
+        <div class="card-title">Copy-paste fallback (if bookmarklet is blocked)</div>
+        <div class="card-sub">For browsers with strict Content Security Policy</div>
+      </div>
+    </div>
+    <p>
+      If clicking the bookmarklet shows a security error, use this instead:
+    </p>
+    <p>
+      1. Click <strong>Copy Full Code</strong> below.<br>
+      2. Go to your ServiceNow tab.<br>
+      3. Open DevTools Console (<kbd>F12</kbd> → Console tab).<br>
+      4. Paste and press <kbd>Enter</kbd>.
+    </p>
+    <button class="copy-btn" id="copy-full-btn">
+      📋 Copy Full Code
+      <span class="copied-badge" id="full-copied">Copied!</span>
+    </button>
+  </div>
+
+  <!-- Step 4: Run -->
+  <div class="card">
+    <div class="card-header">
+      <div class="step-badge">4</div>
+      <div>
+        <div class="card-title">Run the test on your ServiceNow page</div>
+        <div class="card-sub">Do this every time you want to test</div>
+      </div>
+    </div>
+    <p>
+      1. Navigate to your ServiceNow instance in your browser and log in normally.<br>
+      2. Click the <strong>🔬 SNOW API Test</strong> bookmark you just added.<br>
+      3. A test panel will appear. Enter any PRB number you have access to.<br>
+      4. Click <strong>▶ Run Tests</strong> and review the results.<br>
+      5. Use the <strong>📋 Copy results</strong> button to share the output.
+    </p>
+    <div class="info-box">
+      💡 <strong>Pro tip:</strong> For best results, navigate to a specific PRB form page first
+      (<code>nav_to.do?uri=problem_form.do</code>) — this ensures <code>g_ck</code> (CSRF token)
+      is available for testing write operations.
+    </div>
+  </div>
+
+  <footer>
+    <p>Part of <a href="https://github.com/mikejsmith1985/jira-automation">Waypoint</a> — ServiceNow ↔ Jira automation</p>
+  </footer>
+
+</div>
+
+<script>
+  // ── Populate bookmarklet href from the <a> tag ────────────────────────────
+  const bmEl   = document.getElementById('loader-bookmarklet');
+  const bmText = document.getElementById('bookmarklet-text');
+  bmText.textContent = bmEl.href;
+
+  // Copy bookmarklet URL
+  document.getElementById('copy-bm-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(bmEl.href).then(() => {
+      const badge = document.getElementById('bm-copied');
+      badge.style.display = 'inline';
+      setTimeout(() => badge.style.display = 'none', 2500);
+    });
+  });
+
+  // ── Fetch full JS and put it in the copy-full button ──────────────────────
+  const SCRIPT_URL = 'snow-api-test.js';
+  let fullCode = null;
+
+  fetch(SCRIPT_URL)
+    .then(r => r.text())
+    .then(code => { fullCode = code; })
+    .catch(() => {
+      // fallback: inline the loader so the page still works when offline
+      fullCode = bmEl.href.replace(/^javascript:/, '');
+    });
+
+  document.getElementById('copy-full-btn').addEventListener('click', () => {
+    const code = fullCode || bmEl.href.replace(/^javascript:/, '');
+    navigator.clipboard.writeText(code).then(() => {
+      const badge = document.getElementById('full-copied');
+      badge.style.display = 'inline';
+      setTimeout(() => badge.style.display = 'none', 2500);
+    });
+  });
+</script>
+</body>
+</html>
