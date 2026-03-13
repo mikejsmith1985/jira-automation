@@ -139,8 +139,8 @@ jobs:
             See [RELEASE_NOTES.md](https://github.com/mikejsmith1985/jira-automation/blob/main/RELEASE_NOTES.md) for details.
           files: |
             ./dist/waypoint.exe
-            ./dist/snow-api-test.html
-            ./dist/snow-api-test.js
+            ./tools/snow-api-test.html
+            ./tools/snow-api-test.js
           draft: false
           prerelease: false
         env:
